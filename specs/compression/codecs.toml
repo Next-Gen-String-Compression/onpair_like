@@ -1,0 +1,95 @@
+# Compression-axis characterization (DESIGN.md §16 codecs).
+#
+# Not a query-latency race — this spec reports, per codec and column:
+#   - compression ratio  (raw payload / stored bytes; payload-only and
+#     payload+offsets), read directly from the Build row footprint;
+#   - compression throughput   = raw_payload / build_ns   (Build row);
+#   - decompression throughput = raw_payload / decode_ns  (the `decode` strategy's
+#     instrumented phase split, isolated from scan by the harness clock).
+#
+# Method / caveats:
+#   - `build_ns` is a SINGLE-SHOT measurement (one compression per chunk, not
+#     median-timed) — a fair first-pass throughput, not paper-grade. `decode_ns`
+#     is captured once per query's instrumented pass; since it depends only on
+#     the payload (not the query), the lean suites below fire it a handful of
+#     times and we take the median.
+#   - Compression RATIO is exact (deterministic footprint), not a timing.
+#   - Every candidate here is decode-only (no compressed-domain view), so the
+#     only applicable strategy is the harness-composed `decode`; the single
+#     cheap scanner (memmem) both drives it and gates the decode round-trip for
+#     correctness before any number is recorded.
+#   - `strategies` MUST sit above the [[...]] array-of-tables below — a bare key
+#     after an array-of-tables binds to its last table, not the top-level spec.
+#
+# cpp_identity is the reference line: an identity codec whose build/decode are
+# pure memcpy — the ratio-1.0 anchor and the throughput ceiling. zstd sweeps its
+# classic level curve (1/3/9/19); lz4_flex has no level knob; onpair runs at its
+# default config (its decode() gives the "if you fully decompressed" number —
+# its compressed-domain match path is out of scope here). Offsets are stored
+# uncompressed (8 B/row) and counted separately, so the short-row offset tax is
+# visible.
+#
+# Lean single-op (contains) suites keep decode from re-running hundreds of times
+# per payload; regenerate with:  bench gen --profile quick --ops contains
+# Prereqs: ./reproduce.sh datasets
+
+strategies = ["decode"]
+
+[measure]
+chunk_rows = [0]     # one chunk over the whole column: build/decode the full payload
+warmup = 0
+min_iters = 1
+min_millis = 0
+
+[[datasets]]
+path = "../../datasets/msmarco-query"       # short rows (~36 B) — offset tax high
+[[datasets]]
+path = "../../datasets/clickbench-url-1m"    # URLs (~89 B) — highly redundant
+[[datasets]]
+path = "../../datasets/tpch-ccomment-sf10"   # generated comment text (~72 B)
+[[datasets]]
+path = "../../datasets/dbpedia-abstract"     # long natural-language text (~338 B)
+
+[[suites]]
+path = "../../suites/compression/msmarco-query"
+[[suites]]
+path = "../../suites/compression/clickbench-url-1m"
+[[suites]]
+path = "../../suites/compression/tpch-ccomment-sf10"
+[[suites]]
+path = "../../suites/compression/dbpedia-abstract"
+
+# Reference: identity codec (build/decode = memcpy) — ratio 1.0, throughput ceiling.
+[[candidates]]
+name = "cpp_identity"
+
+# LZ4 (single mode — lz4_flex has no level knob).
+[[candidates]]
+name = "lz4"
+
+# Zstandard across its classic ratio/speed curve.
+[[candidates]]
+name = "zstd"
+configs = ['{"level":1}', '{"level":3}', '{"level":9}', '{"level":19}']
+
+# FSST (cwida/fsst upstream) — the string-native rival (DESIGN.md §17). Standard
+# decode-only baseline; the compressed-domain FSST-LIKE matcher is `fsst_like`.
+[[candidates]]
+name = "fsst"
+
+# FSST-LIKE (calin2110, DaMoN'26). On the compression axis this contributes its
+# decode() baseline (same shape as fsst); its compressed-domain run() strategies
+# are measured on the query axis (specs/compression/fsst_like_query.toml).
+[[candidates]]
+name = "fsst_like"
+
+# OnPair (the paper's codec), swept across dictionary sizes (2^bits entries):
+# 9-bit (512) is the floor of the accepted range, 16-bit (65536) is the default.
+# This is OnPair's ratio/speed knob, analogous to zstd's level. seed defaults to
+# 42 (deterministic build).
+[[candidates]]
+name = "onpair"
+configs = ['{"bits":9}', '{"bits":12}', '{"bits":14}', '{"bits":16}']
+
+[[scanners]]
+name = "memmem"

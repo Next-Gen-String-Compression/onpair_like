@@ -1,0 +1,21 @@
+{
+  "format_version": 1,
+  "id": "clickbench-url-1m",
+  "description": "Generated sweep over dataset clickbench-url-1m (1000000 rows): 20 queries across ops [\"contains\"] (DESIGN.md §14; 9/18 grid points filled). Regenerate with `bench gen --seed 42 --profile quick`.",
+  "dataset": {
+    "id": "clickbench-url-1m",
+    "checksum": "xxh3:d164c1b5dbd6aff2"
+  },
+  "provenance": {
+    "generator": {
+      "name": "gen1",
+      "ops": [
+        "contains"
+      ],
+      "profile": "quick",
+      "seed": 42
+    }
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-07-09T10:04:14Z"
+}

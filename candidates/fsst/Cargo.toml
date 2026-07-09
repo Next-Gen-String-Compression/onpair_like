@@ -1,0 +1,13 @@
+[package]
+name = "lb-cand-fsst"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+links = "lb_fsst"
+
+[dependencies]
+lb-abi = { workspace = true }
+
+[build-dependencies]
+cmake = { workspace = true }

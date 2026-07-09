@@ -1,0 +1,14 @@
+{
+  "format_version": 1,
+  "id": "smoke",
+  "description": "Curated phase-1 suite over the mini fixture dataset: all five ops plus the SEMANTICS.md edge cases.",
+  "dataset": {
+    "id": "mini",
+    "checksum": "xxh3:fd10cb1408b8396f"
+  },
+  "provenance": {
+    "curated_by": "phase-1 vertical slice"
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-07-07T14:34:42Z"
+}

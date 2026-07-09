@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "tpch-pname-sf10-gen1-s42",
+  "description": "Generated sweep over dataset tpch-pname-sf10 (2000000 rows): 317 queries across ops [\"prefix\", \"suffix\", \"contains\", \"multi_contains\", \"contains_any\"] (DESIGN.md §14; 69/308 grid points filled). Regenerate with `bench gen --seed 42 --profile full`.",
+  "dataset": {
+    "id": "tpch-pname-sf10",
+    "checksum": "xxh3:ea4860e177003f58"
+  },
+  "provenance": {
+    "generator": {
+      "name": "gen1",
+      "ops": [
+        "prefix",
+        "suffix",
+        "contains",
+        "multi_contains",
+        "contains_any"
+      ],
+      "profile": "full",
+      "seed": 42
+    }
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-07-08T16:07:24Z"
+}

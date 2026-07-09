@@ -1,0 +1,33 @@
+# Smoke run: every real phase-1 module over the fixture dataset.
+# Prereqs (from the repo root):
+#   cargo run --release --bin bench -- ingest --source datasets/fixtures/mini.csv \
+#       --format csv --column data --id mini --out datasets/mini
+#   cargo run --release --bin bench -- bless --suite suites/smoke --dataset datasets/mini
+# Then:
+#   cargo run --release --bin bench -- run specs/smoke.toml -o results/smoke
+
+[[datasets]]
+path = "../datasets/mini"
+
+[[suites]]
+path = "../suites/smoke"
+
+[[candidates]]
+name = "uncompressed"
+
+[[candidates]]
+name = "cpp_identity"
+
+[[candidates]]
+name = "onpair"
+# One non-default config so the config plumbing is exercised end-to-end.
+configs = ['{"bits": 12, "threshold": 0.3, "seed": 7}']
+
+[[scanners]]
+name = "memmem"
+
+[[scanners]]
+name = "cpp_std_find"
+
+[measure]
+chunk_rows = [0, 64]

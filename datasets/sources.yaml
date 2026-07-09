@@ -1,0 +1,175 @@
+# Pinned dataset manifest — the single source of truth for every column the
+# benchmark (and the paper) reports on. `datasets/prepare.py` materialises
+# entries: download → sha256 verify → extract column → parquet → `bench
+# ingest` → verify the canonical checksum below.
+#
+# Reproducibility contract:
+#   - `source.sha256` pins the raw download where upstream is immutable;
+#     "recorded-at-prepare" means prepare.py records it on first fetch
+#     (write back with --update-checksums) so later runs verify against it.
+#   - `expected_checksum` is the canonical dataset identity (`bench ingest`'s
+#     logical xxh3 over rows). Two machines that end with the same value have
+#     bit-identical benchmark inputs, whatever the raw transport did.
+#   - Extraction rules mirror the OnPair compression paper's benchmark
+#     (github.com/gargiulofrancesco/compression_benchmark,
+#     tools/datasets/*.py) so both papers evaluate the same row streams:
+#     original file order, no shuffling, same field/strip/skip rules.
+#
+# `default: true` marks the paper roster (the compression paper's six
+# headline columns + ClickBench URLs). Non-default entries are supported by
+# prepare.py but fetched only when named with --dataset.
+
+version: 1
+datasets:
+  - id: clickbench-url-1m
+    default: true
+    source:
+      url: https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_0.parquet
+      sha256: fa134fe101e68324e0de851146fda69624f5cbb707d387141d1c2a88a219a16d
+      license: ClickBench (Yandex Metrica sample, published for benchmarking)
+      download_bytes: 122446530
+    kind: parquet            # already columnar: ingest reads it directly
+    params: { column: URL }
+    expected_checksum: "xxh3:d164c1b5dbd6aff2"
+    approx: { rows: 1000000, payload_bytes: 88562192 }
+    notes: URLs, heavy prefix structure, high substring redundancy.
+    # Full ~100M-row column: a manual recipe, not pinned here. Download
+    # https://datasets.clickhouse.com/hits_compatible/hits.parquet (~15 GB) and
+    # ingest its URL column under its own id (clickbench-url). Per the design a
+    # differently-sized slice is a different dataset with its own suites.
+
+  - id: msmarco-query
+    default: true
+    source:
+      url: https://msmarco.z22.web.core.windows.net/msmarcoranking/queries.tar.gz
+      sha256: 05e4c62c9c8520cd695725340d4c990627fd1a92eb8a71b88e3c746031ba6de8
+      license: MS-MARCO (non-commercial research)
+      download_bytes: 18901101
+    kind: tar-tsv-field      # every .tsv member, field 1, strip, skip empty
+    params: { field: 1 }
+    expected_checksum: "xxh3:ef411cc5c265637e"
+    approx: { rows: 1010000, payload_bytes: 36000000 }
+    notes: Short natural-language search queries — the honest short-row case.
+
+  - id: msmarco-url
+    default: true
+    source:
+      url: https://msmarco.z22.web.core.windows.net/msmarcoranking/msmarco-docs.tsv.gz
+      sha256: 78f5cbaae6be4376561a3a16f475c9be6dbcd50e696a67b08fd825c21a263b35
+      license: MS-MARCO (non-commercial research)
+      download_bytes: 8500000000
+    kind: gzip-tsv-field     # field 1 (url), kept only if it startswith http
+    params: { field: 1, require_prefix: "http" }
+    expected_checksum: "xxh3:3f4f2025a92050cf"
+    approx: { rows: 3210000, payload_bytes: 210000000 }
+    notes: >
+      ~8 GB download for a 210 MB column — the price of the original dump.
+      URLs with different host mix than ClickBench.
+
+  - id: amazon-title
+    default: true
+    source:
+      url: https://mcauleylab.ucsd.edu/public_datasets/data/amazon_2023/raw/meta_categories/meta_Books.jsonl.gz
+      sha256: d41f2348d3e0f3099d2a7ee45b304970282199f92a7ccdfe8ba4b1f753009a10
+      license: Amazon Reviews 2023 (McAuley lab, research use)
+      download_bytes: 3200000000
+    kind: jsonl-field        # json per line, .title.strip(), skip empty
+    params: { field: title }
+    expected_checksum: "xxh3:3a0b57c7356a57a6"
+    approx: { rows: 4450000, payload_bytes: 240000000 }
+    notes: Book titles, natural language, U/N=0.87, L_avg 52 B.
+
+  - id: dbpedia-abstract
+    default: true
+    source:
+      url: https://databus.dbpedia.org/dbpedia/text/short-abstracts/2022.12.01/short-abstracts_lang=en.ttl.bz2
+      sha256: e4793027fabd922948763794c4643b07729d207bb537fc766a15961aa711efdd
+      license: CC-BY-SA-4.0
+      download_bytes: 500000000
+    kind: ttl-en-literal     # N-Triples object between '"' and '"@en', raw escaped form
+    params: { limit: 1000000 }
+    expected_checksum: "xxh3:09644aa73fc3e4b1"
+    approx: { rows: 1000000, payload_bytes: 340000000 }
+    notes: Long text (L_avg ~338 B), 99.8% distinct — the long-row showcase.
+
+  - id: tpch-pname-sf10
+    default: true
+    source:
+      url: "duckdb-extension:tpch"   # generated locally, deterministic per SF
+      sha256: n/a
+      license: TPC (academic/benchmark use)
+      download_bytes: 0
+    kind: tpch-duckdb
+    params: { sf: 10, table: part, column: p_name }
+    expected_checksum: "xxh3:ea4860e177003f58"
+    approx: { rows: 2000000, payload_bytes: 50000000 }
+    notes: Synthetic-vocabulary part names, U/N=1.0 — the DB anchor.
+
+  - id: tpch-ccomment-sf10
+    default: true
+    source:
+      url: "duckdb-extension:tpch"
+      sha256: n/a
+      license: TPC (academic/benchmark use)
+      download_bytes: 0
+    kind: tpch-duckdb
+    params: { sf: 10, table: customer, column: c_comment }
+    expected_checksum: "xxh3:af8cd73ba0811038"
+    approx: { rows: 1500000, payload_bytes: 120000000 }
+    notes: Grammar-generated comment text, U/N=0.94.
+
+  # ---- non-default extras (fetch with --dataset <id>) --------------------
+
+  - id: dblp-title
+    default: false
+    source:
+      # Dated release (immutable), unlike the rolling dblp.xml.gz the
+      # compression paper fetched — pin once, verify forever.
+      url: https://dblp.org/xml/release/dblp-2025-12-01.xml.gz
+      sha256: recorded-at-prepare
+      license: ODC-BY 1.0
+      download_bytes: 800000000
+    kind: dblp-xml
+    params: { element: title }
+    expected_checksum: recorded-at-prepare
+    approx: { rows: 7000000, payload_bytes: 400000000 }
+    notes: Publication titles; U/N≈0.65 (duplicated republications).
+
+  - id: dblp-author
+    default: false
+    source:
+      url: https://dblp.org/xml/release/dblp-2025-12-01.xml.gz
+      sha256: recorded-at-prepare
+      license: ODC-BY 1.0
+      download_bytes: 800000000
+    kind: dblp-xml
+    params: { element: author }
+    expected_checksum: recorded-at-prepare
+    approx: { rows: 7000000, payload_bytes: 240000000 }
+    notes: Author names — short, low alphabet diversity, heavy repetition.
+
+  - id: tpch-lcomment-sf10
+    default: false
+    source:
+      url: "duckdb-extension:tpch"
+      sha256: n/a
+      license: TPC (academic/benchmark use)
+      download_bytes: 0
+    kind: tpch-duckdb
+    params: { sf: 10, table: lineitem, column: l_comment }
+    expected_checksum: recorded-at-prepare
+    approx: { rows: 60000000, payload_bytes: 1600000000 }
+    notes: 1.6 GB column — main-memory-scale runs only.
+
+  - id: tpch-caddress-sf10
+    default: false
+    source:
+      url: "duckdb-extension:tpch"
+      sha256: n/a
+      license: TPC (academic/benchmark use)
+      download_bytes: 0
+    kind: tpch-duckdb
+    params: { sf: 10, table: customer, column: c_address }
+    expected_checksum: recorded-at-prepare
+    approx: { rows: 1500000, payload_bytes: 38000000 }
+    notes: Random-character addresses — the low-redundancy adversary.

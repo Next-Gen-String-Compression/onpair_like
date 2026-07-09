@@ -1,0 +1,48 @@
+# Query-axis spec for the FSST family (DESIGN.md §17): the paper's core
+# comparison — compressed-domain match-in-place vs decode-then-eval on the SAME
+# FSST-compressed bytes.
+#
+# `interp` is fsst_like's compressed-domain automaton (codegen backends cpp/llvm
+# join the allowlist once wired). `decode` is the harness-composed
+# decompress-then-scan over fsst_like's own decode() output. Both are gated by
+# the correctness gate before any latency is recorded. onpair is included as the
+# other compressed-domain codec; fsst as the standard decode baseline.
+#
+# Lean contains suites keep the decode passes cheap; prefix/suffix/multi suites
+# can be added once generated (bench gen --ops prefix,suffix,multi_contains).
+strategies = ["interp", "compressed", "decode"]
+
+[measure]
+chunk_rows = [0]
+warmup = 0
+min_iters = 1
+min_millis = 0
+
+[[datasets]]
+path = "../../datasets/msmarco-query"
+[[datasets]]
+path = "../../datasets/clickbench-url-1m"
+[[datasets]]
+path = "../../datasets/tpch-ccomment-sf10"
+[[datasets]]
+path = "../../datasets/dbpedia-abstract"
+
+[[suites]]
+path = "../../suites/compression/msmarco-query"
+[[suites]]
+path = "../../suites/compression/clickbench-url-1m"
+[[suites]]
+path = "../../suites/compression/tpch-ccomment-sf10"
+[[suites]]
+path = "../../suites/compression/dbpedia-abstract"
+
+[[candidates]]
+name = "fsst_like"
+[[candidates]]
+name = "onpair"
+configs = ['{"bits":12}']
+[[candidates]]
+name = "fsst"
+
+[[scanners]]
+name = "memmem"

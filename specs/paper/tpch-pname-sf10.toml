@@ -1,0 +1,20 @@
+# Generated sweep over TPC-H p_name at SF=10 (synthetic vocabulary, U/N=1.0 — the DB anchor).
+# Prereqs: ./reproduce.sh datasets && ./reproduce.sh suites
+
+[[datasets]]
+path = "../../datasets/tpch-pname-sf10"
+
+[[suites]]
+path = "../../suites/tpch-pname-sf10-gen1-s42"
+
+[[candidates]]
+name = "uncompressed"
+
+[[candidates]]
+name = "onpair"
+
+[[scanners]]
+name = "memmem"
+
+[measure]
+chunk_rows = [0]

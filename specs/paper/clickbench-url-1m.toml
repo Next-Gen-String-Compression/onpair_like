@@ -1,0 +1,33 @@
+# The generated sweep (DESIGN.md §14) over the ClickBench URL 1M part:
+# the full parameter grid, paper-grade measurement defaults.
+# Prereqs (from the repo root):
+#   see datasets/sources.yaml (id: clickbench-url-1m) for the fetch + ingest
+#   cargo run --release --bin bench -- gen \
+#       --dataset datasets/clickbench-url-1m \
+#       --out suites/clickbench-url-1m-gen1-s42 --seed 42
+#   cargo run --release --bin bench -- bless \
+#       --suite suites/clickbench-url-1m-gen1-s42 \
+#       --dataset datasets/clickbench-url-1m
+# Then:
+#   cargo run --release --bin bench -- run specs/clickbench-url-1m-gen1.toml \
+#       -o results/clickbench-url-1m-gen1
+
+[[datasets]]
+path = "../../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../../suites/clickbench-url-1m-gen1-s42"
+
+[[candidates]]
+name = "uncompressed"
+
+[[candidates]]
+name = "onpair"
+
+[[scanners]]
+name = "memmem"
+
+[measure]
+# Whole-column chunking for the headline sweep; add 65536 for the
+# chunking axis when the amortization figure is wanted.
+chunk_rows = [0]

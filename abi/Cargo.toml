@@ -1,0 +1,6 @@
+[package]
+name = "lb-abi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Rust mirror of contract/lb_candidate.h — layout-identical, kept in lockstep"

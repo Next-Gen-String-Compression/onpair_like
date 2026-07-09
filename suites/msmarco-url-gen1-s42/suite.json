@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "msmarco-url-gen1-s42",
+  "description": "Generated sweep over dataset msmarco-url (3213835 rows): 425 queries across ops [\"prefix\", \"suffix\", \"contains\", \"multi_contains\", \"contains_any\"] (DESIGN.md §14; 84/308 grid points filled). Regenerate with `bench gen --seed 42 --profile full`.",
+  "dataset": {
+    "id": "msmarco-url",
+    "checksum": "xxh3:3f4f2025a92050cf"
+  },
+  "provenance": {
+    "generator": {
+      "name": "gen1",
+      "ops": [
+        "prefix",
+        "suffix",
+        "contains",
+        "multi_contains",
+        "contains_any"
+      ],
+      "profile": "full",
+      "seed": 42
+    }
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-07-08T16:00:31Z"
+}

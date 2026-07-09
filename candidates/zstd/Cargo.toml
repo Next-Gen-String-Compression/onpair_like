@@ -1,0 +1,10 @@
+[package]
+name = "lb-cand-zstd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lb-abi = { workspace = true }
+serde_json = { workspace = true }
+zstd = "0.13"

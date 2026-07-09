@@ -1,0 +1,13 @@
+[package]
+name = "lb-cand-cpp-identity"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+links = "cpp_identity"
+
+[dependencies]
+lb-abi = { workspace = true }
+
+[build-dependencies]
+cmake = { workspace = true }

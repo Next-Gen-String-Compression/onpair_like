@@ -1,0 +1,15 @@
+# Gate-canary run: MUST exit nonzero with loud gate failures on the
+# canary's "wrong" strategy (and pass its "ok" strategy). If this run ever
+# succeeds, the correctness gate is broken.
+
+[[datasets]]
+path = "../datasets/mini"
+
+[[suites]]
+path = "../suites/smoke"
+
+[[candidates]]
+name = "gate_canary"
+
+[measure]
+chunk_rows = [0]

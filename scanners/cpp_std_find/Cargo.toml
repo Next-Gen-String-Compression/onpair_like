@@ -1,0 +1,13 @@
+[package]
+name = "lb-scan-cpp-std-find"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+links = "cpp_std_find"
+
+[dependencies]
+lb-abi = { workspace = true }
+
+[build-dependencies]
+cmake = { workspace = true }

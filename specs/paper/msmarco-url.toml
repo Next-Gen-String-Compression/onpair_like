@@ -1,0 +1,20 @@
+# Generated sweep over MS MARCO document URLs (~65 B/row, different host mix than ClickBench).
+# Prereqs: ./reproduce.sh datasets && ./reproduce.sh suites
+
+[[datasets]]
+path = "../../datasets/msmarco-url"
+
+[[suites]]
+path = "../../suites/msmarco-url-gen1-s42"
+
+[[candidates]]
+name = "uncompressed"
+
+[[candidates]]
+name = "onpair"
+
+[[scanners]]
+name = "memmem"
+
+[measure]
+chunk_rows = [0]

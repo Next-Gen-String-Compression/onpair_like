@@ -1,0 +1,21 @@
+{
+  "format_version": 1,
+  "id": "tpch-ccomment-sf10",
+  "description": "Generated sweep over dataset tpch-ccomment-sf10 (1500000 rows): 15 queries across ops [\"contains\"] (DESIGN.md §14; 6/18 grid points filled). Regenerate with `bench gen --seed 42 --profile quick`.",
+  "dataset": {
+    "id": "tpch-ccomment-sf10",
+    "checksum": "xxh3:af8cd73ba0811038"
+  },
+  "provenance": {
+    "generator": {
+      "name": "gen1",
+      "ops": [
+        "contains"
+      ],
+      "profile": "quick",
+      "seed": 42
+    }
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-07-09T10:04:20Z"
+}

@@ -1,0 +1,5 @@
+# datasets/prepare.py dependencies (extraction is stdlib; these are the
+# manifest reader, the parquet writer, and the TPC-H generator).
+pyyaml>=6
+pyarrow>=15
+duckdb>=1.0

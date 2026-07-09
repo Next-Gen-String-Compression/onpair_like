@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "amazon-title-gen1-s42",
+  "description": "Generated sweep over dataset amazon-title (4448181 rows): 363 queries across ops [\"prefix\", \"suffix\", \"contains\", \"multi_contains\", \"contains_any\"] (DESIGN.md §14; 70/308 grid points filled). Regenerate with `bench gen --seed 42 --profile full`.",
+  "dataset": {
+    "id": "amazon-title",
+    "checksum": "xxh3:3a0b57c7356a57a6"
+  },
+  "provenance": {
+    "generator": {
+      "name": "gen1",
+      "ops": [
+        "prefix",
+        "suffix",
+        "contains",
+        "multi_contains",
+        "contains_any"
+      ],
+      "profile": "full",
+      "seed": 42
+    }
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-07-08T15:19:22Z"
+}

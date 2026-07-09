@@ -1,0 +1,15 @@
+/target
+/results
+.DS_Store
+/.venv
+# Cargo.lock IS tracked (workspace ships binaries): pins exact dependency
+# versions so every clone resolves an identical build — reproducibility.
+# raw downloads + intermediates live under datasets/raw (fetch recipes in
+# datasets/sources.yaml; artifacts are re-derivable and checksum-pinned)
+datasets/raw/
+# dataset artifacts are cached products of `bench ingest`, never sources
+datasets/**/data.arrow
+datasets/**/manifest.json
+# raw downloads are cached products of the fetch recipes in datasets/sources.yaml
+datasets/**/*.parquet
+!datasets/fixtures/**

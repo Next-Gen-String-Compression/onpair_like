@@ -1,0 +1,3687 @@
+{
+  "generator": "gen1",
+  "seed": 42,
+  "profile": "full",
+  "ops": [
+    "prefix",
+    "suffix",
+    "contains",
+    "multi_contains",
+    "contains_any"
+  ],
+  "dataset": {
+    "checksum": "xxh3:ef411cc5c265637e",
+    "id": "msmarco-query",
+    "num_rows": 1010916
+  },
+  "grid_points": 308,
+  "filled_points": 75,
+  "partial_points": 46,
+  "empty_points": 187,
+  "queries": 375,
+  "estimate_probes": 7802,
+  "exact_probes": 1577,
+  "points": [
+    {
+      "op": "prefix",
+      "band": "0",
+      "len": 1,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 6
+    },
+    {
+      "op": "prefix",
+      "band": "1e-5",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-4",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-3",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-2",
+      "len": 1,
+      "requested": 5,
+      "filled": 4,
+      "achieved_selectivities": [
+        0.008500211689200685,
+        0.008005610753020033,
+        0.016722457652267844,
+        0.01774529238828943
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-1",
+      "len": 1,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.1774331398454471
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "0.3",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.5",
+      "len": 1,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.49913741596730093
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "0.8",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0",
+      "len": 2,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "prefix",
+      "band": "1e-5",
+      "len": 2,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-4",
+      "len": 2,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-3",
+      "len": 2,
+      "requested": 5,
+      "filled": 2,
+      "achieved_selectivities": [
+        0.0010050291023190848,
+        0.0005697802784801111
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-2",
+      "len": 2,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.006684037051545331
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-1",
+      "len": 2,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.17010216476937748
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "0.3",
+      "len": 2,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.5",
+      "len": 2,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.4840916554886855
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "0.8",
+      "len": 2,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0",
+      "len": 4,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "prefix",
+      "band": "1e-5",
+      "len": 4,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-4",
+      "len": 4,
+      "requested": 5,
+      "filled": 2,
+      "achieved_selectivities": [
+        0.00008507136102307214,
+        0.00010683380221502084
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-3",
+      "len": 4,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-2",
+      "len": 4,
+      "requested": 5,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.01776606562760902,
+        0.009813871775696497,
+        0.005709673207269447
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-1",
+      "len": 4,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.1670445417819087
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "0.3",
+      "len": 4,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.35417482758211366
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "0.5",
+      "len": 4,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.8",
+      "len": 4,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0",
+      "len": 8,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "prefix",
+      "band": "1e-5",
+      "len": 8,
+      "requested": 5,
+      "filled": 2,
+      "achieved_selectivities": [
+        8.902816851251736e-6,
+        5.935211234167824e-6
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-4",
+      "len": 8,
+      "requested": 5,
+      "filled": 2,
+      "achieved_selectivities": [
+        0.00007913614978890433,
+        0.00015332629021600212
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-3",
+      "len": 8,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0008892924832528123,
+        0.0009654610274246327,
+        0.0012285887254727395,
+        0.0016806539811418555,
+        0.0014907272216484852
+      ],
+      "draws": 15
+    },
+    {
+      "op": "prefix",
+      "band": "1e-2",
+      "len": 8,
+      "requested": 5,
+      "filled": 4,
+      "achieved_selectivities": [
+        0.011748750638035209,
+        0.005695824381056388,
+        0.015713471742459312,
+        0.005980714520296444
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-1",
+      "len": 8,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.1687568502229661
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "0.3",
+      "len": 8,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.5",
+      "len": 8,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.8",
+      "len": 8,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0",
+      "len": 16,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "prefix",
+      "band": "1e-5",
+      "len": 16,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        7.913614978890432e-6,
+        0.000013848826213058256,
+        6.924413106529128e-6,
+        0.000015827229957780864,
+        6.924413106529128e-6
+      ],
+      "draws": 20
+    },
+    {
+      "op": "prefix",
+      "band": "1e-4",
+      "len": 16,
+      "requested": 5,
+      "filled": 2,
+      "achieved_selectivities": [
+        0.00006034131421403954,
+        0.0000741901404270978
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-3",
+      "len": 16,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.000842799995251831
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-2",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-1",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.3",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.5",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.8",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0",
+      "len": 32,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "prefix",
+      "band": "1e-5",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-4",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-3",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-2",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-1",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.3",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.5",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.8",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0",
+      "len": 64,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "prefix",
+      "band": "1e-5",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-4",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-3",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-2",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-1",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.3",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.5",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.8",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0",
+      "len": 128,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "prefix",
+      "band": "1e-5",
+      "len": 128,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-4",
+      "len": 128,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-3",
+      "len": 128,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-2",
+      "len": 128,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "1e-1",
+      "len": 128,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.3",
+      "len": 128,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.5",
+      "len": 128,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "prefix",
+      "band": "0.8",
+      "len": 128,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0",
+      "len": 1,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 6
+    },
+    {
+      "op": "suffix",
+      "band": "1e-5",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-4",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-3",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-2",
+      "len": 1,
+      "requested": 5,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.005721543629737783,
+        0.007461549723221316,
+        0.01686984873124968
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-1",
+      "len": 1,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.06743488084074245,
+        0.118675537829058,
+        0.05690185930383929,
+        0.060020812807394484,
+        0.07216623339624657
+      ],
+      "draws": 12
+    },
+    {
+      "op": "suffix",
+      "band": "0.3",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.5",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.8",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0",
+      "len": 2,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "suffix",
+      "band": "1e-5",
+      "len": 2,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-4",
+      "len": 2,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.00013650985838585994
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-3",
+      "len": 2,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-2",
+      "len": 2,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.011046417308658681,
+        0.010576546419287063,
+        0.009074937977042603,
+        0.01298030696912503,
+        0.009407309806156
+      ],
+      "draws": 9
+    },
+    {
+      "op": "suffix",
+      "band": "1e-1",
+      "len": 2,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.05920076445520696
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "suffix",
+      "band": "0.3",
+      "len": 2,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.5",
+      "len": 2,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.8",
+      "len": 2,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0",
+      "len": 4,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "suffix",
+      "band": "1e-5",
+      "len": 4,
+      "requested": 5,
+      "filled": 2,
+      "achieved_selectivities": [
+        5.935211234167824e-6,
+        7.913614978890432e-6
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-4",
+      "len": 4,
+      "requested": 5,
+      "filled": 4,
+      "achieved_selectivities": [
+        0.00009001737038487867,
+        0.00010683380221502084,
+        0.00006528732357584606,
+        0.00010782300408738214
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-3",
+      "len": 4,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0014719323860736204,
+        0.0009981046892125558,
+        0.0010040399004467237,
+        0.001301789664027476,
+        0.0011079060970446606
+      ],
+      "draws": 13
+    },
+    {
+      "op": "suffix",
+      "band": "1e-2",
+      "len": 4,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.006003466163360754
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-1",
+      "len": 4,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.3",
+      "len": 4,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.5",
+      "len": 4,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.8",
+      "len": 4,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0",
+      "len": 8,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "suffix",
+      "band": "1e-5",
+      "len": 8,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        8.902816851251736e-6,
+        6.924413106529128e-6,
+        0.00001483802808541956,
+        6.924413106529128e-6,
+        8.902816851251736e-6
+      ],
+      "draws": 17
+    },
+    {
+      "op": "suffix",
+      "band": "1e-4",
+      "len": 8,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.00008012535166126563,
+        0.00011474741719391127,
+        0.00011375821532154996,
+        0.0000999093891084917,
+        0.0001444234733647504
+      ],
+      "draws": 23
+    },
+    {
+      "op": "suffix",
+      "band": "1e-3",
+      "len": 8,
+      "requested": 5,
+      "filled": 4,
+      "achieved_selectivities": [
+        0.0012444159554305205,
+        0.0006617760526097124,
+        0.0008774220607844766,
+        0.0010277807453833948
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-2",
+      "len": 8,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-1",
+      "len": 8,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.3",
+      "len": 8,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.5",
+      "len": 8,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.8",
+      "len": 8,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0",
+      "len": 16,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "suffix",
+      "band": "1e-5",
+      "len": 16,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        6.924413106529128e-6
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-4",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-3",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-2",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-1",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.3",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.5",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.8",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0",
+      "len": 32,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "suffix",
+      "band": "1e-5",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-4",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-3",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-2",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-1",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.3",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.5",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.8",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0",
+      "len": 64,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "suffix",
+      "band": "1e-5",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-4",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-3",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-2",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "1e-1",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.3",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.5",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "suffix",
+      "band": "0.8",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0",
+      "len": 1,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 9
+    },
+    {
+      "op": "contains",
+      "band": "1e-5",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-4",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-3",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-2",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-1",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0.3",
+      "len": 1,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0.5",
+      "len": 1,
+      "requested": 5,
+      "filled": 2,
+      "achieved_selectivities": [
+        0.4373854998832742,
+        0.5243383228675775
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "contains",
+      "band": "0.8",
+      "len": 1,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.904172057816871,
+        0.9401651571446095,
+        0.9126871075341572,
+        0.651740599614607,
+        0.8301817361679902
+      ],
+      "draws": 10
+    },
+    {
+      "op": "contains",
+      "band": "0",
+      "len": 2,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "contains",
+      "band": "1e-5",
+      "len": 2,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-4",
+      "len": 2,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-3",
+      "len": 2,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-2",
+      "len": 2,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.009923673183528601
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "contains",
+      "band": "1e-1",
+      "len": 2,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.07018782965152397,
+        0.06440099869821034,
+        0.16785173050975552,
+        0.16006077656303788,
+        0.15790035967380078
+      ],
+      "draws": 20
+    },
+    {
+      "op": "contains",
+      "band": "0.3",
+      "len": 2,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.28050105053238844,
+        0.2770220275472937,
+        0.25806694126910645,
+        0.31183698744504984,
+        0.3334668755861021
+      ],
+      "draws": 19
+    },
+    {
+      "op": "contains",
+      "band": "0.5",
+      "len": 2,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.569270839515845
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "contains",
+      "band": "0.8",
+      "len": 2,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.6861588895615461
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "contains",
+      "band": "0",
+      "len": 4,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "contains",
+      "band": "1e-5",
+      "len": 4,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-4",
+      "len": 4,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.0001473910789818343
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "contains",
+      "band": "1e-3",
+      "len": 4,
+      "requested": 5,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.001158355392535087,
+        0.001158355392535087,
+        0.0016272370800343452
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "contains",
+      "band": "1e-2",
+      "len": 4,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.00763861685837399,
+        0.006657328600991576,
+        0.007725666623141785,
+        0.007117307471639582,
+        0.007329985874197263
+      ],
+      "draws": 13
+    },
+    {
+      "op": "contains",
+      "band": "1e-1",
+      "len": 4,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.17666452999062238
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "contains",
+      "band": "0.3",
+      "len": 4,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0.5",
+      "len": 4,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0.8",
+      "len": 4,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0",
+      "len": 8,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "contains",
+      "band": "1e-5",
+      "len": 8,
+      "requested": 5,
+      "filled": 4,
+      "achieved_selectivities": [
+        6.924413106529128e-6,
+        6.924413106529128e-6,
+        0.000013848826213058256,
+        0.000011870422468335647
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "contains",
+      "band": "1e-4",
+      "len": 8,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.00011969342655571778,
+        0.00015530469396072473,
+        0.00013552065651349865,
+        0.00008210375540598823,
+        0.00011771502281099518
+      ],
+      "draws": 22
+    },
+    {
+      "op": "contains",
+      "band": "1e-3",
+      "len": 8,
+      "requested": 5,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.0009001737038487866,
+        0.0009100657225723996,
+        0.0006400136114177637
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "contains",
+      "band": "1e-2",
+      "len": 8,
+      "requested": 5,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.006150857242342589
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "contains",
+      "band": "1e-1",
+      "len": 8,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0.3",
+      "len": 8,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0.5",
+      "len": 8,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0.8",
+      "len": 8,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0",
+      "len": 16,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "contains",
+      "band": "1e-5",
+      "len": 16,
+      "requested": 5,
+      "filled": 4,
+      "achieved_selectivities": [
+        0.00001483802808541956,
+        7.913614978890432e-6,
+        5.935211234167824e-6,
+        6.924413106529128e-6
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "contains",
+      "band": "1e-4",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-3",
+      "len": 16,
+      "requested": 5,
+      "filled": 2,
+      "achieved_selectivities": [
+        0.0008863248776357284,
+        0.0010208563322768656
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "contains",
+      "band": "1e-2",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-1",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0.3",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0.5",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0.8",
+      "len": 16,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0",
+      "len": 32,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "contains",
+      "band": "1e-5",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-4",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-3",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-2",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-1",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0.3",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0.5",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0.8",
+      "len": 32,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0",
+      "len": 64,
+      "requested": 5,
+      "filled": 5,
+      "achieved_selectivities": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "draws": 5
+    },
+    {
+      "op": "contains",
+      "band": "1e-5",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-4",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-3",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-2",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-1",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0.3",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0.5",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0.8",
+      "len": 64,
+      "requested": 5,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-5",
+      "len": 8,
+      "fragments": 2,
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.000016816431830142167,
+        9.89201872361304e-6,
+        0.000012859624340696952
+      ],
+      "draws": 28
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-4",
+      "len": 8,
+      "fragments": 2,
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.00007715774604418171,
+        0.00014343427149238907,
+        0.00008803896664015606
+      ],
+      "draws": 28
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-3",
+      "len": 8,
+      "fragments": 2,
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.0005885751140549759,
+        0.000911054924444761,
+        0.0013552065651349864
+      ],
+      "draws": 23
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-2",
+      "len": 8,
+      "fragments": 2,
+      "requested": 3,
+      "filled": 2,
+      "achieved_selectivities": [
+        0.01042322012907106,
+        0.008570445022138337
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-1",
+      "len": 8,
+      "fragments": 2,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-5",
+      "len": 16,
+      "fragments": 2,
+      "requested": 3,
+      "filled": 1,
+      "achieved_selectivities": [
+        5.935211234167824e-6
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-4",
+      "len": 16,
+      "fragments": 2,
+      "requested": 3,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.00013947746400294386
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-3",
+      "len": 16,
+      "fragments": 2,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-2",
+      "len": 16,
+      "fragments": 2,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-1",
+      "len": 16,
+      "fragments": 2,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-5",
+      "len": 32,
+      "fragments": 2,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-4",
+      "len": 32,
+      "fragments": 2,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-3",
+      "len": 32,
+      "fragments": 2,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-2",
+      "len": 32,
+      "fragments": 2,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-1",
+      "len": 32,
+      "fragments": 2,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-5",
+      "len": 8,
+      "fragments": 3,
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        6.924413106529128e-6,
+        6.924413106529128e-6,
+        0.000011870422468335647
+      ],
+      "draws": 14
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-4",
+      "len": 8,
+      "fragments": 3,
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.00009397417787432388,
+        0.0000741901404270978,
+        0.0000741901404270978
+      ],
+      "draws": 11
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-3",
+      "len": 8,
+      "fragments": 3,
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.0007003549256318032,
+        0.0008813788682739219,
+        0.0006123159589916472
+      ],
+      "draws": 24
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-2",
+      "len": 8,
+      "fragments": 3,
+      "requested": 3,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.00698673282448789
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-1",
+      "len": 8,
+      "fragments": 3,
+      "requested": 3,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.060016855999905035
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-5",
+      "len": 16,
+      "fragments": 3,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-4",
+      "len": 16,
+      "fragments": 3,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-3",
+      "len": 16,
+      "fragments": 3,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-2",
+      "len": 16,
+      "fragments": 3,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-1",
+      "len": 16,
+      "fragments": 3,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-5",
+      "len": 32,
+      "fragments": 3,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-4",
+      "len": 32,
+      "fragments": 3,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-3",
+      "len": 32,
+      "fragments": 3,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-2",
+      "len": 32,
+      "fragments": 3,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-1",
+      "len": 32,
+      "fragments": 3,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-5",
+      "len": 8,
+      "fragments": 4,
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        5.935211234167824e-6,
+        8.902816851251736e-6,
+        6.924413106529128e-6
+      ],
+      "draws": 27
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-4",
+      "len": 8,
+      "fragments": 4,
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.00008210375540598823,
+        0.0001276070415346082,
+        0.00013749906025822126
+      ],
+      "draws": 11
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-3",
+      "len": 8,
+      "fragments": 4,
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.0006123159589916472,
+        0.001367076987603322,
+        0.0008962168963593414
+      ],
+      "draws": 19
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-2",
+      "len": 8,
+      "fragments": 4,
+      "requested": 3,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.006285388696983725
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-1",
+      "len": 8,
+      "fragments": 4,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-5",
+      "len": 16,
+      "fragments": 4,
+      "requested": 3,
+      "filled": 2,
+      "achieved_selectivities": [
+        7.913614978890432e-6,
+        0.000015827229957780864
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-4",
+      "len": 16,
+      "fragments": 4,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-3",
+      "len": 16,
+      "fragments": 4,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-2",
+      "len": 16,
+      "fragments": 4,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-1",
+      "len": 16,
+      "fragments": 4,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-5",
+      "len": 32,
+      "fragments": 4,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-4",
+      "len": 32,
+      "fragments": 4,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-3",
+      "len": 32,
+      "fragments": 4,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-2",
+      "len": 32,
+      "fragments": 4,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-1",
+      "len": 32,
+      "fragments": 4,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-5",
+      "len": 8,
+      "fragments": 8,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-4",
+      "len": 8,
+      "fragments": 8,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-3",
+      "len": 8,
+      "fragments": 8,
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.0013324549220706766,
+        0.0017291248728875594,
+        0.0016450427137368485
+      ],
+      "draws": 14
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-2",
+      "len": 8,
+      "fragments": 8,
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.008618915913884043,
+        0.008807853471505051,
+        0.005837280248804055
+      ],
+      "draws": 11
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-1",
+      "len": 8,
+      "fragments": 8,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-5",
+      "len": 16,
+      "fragments": 8,
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.000012859624340696952,
+        6.924413106529128e-6,
+        0.000012859624340696952
+      ],
+      "draws": 27
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-4",
+      "len": 16,
+      "fragments": 8,
+      "requested": 3,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.00006330891983112346
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-3",
+      "len": 16,
+      "fragments": 8,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-2",
+      "len": 16,
+      "fragments": 8,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-1",
+      "len": 16,
+      "fragments": 8,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-5",
+      "len": 32,
+      "fragments": 8,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-4",
+      "len": 32,
+      "fragments": 8,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-3",
+      "len": 32,
+      "fragments": 8,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-2",
+      "len": 32,
+      "fragments": 8,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "multi_contains",
+      "band": "1e-1",
+      "len": 32,
+      "fragments": 8,
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-4",
+      "len": 8,
+      "k": 2,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.0000741901404270978,
+        0.0001503586845989182,
+        0.00011276901344918865
+      ],
+      "draws": 6
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-4",
+      "len": 8,
+      "k": 2,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.00008111455353362693,
+        0.00010683380221502084,
+        0.0001731103276632282
+      ],
+      "draws": 5
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-3",
+      "len": 8,
+      "k": 2,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.0009160009338065675,
+        0.0016519671268433777,
+        0.0012523295704094108
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-3",
+      "len": 8,
+      "k": 2,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.0006805708881845771,
+        0.0013077248752616439,
+        0.0014442347336475038
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-2",
+      "len": 8,
+      "k": 2,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.01210684171583,
+        0.0075535454973509174,
+        0.008355788215835935
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-2",
+      "len": 8,
+      "k": 2,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.007467484934455484,
+        0.005879815929315591,
+        0.00663754456354435
+      ],
+      "draws": 4
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-1",
+      "len": 8,
+      "k": 2,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.07530398173537663,
+        0.08520984928520273,
+        0.0823935915545901
+      ],
+      "draws": 14
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-1",
+      "len": 8,
+      "k": 2,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.056305370574805426
+      ],
+      "draws": 32,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "contains_any",
+      "band": "0.5",
+      "len": 8,
+      "k": 2,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "0.5",
+      "len": 8,
+      "k": 2,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-4",
+      "len": 8,
+      "k": 4,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.00010881220595974344,
+        0.00008704976476779475,
+        0.0001444234733647504
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-4",
+      "len": 8,
+      "k": 4,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.00011672582093863388,
+        0.000057373708596955636,
+        0.00013848826213058257
+      ],
+      "draws": 4
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-3",
+      "len": 8,
+      "k": 4,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.001288930039686779,
+        0.0012770596172184435,
+        0.0014531375504987555
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-3",
+      "len": 8,
+      "k": 4,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.0006380352076730411,
+        0.0006944197143976354,
+        0.0006103375552469246
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-2",
+      "len": 8,
+      "k": 4,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.008409205116943446,
+        0.012199826691831962,
+        0.010689315432736251
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-2",
+      "len": 8,
+      "k": 4,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.009454791496029343,
+        0.006514883531371548,
+        0.012535166126562445
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-1",
+      "len": 8,
+      "k": 4,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.12775740021920715,
+        0.056463642874383234,
+        0.0684972836516585
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-1",
+      "len": 8,
+      "k": 4,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "0.5",
+      "len": 8,
+      "k": 4,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "0.5",
+      "len": 8,
+      "k": 4,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-4",
+      "len": 8,
+      "k": 8,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.00012661783966224692,
+        0.00013650985838585994,
+        0.00012068262842807909
+      ],
+      "draws": 9
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-4",
+      "len": 8,
+      "k": 8,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.00009298497600196257,
+        0.00011079060970446605,
+        0.0000969417834914078
+      ],
+      "draws": 4
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-3",
+      "len": 8,
+      "k": 8,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.0009723854405311619,
+        0.0012602431853883014,
+        0.0012068262842807908
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-3",
+      "len": 8,
+      "k": 8,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.000842799995251831,
+        0.0005717586822248337,
+        0.0007132145499725002
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-2",
+      "len": 8,
+      "k": 8,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.016312928077110263,
+        0.012193891480597794,
+        0.008923590090571323
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-2",
+      "len": 8,
+      "k": 8,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.01001369055391348,
+        0.010064139849403906,
+        0.012765650162822629
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-1",
+      "len": 8,
+      "k": 8,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.09897558254098264,
+        0.08806468588883745,
+        0.11712743689881257
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-1",
+      "len": 8,
+      "k": 8,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "0.5",
+      "len": 8,
+      "k": 8,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "0.5",
+      "len": 8,
+      "k": 8,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-4",
+      "len": 8,
+      "k": 16,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-4",
+      "len": 8,
+      "k": 16,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.00010485539847029822,
+        0.00008507136102307214,
+        0.00015827229957780865
+      ],
+      "draws": 5
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-3",
+      "len": 8,
+      "k": 16,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.0013542173632626253,
+        0.001044597177213537,
+        0.0010910896652145184
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-3",
+      "len": 8,
+      "k": 16,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.0015085328553509885,
+        0.000888303281380451,
+        0.0008170807465704371
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-2",
+      "len": 8,
+      "k": 16,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.011433195240751952,
+        0.011490568949348908,
+        0.012420418709368533
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-2",
+      "len": 8,
+      "k": 16,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.009506229993392132,
+        0.00610634315808633,
+        0.007607951600330789
+      ],
+      "draws": 4
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-1",
+      "len": 8,
+      "k": 16,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.08907663940426307,
+        0.10046828816637585,
+        0.10095596468944996
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-1",
+      "len": 8,
+      "k": 16,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "0.5",
+      "len": 8,
+      "k": 16,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "0.5",
+      "len": 8,
+      "k": 16,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-4",
+      "len": 8,
+      "k": 64,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-4",
+      "len": 8,
+      "k": 64,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-3",
+      "len": 8,
+      "k": 64,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-3",
+      "len": 8,
+      "k": 64,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.0012127614955149586,
+        0.0012641999928777465,
+        0.0012305671292174622
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-2",
+      "len": 8,
+      "k": 64,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-2",
+      "len": 8,
+      "k": 64,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 3,
+      "achieved_selectivities": [
+        0.01269146002239553,
+        0.009218372248534992,
+        0.010280775059451033
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-1",
+      "len": 8,
+      "k": 64,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "1e-1",
+      "len": 8,
+      "k": 64,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "0.5",
+      "len": 8,
+      "k": 64,
+      "mix": "balanced",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains_any",
+      "band": "0.5",
+      "len": 8,
+      "k": 64,
+      "mix": "skewed",
+      "requested": 3,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 32,
+      "reason": "no_candidates_in_band"
+    }
+  ]
+}

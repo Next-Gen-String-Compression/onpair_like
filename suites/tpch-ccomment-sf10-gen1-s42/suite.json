@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "tpch-ccomment-sf10-gen1-s42",
+  "description": "Generated sweep over dataset tpch-ccomment-sf10 (1500000 rows): 415 queries across ops [\"prefix\", \"suffix\", \"contains\", \"multi_contains\", \"contains_any\"] (DESIGN.md §14; 88/308 grid points filled). Regenerate with `bench gen --seed 42 --profile full`.",
+  "dataset": {
+    "id": "tpch-ccomment-sf10",
+    "checksum": "xxh3:af8cd73ba0811038"
+  },
+  "provenance": {
+    "generator": {
+      "name": "gen1",
+      "ops": [
+        "prefix",
+        "suffix",
+        "contains",
+        "multi_contains",
+        "contains_any"
+      ],
+      "profile": "full",
+      "seed": 42
+    }
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-07-08T16:05:06Z"
+}

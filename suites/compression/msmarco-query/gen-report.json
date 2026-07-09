@@ -1,0 +1,214 @@
+{
+  "generator": "gen1",
+  "seed": 42,
+  "profile": "quick",
+  "ops": [
+    "contains"
+  ],
+  "dataset": {
+    "checksum": "xxh3:ef411cc5c265637e",
+    "id": "msmarco-query",
+    "num_rows": 1010916
+  },
+  "grid_points": 18,
+  "filled_points": 5,
+  "partial_points": 1,
+  "empty_points": 12,
+  "queries": 11,
+  "estimate_probes": 190,
+  "exact_probes": 44,
+  "points": [
+    {
+      "op": "contains",
+      "band": "0",
+      "len": 2,
+      "requested": 2,
+      "filled": 2,
+      "achieved_selectivities": [
+        0.0,
+        0.0
+      ],
+      "draws": 3
+    },
+    {
+      "op": "contains",
+      "band": "1e-5",
+      "len": 2,
+      "requested": 2,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 12,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-4",
+      "len": 2,
+      "requested": 2,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 12,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-3",
+      "len": 2,
+      "requested": 2,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 12,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-2",
+      "len": 2,
+      "requested": 2,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 12,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-1",
+      "len": 2,
+      "requested": 2,
+      "filled": 2,
+      "achieved_selectivities": [
+        0.1503438465708328,
+        0.17158893518353652
+      ],
+      "draws": 8
+    },
+    {
+      "op": "contains",
+      "band": "0",
+      "len": 8,
+      "requested": 2,
+      "filled": 2,
+      "achieved_selectivities": [
+        0.0,
+        0.0
+      ],
+      "draws": 2
+    },
+    {
+      "op": "contains",
+      "band": "1e-5",
+      "len": 8,
+      "requested": 2,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 12,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-4",
+      "len": 8,
+      "requested": 2,
+      "filled": 2,
+      "achieved_selectivities": [
+        0.00006429812170348476,
+        0.00011672582093863388
+      ],
+      "draws": 10
+    },
+    {
+      "op": "contains",
+      "band": "1e-3",
+      "len": 8,
+      "requested": 2,
+      "filled": 1,
+      "achieved_selectivities": [
+        0.0013186060958576182
+      ],
+      "draws": 12,
+      "reason": "budget_exhausted"
+    },
+    {
+      "op": "contains",
+      "band": "1e-2",
+      "len": 8,
+      "requested": 2,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 12,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-1",
+      "len": 8,
+      "requested": 2,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 12,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "0",
+      "len": 32,
+      "requested": 2,
+      "filled": 2,
+      "achieved_selectivities": [
+        0.0,
+        0.0
+      ],
+      "draws": 2
+    },
+    {
+      "op": "contains",
+      "band": "1e-5",
+      "len": 32,
+      "requested": 2,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 12,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-4",
+      "len": 32,
+      "requested": 2,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 12,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-3",
+      "len": 32,
+      "requested": 2,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 12,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-2",
+      "len": 32,
+      "requested": 2,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 12,
+      "reason": "no_candidates_in_band"
+    },
+    {
+      "op": "contains",
+      "band": "1e-1",
+      "len": 32,
+      "requested": 2,
+      "filled": 0,
+      "achieved_selectivities": [],
+      "draws": 12,
+      "reason": "no_candidates_in_band"
+    }
+  ]
+}

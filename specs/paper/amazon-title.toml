@@ -1,0 +1,20 @@
+# Generated sweep over Amazon Books titles (natural language, ~52 B/row, U/N=0.87).
+# Prereqs: ./reproduce.sh datasets && ./reproduce.sh suites
+
+[[datasets]]
+path = "../../datasets/amazon-title"
+
+[[suites]]
+path = "../../suites/amazon-title-gen1-s42"
+
+[[candidates]]
+name = "uncompressed"
+
+[[candidates]]
+name = "onpair"
+
+[[scanners]]
+name = "memmem"
+
+[measure]
+chunk_rows = [0]

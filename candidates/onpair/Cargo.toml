@@ -1,0 +1,13 @@
+[package]
+name = "lb-cand-onpair"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+links = "lb_onpair"
+
+[dependencies]
+lb-abi = { workspace = true }
+
+[build-dependencies]
+cmake = { workspace = true }

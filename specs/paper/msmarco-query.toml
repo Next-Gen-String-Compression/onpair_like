@@ -1,0 +1,21 @@
+# Generated sweep over MS MARCO queries (short natural language, ~36 B/row):
+# the honest short-row counterpoint to the URL columns.
+# Prereqs: ./reproduce.sh datasets && ./reproduce.sh suites
+
+[[datasets]]
+path = "../../datasets/msmarco-query"
+
+[[suites]]
+path = "../../suites/msmarco-query-gen1-s42"
+
+[[candidates]]
+name = "uncompressed"
+
+[[candidates]]
+name = "onpair"
+
+[[scanners]]
+name = "memmem"
+
+[measure]
+chunk_rows = [0]

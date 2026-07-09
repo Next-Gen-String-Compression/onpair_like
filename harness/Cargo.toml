@@ -1,0 +1,80 @@
+[package]
+name = "lb-harness"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "LIKE-benchmark harness: formats, oracle, gate, timing, orchestration"
+
+[[bin]]
+name = "bench"
+path = "src/main.rs"
+
+[lib]
+name = "lb_harness"
+path = "src/lib.rs"
+
+[features]
+default = [
+    "cand-uncompressed",
+    "cand-gate-canary",
+    "cand-cpp-identity",
+    "cand-onpair",
+    "cand-lz4",
+    "cand-zstd",
+    "cand-fsst",
+    "cand-fsst-like",
+    "scan-memmem",
+    "scan-cpp-std-find",
+    "scan-classics",
+    "scan-multi",
+    "scan-composed",
+    "scan-libc",
+    "scan-stringzilla",
+]
+cand-uncompressed = ["dep:lb-cand-uncompressed"]
+cand-gate-canary = ["dep:lb-cand-gate-canary"]
+cand-cpp-identity = ["dep:lb-cand-cpp-identity"]
+cand-onpair = ["dep:lb-cand-onpair"]
+cand-lz4 = ["dep:lb-cand-lz4"]
+cand-zstd = ["dep:lb-cand-zstd"]
+cand-fsst = ["dep:lb-cand-fsst"]
+cand-fsst-like = ["dep:lb-cand-fsst-like"]
+scan-memmem = ["dep:lb-scan-memmem"]
+scan-cpp-std-find = ["dep:lb-scan-cpp-std-find"]
+scan-classics = ["dep:lb-scan-classics"]
+scan-multi = ["dep:lb-scan-multi"]
+scan-composed = ["dep:lb-scan-composed"]
+scan-libc = ["dep:lb-scan-libc"]
+scan-stringzilla = ["dep:lb-scan-stringzilla"]
+
+[dependencies]
+lb-abi = { workspace = true }
+lb-cand-uncompressed = { path = "../candidates/uncompressed", optional = true }
+lb-cand-gate-canary = { path = "../candidates/gate_canary", optional = true }
+lb-cand-cpp-identity = { path = "../candidates/cpp_identity", optional = true }
+lb-cand-onpair = { path = "../candidates/onpair", optional = true }
+lb-cand-lz4 = { path = "../candidates/lz4", optional = true }
+lb-cand-zstd = { path = "../candidates/zstd", optional = true }
+lb-cand-fsst = { path = "../candidates/fsst", optional = true }
+lb-cand-fsst-like = { path = "../candidates/fsst_like", optional = true }
+lb-scan-memmem = { path = "../scanners/memmem", optional = true }
+lb-scan-cpp-std-find = { path = "../scanners/cpp_std_find", optional = true }
+lb-scan-classics = { path = "../scanners/classics", optional = true }
+lb-scan-multi = { path = "../scanners/multi", optional = true }
+lb-scan-composed = { path = "../scanners/composed", optional = true }
+lb-scan-libc = { path = "../scanners/libc", optional = true }
+lb-scan-stringzilla = { path = "../scanners/stringzilla", optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+xxhash-rust = { workspace = true }
+arrow = "59.0.0"
+parquet = "59.0.0"
+csv = "1.4.0"
+toml = "1.1.2"
+base64 = "0.22.1"
+humantime = "2.4.0"
+core_affinity = "0.8.3"
+clap = { version = "4.6.1", features = ["derive"] }
+
+[dev-dependencies]
+tempfile = "3"

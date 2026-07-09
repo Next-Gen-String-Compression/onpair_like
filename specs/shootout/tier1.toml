@@ -1,0 +1,73 @@
+# Tier-1 uncompressed scanner shootout (DESIGN.md §16.3).
+#
+# Every registered scanner, `direct` strategy only (over the uncompressed
+# candidate's zero-copy view), on three representative columns: short rows,
+# URLs, and long text. Output feeds the winner map over (op, needle length,
+# selectivity band) that defends every baseline choice.
+#
+# `strategies = ["direct"]` keeps this a pure scanner race: no build cost, no
+# decode re-runs. Scanners that do not support an op (or decline a specific
+# query via supports_query — e.g. bndm on a >64 B needle) are recorded
+# Unsupported, never Error, so the coverage gaps are explicit.
+#
+# Prereqs: ./reproduce.sh datasets && ./reproduce.sh suites
+
+[[datasets]]
+path = "../../datasets/msmarco-query"      # short rows (~36 B)
+[[datasets]]
+path = "../../datasets/clickbench-url-1m"  # URLs
+[[datasets]]
+path = "../../datasets/dbpedia-abstract"   # long text (~338 B)
+
+[[suites]]
+path = "../../suites/msmarco-query-gen1-s42"
+[[suites]]
+path = "../../suites/clickbench-url-1m-gen1-s42"
+[[suites]]
+path = "../../suites/dbpedia-abstract-gen1-s42"
+
+[[candidates]]
+name = "uncompressed"
+
+# --- single-pattern evaluators (contains / prefix / suffix) ---
+[[scanners]]
+name = "memmem"
+[[scanners]]
+name = "memmem-hay"
+[[scanners]]
+name = "cpp_std_find"
+[[scanners]]
+name = "libc-memmem"
+[[scanners]]
+name = "stringzilla"
+[[scanners]]
+name = "bndm"
+[[scanners]]
+name = "kmp"
+[[scanners]]
+name = "bmh"
+
+# --- multi-pattern engines (contains / contains_any) ---
+[[scanners]]
+name = "aho_corasick"
+[[scanners]]
+name = "teddy"
+# (ac-cpp, the author's C++ Aho-Corasick, was benchmarked and dropped as a
+# contender — see DESIGN.md §16.2; source parked in scanners/ac_cpp.)
+
+# --- composed prefilter ablation (contains) ---
+[[scanners]]
+name = "pf-none"
+[[scanners]]
+name = "pf-first-byte"
+[[scanners]]
+name = "pf-rare-byte"
+[[scanners]]
+name = "pf-first-last"
+[[scanners]]
+name = "pf-rare-pair"
+
+strategies = ["direct"]
+
+[measure]
+chunk_rows = [0]

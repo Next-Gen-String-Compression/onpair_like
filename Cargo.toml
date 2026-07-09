@@ -1,0 +1,45 @@
+[workspace]
+resolver = "2"
+members = [
+    "abi",
+    "harness",
+    "candidates/uncompressed",
+    "candidates/gate_canary",
+    "candidates/cpp_identity",
+    "candidates/onpair",
+    "candidates/lz4",
+    "candidates/zstd",
+    "candidates/fsst",
+    "candidates/fsst_like",
+    "scanners/memmem",
+    "scanners/cpp_std_find",
+    "scanners/classics",
+    "scanners/multi",
+    "scanners/composed",
+    "scanners/libc",
+    "scanners/stringzilla",
+]
+# Parked, not built: the author's C++ Aho-Corasick. Benchmarked (2026-07-09)
+# and dropped as a contender — it only roughly matches the public
+# `aho-corasick` crate and loses to `teddy` at small k. Source kept for
+# reference; excluded so the workspace never compiles it.
+exclude = ["scanners/ac_cpp"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+lb-abi = { path = "abi" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+memchr = "2"
+aho-corasick = "1"
+cmake = "0.1"
+
+[profile.release]
+debug = true          # symbols for perf work; no runtime cost
+lto = "thin"
+codegen-units = 1
