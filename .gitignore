@@ -13,3 +13,9 @@ datasets/**/manifest.json
 # raw downloads are cached products of the fetch recipes in datasets/sources.yaml
 datasets/**/*.parquet
 !datasets/fixtures/**
+
+# generated analysis outputs (re-derivable)
+analysis/summary.json
+analysis/report.html
+analysis/*.log
+analysis/*.out

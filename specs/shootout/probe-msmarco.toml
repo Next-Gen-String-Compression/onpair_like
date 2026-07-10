@@ -1,0 +1,44 @@
+# Timing probe: full scanner roster over ONE dataset (msmarco-query), direct only.
+[[datasets]]
+path = "../../datasets/msmarco-query"
+[[suites]]
+path = "../../suites/msmarco-query-gen1-s42"
+
+[[candidates]]
+name = "uncompressed"
+
+[[scanners]]
+name = "memmem"
+[[scanners]]
+name = "memmem-hay"
+[[scanners]]
+name = "cpp_std_find"
+[[scanners]]
+name = "libc-memmem"
+[[scanners]]
+name = "stringzilla"
+[[scanners]]
+name = "bndm"
+[[scanners]]
+name = "kmp"
+[[scanners]]
+name = "bmh"
+[[scanners]]
+name = "aho_corasick"
+[[scanners]]
+name = "teddy"
+[[scanners]]
+name = "pf-none"
+[[scanners]]
+name = "pf-first-byte"
+[[scanners]]
+name = "pf-rare-byte"
+[[scanners]]
+name = "pf-first-last"
+[[scanners]]
+name = "pf-rare-pair"
+
+strategies = ["direct"]
+
+[measure]
+chunk_rows = [0]

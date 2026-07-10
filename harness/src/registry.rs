@@ -20,7 +20,12 @@ pub fn candidates() -> Vec<Candidate> {
     #[cfg(feature = "cand-cpp-identity")]
     v.push(lb_cand_cpp_identity::vtable());
     #[cfg(feature = "cand-onpair")]
-    v.push(lb_cand_onpair::vtable());
+    {
+        v.push(lb_cand_onpair::vtable());
+        // OnPair as a plain codec (decompress-then-eval), a decode-only peer of
+        // lz4/zstd/fsst — distinct from the compressed-domain `onpair` candidate.
+        v.push(lb_cand_onpair::vtable_decode());
+    }
     #[cfg(feature = "cand-lz4")]
     v.push(lb_cand_lz4::vtable());
     #[cfg(feature = "cand-zstd")]

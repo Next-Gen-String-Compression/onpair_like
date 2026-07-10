@@ -1,0 +1,80 @@
+# Unified candidate head-to-head on the QUERY axis (DESIGN.md §16.3 Tier 2).
+#
+# Every query-capable storage candidate, answering the SAME contains queries on
+# the SAME columns, correctness-gated, so latency is apples-to-apples and pairs
+# with the compression-axis ratio (specs/compression/codecs.toml) into the
+# two-axis Pareto:
+#
+#   uncompressed   direct     — the zero-copy ceiling (memmem over the raw view)
+#   onpair         compressed — compressed-domain match (the paper's codec)
+#   fsst_like      interp     — compressed-domain automaton (DaMoN'26)
+#   fsst           decode     — string-native codec, decompress-then-scan
+#   lz4 / zstd     decode     — general block codecs, decompress-then-scan
+#   cpp_identity   decode     — memcpy "decode": the decode-path floor
+#
+# Contains-only + lean suites (11-20 q/col): decode strategies re-run the whole
+# payload decompression per query, so the full generated grids (375-554 q) are
+# unaffordable here. The full op x length x selectivity grid is mapped on the
+# cheap engines by specs/shootout/tier1.toml (scanners) and specs/paper/*
+# (uncompressed vs onpair). Measurement uses harness defaults (warmup + median),
+# NOT the compression spec's single-shot mode: this IS a latency race.
+
+[[datasets]]
+path = "../../datasets/msmarco-query"
+[[datasets]]
+path = "../../datasets/clickbench-url-1m"
+[[datasets]]
+path = "../../datasets/tpch-ccomment-sf10"
+[[datasets]]
+path = "../../datasets/dbpedia-abstract"
+
+[[suites]]
+path = "../../suites/compression/msmarco-query"
+[[suites]]
+path = "../../suites/compression/clickbench-url-1m"
+[[suites]]
+path = "../../suites/compression/tpch-ccomment-sf10"
+[[suites]]
+path = "../../suites/compression/dbpedia-abstract"
+
+[[candidates]]
+name = "uncompressed"
+
+[[candidates]]
+name = "onpair"
+configs = ['{"bits":12}', '{"bits":16}']
+
+# OnPair used as a plain block codec (decompress-then-eval) — the decode-only peer
+# of lz4/zstd/fsst, distinct from onpair's compressed-domain `compressed` path.
+# Makes "what if you just decompressed OnPair and scanned?" a first-class line.
+[[candidates]]
+name = "onpair_decode"
+configs = ['{"bits":12}', '{"bits":16}']
+
+[[candidates]]
+name = "fsst_like"
+
+[[candidates]]
+name = "fsst"
+
+[[candidates]]
+name = "lz4"
+
+[[candidates]]
+name = "zstd"
+configs = ['{"level":3}', '{"level":19}']
+
+[[candidates]]
+name = "cpp_identity"
+
+[[scanners]]
+name = "memmem"
+
+# Harness composes the applicable strategy per candidate (direct for the
+# zero-copy view; compressed/interp for compressed-domain matchers; decode for
+# decode-only codecs). Listing all four keeps every path in-scope; unsupported
+# (candidate, strategy) pairs are simply not emitted.
+strategies = ["direct", "compressed", "interp", "decode"]
+
+[measure]
+chunk_rows = [0]
