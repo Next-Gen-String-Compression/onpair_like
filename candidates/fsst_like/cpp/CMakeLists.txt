@@ -86,10 +86,18 @@ if(APPLE)
                 $<TARGET_OBJECTS:fl_objs> -o ${COMBINED}
         DEPENDS fl_objs COMMAND_EXPAND_LISTS VERBATIM)
 else()
+    # Combine all objects into one relocatable object, then localize the
+    # calin2110 FSST-fork symbols so they can't clash with the `fsst` candidate's
+    # cwida FSST symbols at the final harness link. localize.sh localizes only
+    # strong-global (non-COMDAT) defs and leaves weak COMDAT symbols (C++
+    # templates, vtables, typeinfo, inline fsst_decompress, libstdc++ machinery)
+    # intact — a blanket `objcopy --keep-global-symbol=<entry>` demotes those weak
+    # COMDAT symbols to local, corrupting their group sections (lld tolerates it
+    # but crashes the co-linked fsst candidate; bfd refuses). See localize.sh.
     add_custom_command(OUTPUT ${COMBINED}
         COMMAND ${CMAKE_LINKER} -r $<TARGET_OBJECTS:fl_objs> -o ${COMBINED}
-        COMMAND objcopy --keep-global-symbol=lb_candidate_fsst_like ${COMBINED}
-        DEPENDS fl_objs COMMAND_EXPAND_LISTS VERBATIM)
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/localize.sh ${COMBINED}
+        DEPENDS fl_objs ${CMAKE_CURRENT_SOURCE_DIR}/localize.sh COMMAND_EXPAND_LISTS VERBATIM)
 endif()
 set_source_files_properties(${COMBINED} PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
 

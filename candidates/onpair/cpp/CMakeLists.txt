@@ -22,6 +22,29 @@ FetchContent_Declare(
 # host-native codegen; the query-time hot path is header-only and is
 # compiled into THIS target (see below).
 set(ONPAIR_NATIVE_ARCH ON)
+
+# OnPair links Boost::unordered (header-only boost::unordered_flat_map, Boost
+# >= 1.81). Resolve it here, before OnPair's own find_package runs, so the
+# target exists when OnPair links it. This is onpair_like's wrapper — the OnPair
+# library itself is fetched unmodified.
+#   * Homebrew/macOS (and any Boost whose CMake package exports the component):
+#     this find_package creates the real target; the shim below is skipped.
+#   * Debian/Ubuntu: the package ships no per-config for header-only libs, so
+#     find_package reports Boost_FOUND but creates no target — we synthesize an
+#     INTERFACE target from the installed headers.
+#   * No system Boost at all: neither branch fires and OnPair's own vendored-Boost
+#     FetchContent fallback still triggers.
+find_package(Boost 1.81 QUIET CONFIG COMPONENTS unordered)
+if(NOT TARGET Boost::unordered)
+    find_path(LB_BOOST_UNORDERED_INCLUDE boost/unordered/unordered_flat_map.hpp)
+    if(LB_BOOST_UNORDERED_INCLUDE)
+        message(STATUS "lb_onpair: synthesizing header-only Boost::unordered from ${LB_BOOST_UNORDERED_INCLUDE}")
+        add_library(Boost::unordered INTERFACE IMPORTED GLOBAL)
+        set_target_properties(Boost::unordered PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${LB_BOOST_UNORDERED_INCLUDE}")
+    endif()
+endif()
+
 FetchContent_MakeAvailable(onpair)
 
 add_library(lb_onpair STATIC onpair_candidate.cpp)
