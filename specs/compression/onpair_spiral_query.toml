@@ -1,0 +1,64 @@
+# Query-axis spec for SpiralDB's OnPair (Rust, github.com/spiraldb/onpair): the
+# three contains recipes its `feat/search-prefilter` branch ships, measured
+# head-to-head on the SAME columns.
+#
+#   pf_kmp    — SIMD substring prefilter, then verify each survivor in the
+#               compressed domain with a token-level KMP automaton
+#               (ColumnView::rows_containing_prefiltered).
+#   pf_memmem — the SAME prefilter, then verify each survivor by decoding it and
+#               running memmem over the bytes
+#               (ColumnView::rows_containing_prefiltered_memmem).
+#   kmp       — the token-KMP automaton over EVERY row, no prefilter
+#               (ColumnView::rows_containing). The un-prefiltered baseline.
+#
+# All answer CONTAINS only, off one shared build. pf_kmp vs kmp isolates the
+# prefilter's payoff (same verify, ± the prefilter); pf_kmp vs pf_memmem
+# isolates the verify (compressed-domain KMP vs decode+SIMD memmem) at identical
+# prefilter selectivity. `onpair` (the C++ onpair_cpp) rides along as the
+# reference: its `compressed` path is the cross-library counterpart of `kmp`
+# (token-KMP over every row) — a different library and storage scheme, not the
+# same bytes.
+#
+# Contains-only lean suites (11-20 q/col). Correctness-gated before any latency
+# is recorded. Regenerate the suites with:  bench gen --profile quick --ops contains
+strategies = ["pf_kmp", "pf_memmem", "kmp", "compressed"]
+
+[measure]
+chunk_rows = [0]
+warmup = 0
+min_iters = 1
+min_millis = 0
+
+[[datasets]]
+path = "../../datasets/msmarco-query"       # short rows (~36 B)
+[[datasets]]
+path = "../../datasets/clickbench-url-1m"    # URLs (~89 B), highly redundant
+[[datasets]]
+path = "../../datasets/tpch-ccomment-sf10"   # generated comment text (~72 B)
+[[datasets]]
+path = "../../datasets/dbpedia-abstract"     # long natural-language text (~338 B)
+
+[[suites]]
+path = "../../suites/compression/msmarco-query"
+[[suites]]
+path = "../../suites/compression/clickbench-url-1m"
+[[suites]]
+path = "../../suites/compression/tpch-ccomment-sf10"
+[[suites]]
+path = "../../suites/compression/dbpedia-abstract"
+
+# SpiralDB OnPair (Rust) — the two prefilter+verify recipes, swept across the
+# dictionary-size knob (2^bits tokens); 16-bit is the default, 12-bit is a
+# smaller-dictionary point. seed defaults to 42 (deterministic build).
+[[candidates]]
+name = "onpair_spiral"
+configs = ['{"bits":12}', '{"bits":16}']
+
+# Reference: the C++ onpair_cpp compressed-domain automata on the same columns.
+[[candidates]]
+name = "onpair"
+configs = ['{"bits":12}', '{"bits":16}']
+
+# Drives the correctness gate's decode round-trip; not itself a matcher here.
+[[scanners]]
+name = "memmem"

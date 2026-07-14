@@ -836,6 +836,13 @@ candidates/
   onpair/        C++: OnPair (pinned via FetchContent) — the first real
                  compressed candidate; decode() plus a "compressed"
                  strategy (token automata over the packed stream)
+  onpair_spiral/ Rust: SpiralDB's OnPair (git dep, github.com/spiraldb/onpair,
+                 branch feat/search-prefilter) — three contains-only run()
+                 strategies: "pf_kmp" (SIMD prefilter + compressed-domain
+                 token-KMP verify), "pf_memmem" (prefilter + decode-survivors +
+                 memmem verify), and "kmp" (token-KMP over every row, no
+                 prefilter — the cross-library counterpart of `onpair`'s
+                 `compressed`); a distinct library/scheme from `onpair`
 scanners/
   memmem/        Rust: memchr/memmem SIMD kernels (phase-1 workhorse)
   cpp_std_find/  C++: std::string_view::find — proves the C++ scanner path
@@ -929,6 +936,33 @@ only its own directory plus one registry line.
   multi_contains are not expressible compressed-domain and are declared
   unsupported). Chunk payloads are capped at 4 GiB by OnPair's uint32
   offsets; build() rejects larger chunks with a chunk_rows hint.
+- *(Implementation, 2026-07-14)* `onpair_spiral`: SpiralDB's OnPair (the
+  Rust library, github.com/spiraldb/onpair) as a query-axis candidate,
+  pinned to a rev of its `feat/search-prefilter` branch. A pure-Rust glue
+  crate (like lz4/zstd), distinct from the C++ `onpair` — different library,
+  different resident form (codes are one u16 per token, not bit-packed). One
+  build exposes three contains-only `run()` strategies. Two ride the library's
+  SIMD substring prefilter, differing only in the verify step: `pf_kmp`
+  (compressed-domain token-KMP over each survivor's codes;
+  `ColumnView::rows_containing_prefiltered`, capped at 255-byte needles — a
+  longer needle errors the cell) and `pf_memmem` (decode each survivor and run
+  memmem; `rows_containing_prefiltered_memmem`, no cap). The third, `kmp`
+  (`ColumnView::rows_containing`, same 255-byte cap), runs the token-KMP
+  automaton over every row with no prefilter — the un-prefiltered baseline and
+  the cross-library counterpart of the C++ `onpair` candidate's `compressed`
+  path, so `kmp` vs `compressed` races the two libraries and `pf_kmp` vs `kmp`
+  isolates the prefilter's payoff. All three call the
+  library's own convenience recipes verbatim, so the benchmark measures what
+  OnPair ships; no `lb_run_stats` are filled (filling
+  `prefilter_candidates` would mean re-implementing the prefilter/verify
+  split, diverging from the shipped method). The prefilter's resident cost
+  (its stored `cum_token_freq` per-token frequency prefix sums) is attributed
+  on the compression axis as the `prefilter` footprint component — the first
+  candidate to exercise §7's named prefilter-storage accounting. Same 4-GiB
+  u32-offset chunk cap as `onpair`. Query-axis specs:
+  `specs/compression/onpair_spiral_query.toml` (pf_kmp vs pf_memmem vs kmp,
+  with onpair `compressed` as the cross-library reference) and the unified
+  `specs/shootout/candidates.toml` head-to-head.
 
 ---
 

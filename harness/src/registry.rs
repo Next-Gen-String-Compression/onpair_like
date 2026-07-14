@@ -26,6 +26,8 @@ pub fn candidates() -> Vec<Candidate> {
         // lz4/zstd/fsst — distinct from the compressed-domain `onpair` candidate.
         v.push(lb_cand_onpair::vtable_decode());
     }
+    #[cfg(feature = "cand-onpair-spiral")]
+    v.push(lb_cand_onpair_spiral::vtable());
     #[cfg(feature = "cand-lz4")]
     v.push(lb_cand_lz4::vtable());
     #[cfg(feature = "cand-zstd")]

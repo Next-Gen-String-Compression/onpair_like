@@ -7,6 +7,8 @@
 #
 #   uncompressed   direct     — the zero-copy ceiling (memmem over the raw view)
 #   onpair         compressed — compressed-domain match (the paper's codec)
+#   onpair_spiral  kmp/pf_*   — Rust OnPair: token-KMP ± SIMD prefilter, and
+#                               prefilter + decode-memmem verify
 #   fsst_like      interp     — compressed-domain automaton (DaMoN'26)
 #   fsst           decode     — string-native codec, decompress-then-scan
 #   lz4 / zstd     decode     — general block codecs, decompress-then-scan
@@ -18,6 +20,18 @@
 # cheap engines by specs/shootout/tier1.toml (scanners) and specs/paper/*
 # (uncompressed vs onpair). Measurement uses harness defaults (warmup + median),
 # NOT the compression spec's single-shot mode: this IS a latency race.
+#
+# Harness composes the applicable strategy per candidate (direct for the
+# zero-copy view; compressed/interp/pf_kmp/pf_memmem/kmp for compressed-domain
+# matchers; decode for decode-only codecs). Listing every name keeps all paths
+# in-scope; unsupported (candidate, strategy) pairs are simply not emitted.
+# (`kmp` here is onpair_spiral's un-prefiltered strategy, distinct from the
+# `kmp` *scanner*; strategy vs scanner are separate keys in a result row.)
+#
+# This key MUST sit above the [[...]] arrays below: a bare key after an
+# array-of-tables binds to its last table, not the top-level spec (cf.
+# specs/compression/codecs.toml).
+strategies = ["direct", "compressed", "interp", "pf_kmp", "pf_memmem", "kmp", "decode"]
 
 [[datasets]]
 path = "../../datasets/msmarco-query"
@@ -51,6 +65,14 @@ configs = ['{"bits":12}', '{"bits":16}']
 name = "onpair_decode"
 configs = ['{"bits":12}', '{"bits":16}']
 
+# SpiralDB's OnPair (Rust) — contains-only. SIMD substring prefilter + verify
+# (`pf_kmp` compressed-domain token-KMP, `pf_memmem` decode-survivors + memmem)
+# plus `kmp`, the un-prefiltered token-KMP baseline (the cross-library
+# counterpart of `onpair`'s `compressed`). Distinct scheme from C++ `onpair`.
+[[candidates]]
+name = "onpair_spiral"
+configs = ['{"bits":12}', '{"bits":16}']
+
 [[candidates]]
 name = "fsst_like"
 
@@ -69,12 +91,6 @@ name = "cpp_identity"
 
 [[scanners]]
 name = "memmem"
-
-# Harness composes the applicable strategy per candidate (direct for the
-# zero-copy view; compressed/interp for compressed-domain matchers; decode for
-# decode-only codecs). Listing all four keeps every path in-scope; unsupported
-# (candidate, strategy) pairs are simply not emitted.
-strategies = ["direct", "compressed", "interp", "decode"]
 
 [measure]
 chunk_rows = [0]

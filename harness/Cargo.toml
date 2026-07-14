@@ -19,6 +19,7 @@ default = [
     "cand-gate-canary",
     "cand-cpp-identity",
     "cand-onpair",
+    "cand-onpair-spiral",
     "cand-lz4",
     "cand-zstd",
     "cand-fsst",
@@ -35,6 +36,7 @@ cand-uncompressed = ["dep:lb-cand-uncompressed"]
 cand-gate-canary = ["dep:lb-cand-gate-canary"]
 cand-cpp-identity = ["dep:lb-cand-cpp-identity"]
 cand-onpair = ["dep:lb-cand-onpair"]
+cand-onpair-spiral = ["dep:lb-cand-onpair-spiral"]
 cand-lz4 = ["dep:lb-cand-lz4"]
 cand-zstd = ["dep:lb-cand-zstd"]
 cand-fsst = ["dep:lb-cand-fsst"]
@@ -53,6 +55,7 @@ lb-cand-uncompressed = { path = "../candidates/uncompressed", optional = true }
 lb-cand-gate-canary = { path = "../candidates/gate_canary", optional = true }
 lb-cand-cpp-identity = { path = "../candidates/cpp_identity", optional = true }
 lb-cand-onpair = { path = "../candidates/onpair", optional = true }
+lb-cand-onpair-spiral = { path = "../candidates/onpair_spiral", optional = true }
 lb-cand-lz4 = { path = "../candidates/lz4", optional = true }
 lb-cand-zstd = { path = "../candidates/zstd", optional = true }
 lb-cand-fsst = { path = "../candidates/fsst", optional = true }
