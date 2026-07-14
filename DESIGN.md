@@ -1274,7 +1274,6 @@ Single-pattern evaluators (contains/prefix/suffix):
 | `strstr` | platform libc — glibc's SSE2/AVX2 path on Linux/x86, Apple's on macOS |
 | `stringzilla` | modern SIMD library, NEON/AVX-512; competitive with memmem |
 | `vectorscan` | Hyperscan fork (identical x86 codepaths, NEON on ARM); single-literal "noodle" engine; feature-gated heavy dep |
-| `sse4-strstr` | Muła's SIMD strstr; x86-only, platform-gated |
 | `bndm` | bit-parallel, needles ≤ 64 B — matches the needle-length axis |
 | `kmp`, `bmh` | classic reference points (KMP automaton already exists) |
 
@@ -1358,10 +1357,9 @@ authoring, not architecture.
 3. Haystack-scan variant for contains. *Done:* `memmem-hay`.
 4. New scanner crates: `libc-memmem`, `bndm`, `kmp`, `bmh`,
    `aho-corasick`/`teddy` multi, `stringzilla` (crate FFI) — *done.*
-   `sse4-strstr` (x86-gated) and `vectorscan` (FFI, feature-gated) remain:
-   both are untestable on the arm64 dev host (sse4-strstr is x86-only;
-   vectorscan needs a system libhs/libvectorscan), so they land during an
-   x86 run rather than blind here.
+   `vectorscan` (FFI, feature-gated) remains: it is untestable on the arm64
+   dev host (needs a system libhs/libvectorscan), so it lands during an x86
+   run rather than blind here.
 5. New candidates: `lz4`, `zstd`. *Done* (decode-only; offsets stored
    uncompressed and counted in footprint).
 6. Tier-1 shootout spec (`specs/shootout/tier1.toml`, done) + run;
@@ -1501,7 +1499,7 @@ for fixed input, so ratios are stable across runs.
 3. `cpp` / `llvm` / `-simd` codegen backends — **deferred to an x86 host with
    LLVM 16** (untestable on the arm64 dev box: LLVM 16 absent, SSE `_mm_cmpestrm`
    is x86-only, and `cpp` codegen shells out to `clang++` per query). Same
-   deferral rationale as §16.4's sse4-strstr/vectorscan. Full handoff for the
+   deferral rationale as §16.4's vectorscan. Full handoff for the
    x86 agent: **`TODO_fsst_like.md`** at the repo root (architecture, exact
    FSST-LIKE codegen API, per-strategy gating, CMake/LLVM wiring, gotchas,
    validation steps).
