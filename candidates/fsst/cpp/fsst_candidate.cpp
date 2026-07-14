@@ -8,12 +8,13 @@
 // Stored form (footprint components, mirroring lz4/zstd/onpair):
 //   - payload_fsst : concatenated compressed rows (the payload-analog)
 //   - symbol_table : fsst_export() serialization (<= ~2 KB)
-//   - offsets      : compressed-row index, (rows+1) x u64, uncompressed
+//   - offsets      : canonical row index, (rows+1) x u64, uncompressed
 //
-// decode() reconstructs the canonical layout: FSST's inlined decompressor does
-// fixed-stride 8-byte over-copies per symbol (writing up to 7 bytes past a
-// row's true end), which the contract's LB_DECODE_PAD headroom absorbs — the
-// same guarantee onpair relies on (SEMANTICS.md rule 8).
+// FSST code streams are concatenable: decoding the concatenation is equivalent
+// to decoding every row and concatenating the outputs. decode() therefore uses
+// one bulk fsst_decompress call instead of paying one call/loop boundary for
+// every short row. The retained canonical offsets are copied to the output.
+// FSST's fixed-stride over-copy is covered by LB_DECODE_PAD (SEMANTICS.md §8).
 
 #include "lb_candidate.h"
 
@@ -30,7 +31,7 @@ namespace {
 
 struct Handle {
   std::vector<uint8_t> compressed;   // concatenated compressed rows
-  std::vector<uint64_t> coffsets;    // num_rows + 1 offsets into `compressed`
+  std::vector<uint64_t> offsets;     // num_rows + 1 canonical row offsets
   std::vector<uint8_t> symtab;       // fsst_export() bytes
   uint64_t num_rows = 0;
   uint64_t payload_bytes = 0;        // canonical payload = offsets[num_rows]
@@ -60,6 +61,7 @@ void* cand_build(const lb_chunk_view* view, const char* /*config_json*/,
   auto h = std::make_unique<Handle>();
   h->num_rows = n;
   h->payload_bytes = payload;
+  h->offsets.assign(view->offsets, view->offsets + n + 1);
 
   // Conservative output bound: FSST needs ~(7 + 2*len) per string worst case.
   std::vector<uint8_t> out;
@@ -79,14 +81,11 @@ void* cand_build(const lb_chunk_view* view, const char* /*config_json*/,
     return fail("fsst_compress could not fit all rows in the output buffer");
   }
 
-  // Prefix-sum the per-row compressed lengths into the compressed-row index.
-  // fsst_compress lays the compressed rows out contiguously in `out`, so the
-  // concatenation is out[0 .. total); we build coffsets from len_out (robust
-  // regardless of that contiguity guarantee) and copy the payload.
-  h->coffsets.resize(n + 1);
-  h->coffsets[0] = 0;
-  for (uint64_t i = 0; i < n; i++) h->coffsets[i + 1] = h->coffsets[i] + len_out[i];
-  const uint64_t total = h->coffsets[n];
+  // fsst_compress lays rows contiguously in `out`; FSST code streams can be
+  // concatenated and decoded as one stream, so no compressed-row index is
+  // needed by this decode-only candidate.
+  uint64_t total = 0;
+  for (uint64_t i = 0; i < n; i++) total += len_out[i];
   h->compressed.assign(out.data(), out.data() + total);
 
   // Serialize the symbol table (at most sizeof(fsst_decoder_t) bytes).
@@ -104,7 +103,7 @@ uint32_t cand_footprint(void* self, lb_footprint_component* out,
   const lb_footprint_component components[] = {
       {"payload_fsst", h->compressed.size()},
       {"symbol_table", h->symtab.size()},
-      {"offsets", h->coffsets.size() * sizeof(uint64_t)},
+      {"offsets", h->offsets.size() * sizeof(uint64_t)},
   };
   const uint32_t count = 3;
   for (uint32_t i = 0; i < count && i < capacity; i++) out[i] = components[i];
@@ -121,17 +120,11 @@ int cand_decode(void* self, uint8_t* bytes_out, uint64_t bytes_cap,
   fsst_decoder_t decoder;
   if (fsst_import(&decoder, h->symtab.data()) == 0) return 2;
 
-  uint64_t pos = 0;
-  for (uint64_t i = 0; i < h->num_rows; i++) {
-    offsets_out[i] = pos;
-    const size_t clen = size_t(h->coffsets[i + 1] - h->coffsets[i]);
-    const unsigned char* cptr = h->compressed.data() + h->coffsets[i];
-    const size_t got = fsst_decompress(&decoder, clen, cptr, bytes_cap - pos,
-                                       bytes_out + pos);
-    pos += got;
-  }
-  offsets_out[h->num_rows] = pos;
-  if (pos != h->payload_bytes) return 3;
+  const size_t got = fsst_decompress(&decoder, h->compressed.size(),
+                                     h->compressed.data(), bytes_cap, bytes_out);
+  if (got != h->payload_bytes) return 3;
+  std::memcpy(offsets_out, h->offsets.data(),
+              h->offsets.size() * sizeof(uint64_t));
   return 0;
 }
 
@@ -140,7 +133,7 @@ void cand_destroy(void* self) { delete static_cast<Handle*>(self); }
 const lb_candidate kVtable = {
     /*abi_version=*/LB_ABI_VERSION,
     /*name=*/"fsst",
-    /*version=*/"0.1.0+e638d4c",
+    /*version=*/"0.2.0+e638d4c.bulk",
     /*cpu_features=*/nullptr,
     /*strategies=*/nullptr,
     /*strategy_count=*/0,
