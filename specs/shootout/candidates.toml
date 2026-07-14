@@ -76,6 +76,11 @@ configs = ['{"bits":12}', '{"bits":16}']
 [[candidates]]
 name = "fsst_like"
 
+# NOTE: `fsst_spiral` (Vortex's Teddy-prefilter FSST matcher) is intentionally
+# absent here — it is HELD pending an upstream fix to the Teddy streaming scan
+# (~0.02% false positives; see candidates/fsst_spiral/UPSTREAM_BUG.md). The
+# candidate crate + harness wiring exist behind the `cand-fsst-spiral` feature;
+# re-add it here once the upstream matcher passes the gate.
 [[candidates]]
 name = "fsst"
 

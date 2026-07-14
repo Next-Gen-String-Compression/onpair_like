@@ -1,0 +1,27 @@
+[package]
+name = "lb-cand-fsst-spiral"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lb-abi = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# The FSST encoder (SpiralDB's fsst-rs). Pinned to the same version the Vortex
+# matcher resolves, so `fsst::Symbol` is one type across both crates and the
+# symbol table can be handed straight to `FsstMatcher`.
+fsst-rs = "=0.5.10"
+# Vortex's FSST LIKE matcher: SIMD (Hyperscan) Teddy prefilter + DFA verify over
+# FSST codes, directly in the compressed domain. Lives on the (unmerged) branch
+# feat: ji/fsst-like-paper-2-work-clean — the only branch carrying BOTH the Teddy
+# prefilter (fat_teddy.rs) and the planner, i.e. the impl from the SpiralDB
+# "Compile or Prefilter?" blog post. The `dfa` module (where `FsstMatcher` lives)
+# is `pub` only under `_test-harness`, so we enable it.
+vortex-fsst = { git = "https://github.com/vortex-data/vortex.git", rev = "346dfdf3cc342ff47b86b40aeb1e4703925427db", features = ["_test-harness"] }
+
+# Test-only: read the canonical dataset artifact (Arrow IPC, LargeBinary) to
+# reproduce matcher behaviour on real rows. Arrow 58 is already in the graph via
+# vortex-array, so this pulls nothing new.
+[dev-dependencies]
+arrow = "58"

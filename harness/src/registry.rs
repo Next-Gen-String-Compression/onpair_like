@@ -36,6 +36,8 @@ pub fn candidates() -> Vec<Candidate> {
     v.push(lb_cand_fsst::vtable());
     #[cfg(feature = "cand-fsst-like")]
     v.push(lb_cand_fsst_like::vtable());
+    #[cfg(feature = "cand-fsst-spiral")]
+    v.push(lb_cand_fsst_spiral::vtable());
     v.into_iter()
         .map(|vt| Candidate::validate(vt).expect("registered candidate failed validation"))
         .collect()

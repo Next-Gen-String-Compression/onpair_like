@@ -12,6 +12,7 @@ members = [
     "candidates/zstd",
     "candidates/fsst",
     "candidates/fsst_like",
+    "candidates/fsst_spiral",
     "scanners/memmem",
     "scanners/cpp_std_find",
     "scanners/classics",

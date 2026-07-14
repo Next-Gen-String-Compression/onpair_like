@@ -24,6 +24,9 @@ default = [
     "cand-zstd",
     "cand-fsst",
     "cand-fsst-like",
+    # cand-fsst-spiral: HELD (opt-in only) — pulls the heavy Vortex tree and its
+    # Teddy scan has an upstream false-positive bug. Enable explicitly with
+    # `--features cand-fsst-spiral`. See candidates/fsst_spiral/UPSTREAM_BUG.md.
     "scan-memmem",
     "scan-cpp-std-find",
     "scan-classics",
@@ -41,6 +44,7 @@ cand-lz4 = ["dep:lb-cand-lz4"]
 cand-zstd = ["dep:lb-cand-zstd"]
 cand-fsst = ["dep:lb-cand-fsst"]
 cand-fsst-like = ["dep:lb-cand-fsst-like"]
+cand-fsst-spiral = ["dep:lb-cand-fsst-spiral"]
 scan-memmem = ["dep:lb-scan-memmem"]
 scan-cpp-std-find = ["dep:lb-scan-cpp-std-find"]
 scan-classics = ["dep:lb-scan-classics"]
@@ -60,6 +64,7 @@ lb-cand-lz4 = { path = "../candidates/lz4", optional = true }
 lb-cand-zstd = { path = "../candidates/zstd", optional = true }
 lb-cand-fsst = { path = "../candidates/fsst", optional = true }
 lb-cand-fsst-like = { path = "../candidates/fsst_like", optional = true }
+lb-cand-fsst-spiral = { path = "../candidates/fsst_spiral", optional = true }
 lb-scan-memmem = { path = "../scanners/memmem", optional = true }
 lb-scan-cpp-std-find = { path = "../scanners/cpp_std_find", optional = true }
 lb-scan-classics = { path = "../scanners/classics", optional = true }

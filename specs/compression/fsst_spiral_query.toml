@@ -1,0 +1,79 @@
+# ┌──────────────────────────────────────────────────────────────────────────┐
+# │ BLOCKED / HELD — does NOT pass the gate today.                             │
+# │ The Vortex Teddy scan on the pinned branch has a ~0.02% false-positive bug │
+# │ on short contains needles (see candidates/fsst_spiral/UPSTREAM_BUG.md).    │
+# │ fsst_spiral is behind the non-default `cand-fsst-spiral` feature; running  │
+# │ this needs `--features cand-fsst-spiral` AND a fixed Vortex ref. Kept as    │
+# │ the ready-to-use validation spec for when the upstream matcher is fixed.   │
+# └──────────────────────────────────────────────────────────────────────────┘
+#
+# Query-axis spec for Vortex's FSST LIKE matcher (github.com/vortex-data/vortex,
+# branch ji/fsst-like-paper-2-work-clean) — the compressed-domain matcher from
+# SpiralDB's "Compile or Prefilter?" blog: a SIMD (Hyperscan) Teddy literal
+# prefilter followed by a DFA verify over FSST codes, never decompressing.
+#
+# Measured head-to-head against the other FSST-encoded engines on the SAME
+# columns — the clean "prefilter vs automaton vs decompress" comparison, all
+# over the same encoding:
+#
+#   teddy   — fsst_spiral: Teddy prefilter + DFA verify in the compressed domain
+#             (ColumnView pushdown; the blog's engine).
+#   interp  — fsst_like (C++, DaMoN'26): compressed-domain automaton, NO prefilter.
+#             Isolates the Teddy prefilter's payoff (same "match on codes" idea,
+#             ± the SIMD prefilter).
+#   decode  — fsst (C++): decompress the whole payload, then memmem. The
+#             string-native decode baseline every compressed-domain matcher must beat.
+#
+# fsst_spiral answers CONTAINS/PREFIX/SUFFIX (one `teddy` strategy, op chosen by
+# the query), but these lean compression suites are contains-only, so only
+# contains cells are emitted here; prefix/suffix support is exercised by the
+# swept grids.
+#
+# Known coverage gap: the Vortex matcher is a LIKE-pattern engine with NO escape,
+# so a literal needle containing `%` or `_` cannot be expressed as `%needle%`.
+# fsst_spiral reports those as errored cells (never a wrong answer) — in practice
+# a few clickbench-url percent-encoded needles. The correctness gate still passes
+# (no gate failures); expect a small nonzero error count on clickbench only.
+#
+# Correctness-gated before any latency is recorded. Single-shot measurement (as
+# the compression-axis specs): the real latency race is specs/shootout/candidates.toml.
+strategies = ["teddy", "interp", "decode"]
+
+[measure]
+chunk_rows = [0]
+warmup = 0
+min_iters = 1
+min_millis = 0
+
+[[datasets]]
+path = "../../datasets/msmarco-query"       # short rows (~36 B)
+[[datasets]]
+path = "../../datasets/clickbench-url-1m"    # URLs (~89 B), highly redundant
+[[datasets]]
+path = "../../datasets/tpch-ccomment-sf10"   # generated comment text (~72 B)
+[[datasets]]
+path = "../../datasets/dbpedia-abstract"     # long natural-language text (~338 B)
+
+[[suites]]
+path = "../../suites/compression/msmarco-query"
+[[suites]]
+path = "../../suites/compression/clickbench-url-1m"
+[[suites]]
+path = "../../suites/compression/tpch-ccomment-sf10"
+[[suites]]
+path = "../../suites/compression/dbpedia-abstract"
+
+# Vortex FSST matcher (Rust). No config knobs: FSST training exposes none, so a
+# single default build per column.
+[[candidates]]
+name = "fsst_spiral"
+
+# References: the same FSST encoding under a no-prefilter automaton and a decode baseline.
+[[candidates]]
+name = "fsst_like"
+[[candidates]]
+name = "fsst"
+
+# Drives the decode path's round-trip and the correctness gate; not a matcher here.
+[[scanners]]
+name = "memmem"
