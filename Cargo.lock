@@ -774,6 +774,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "lb-cand-dict"
+version = "0.1.0"
+dependencies = [
+ "cmake",
+ "lb-abi",
+]
+
+[[package]]
+name = "lb-cand-dict-fsst"
+version = "0.1.0"
+dependencies = [
+ "cmake",
+ "lb-abi",
+]
+
+[[package]]
 name = "lb-cand-fsst"
 version = "0.1.0"
 dependencies = [
@@ -782,7 +798,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lb-cand-fsst-like"
+name = "lb-cand-fsst-like-tum"
 version = "0.1.0"
 dependencies = [
  "cmake",
@@ -850,8 +866,10 @@ dependencies = [
  "humantime",
  "lb-abi",
  "lb-cand-cpp-identity",
+ "lb-cand-dict",
+ "lb-cand-dict-fsst",
  "lb-cand-fsst",
- "lb-cand-fsst-like",
+ "lb-cand-fsst-like-tum",
  "lb-cand-gate-canary",
  "lb-cand-lz4",
  "lb-cand-onpair",

@@ -2,9 +2,9 @@
 # comparison — compressed-domain match-in-place vs decode-then-eval on the SAME
 # FSST-compressed bytes.
 #
-# `interp` is fsst_like's compressed-domain automaton (codegen backends cpp/llvm
+# `interp` is fsst_like_tum's compressed-domain automaton (codegen backends cpp/llvm
 # join the allowlist once wired). `decode` is the harness-composed
-# decompress-then-scan over fsst_like's own decode() output. Both are gated by
+# decompress-then-scan over fsst_like_tum's own decode() output. Both are gated by
 # the correctness gate before any latency is recorded. onpair is included as the
 # other compressed-domain codec; fsst as the standard decode baseline.
 #
@@ -37,7 +37,7 @@ path = "../../suites/compression/tpch-ccomment-sf10"
 path = "../../suites/compression/dbpedia-abstract"
 
 [[candidates]]
-name = "fsst_like"
+name = "fsst_like_tum"
 [[candidates]]
 name = "onpair"
 configs = ['{"bits":12}']

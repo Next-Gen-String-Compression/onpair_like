@@ -1,4 +1,4 @@
-# Author-owned build for the `fsst_like` candidate (DESIGN.md §17): the DaMoN'26
+# Author-owned build for the `fsst_like_tum` candidate (DESIGN.md §17): the DaMoN'26
 # FSST-LIKE-Matching compressed-domain matcher. The harness build invokes this
 # via the `cmake` crate from build.rs and links the static library.
 #
@@ -7,10 +7,10 @@
 # later milestone). Because this candidate statically links its own FSST copy
 # (calin2110 fork) while the `fsst` candidate links cwida upstream — and both
 # forks export the identical `fsst_*` / `libfsst::` symbols — we LOCALIZE every
-# symbol here except the single lb_candidate_fsst_like entry point, so the two
+# symbol here except the single lb_candidate_fsst_like_tum entry point, so the two
 # archives do not collide at the final harness link.
 cmake_minimum_required(VERSION 3.21)
-project(lb_fsst_like CXX)
+project(lb_fsst_like_tum CXX)
 
 include(FetchContent)
 # All three populated source-only (SOURCE_SUBDIR points at a nonexistent dir so
@@ -43,7 +43,7 @@ check_cxx_compiler_flag("-march=native" LB_FL_MARCH_NATIVE)
 # Curated interpreted subset — no codegen/*, no vectorscan/hybrid_string_search,
 # no serializer/utils (file I/O the matcher does not need).
 add_library(fl_objs OBJECT
-    fsst_like_candidate.cpp
+    fsst_like_tum_candidate.cpp
     ${fsst_like_src_SOURCE_DIR}/src/encoder.cpp
     ${fsst_like_src_SOURCE_DIR}/src/automata.cpp
     ${fsst_like_src_SOURCE_DIR}/src/like_pattern_automaton.cpp
@@ -58,6 +58,7 @@ target_include_directories(fl_objs PRIVATE
     ${GEN_INC}
     ${fmt_ext_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../contract
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../common/fsst_common
 )
 target_compile_definitions(fl_objs PRIVATE FMT_HEADER_ONLY)
 set_target_properties(fl_objs PROPERTIES
@@ -79,10 +80,10 @@ set_source_files_properties(${fsst_fork_SOURCE_DIR}/fsst_avx512.cpp
 # Combine all objects into one relocatable object, exporting ONLY the entry
 # point; every FSST / FSST-LIKE symbol becomes local, so this archive cannot
 # clash with the `fsst` candidate's cwida FSST symbols.
-set(COMBINED ${CMAKE_CURRENT_BINARY_DIR}/lb_fsst_like_combined${CMAKE_CXX_OUTPUT_EXTENSION})
+set(COMBINED ${CMAKE_CURRENT_BINARY_DIR}/lb_fsst_like_tum_combined${CMAKE_CXX_OUTPUT_EXTENSION})
 if(APPLE)
     add_custom_command(OUTPUT ${COMBINED}
-        COMMAND ld -r -exported_symbol _lb_candidate_fsst_like
+        COMMAND ld -r -exported_symbol _lb_candidate_fsst_like_tum
                 $<TARGET_OBJECTS:fl_objs> -o ${COMBINED}
         DEPENDS fl_objs COMMAND_EXPAND_LISTS VERBATIM)
 else()
@@ -101,7 +102,7 @@ else()
 endif()
 set_source_files_properties(${COMBINED} PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
 
-add_library(lb_fsst_like STATIC ${COMBINED})
-set_target_properties(lb_fsst_like PROPERTIES LINKER_LANGUAGE CXX)
+add_library(lb_fsst_like_tum STATIC ${COMBINED})
+set_target_properties(lb_fsst_like_tum PROPERTIES LINKER_LANGUAGE CXX)
 
-install(TARGETS lb_fsst_like ARCHIVE DESTINATION lib)
+install(TARGETS lb_fsst_like_tum ARCHIVE DESTINATION lib)

@@ -34,8 +34,12 @@ pub fn candidates() -> Vec<Candidate> {
     v.push(lb_cand_zstd::vtable());
     #[cfg(feature = "cand-fsst")]
     v.push(lb_cand_fsst::vtable());
-    #[cfg(feature = "cand-fsst-like")]
-    v.push(lb_cand_fsst_like::vtable());
+    #[cfg(feature = "cand-fsst-like-tum")]
+    v.push(lb_cand_fsst_like_tum::vtable());
+    #[cfg(feature = "cand-dict")]
+    v.push(lb_cand_dict::vtable());
+    #[cfg(feature = "cand-dict-fsst")]
+    v.push(lb_cand_dict_fsst::vtable());
     v.into_iter()
         .map(|vt| Candidate::validate(vt).expect("registered candidate failed validation"))
         .collect()

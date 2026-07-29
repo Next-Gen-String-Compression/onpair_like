@@ -9,7 +9,7 @@
 #   onpair         compressed — compressed-domain match (the paper's codec)
 #   onpair_spiral  kmp/pf_*   — Rust OnPair: token-KMP ± SIMD prefilter, and
 #                               prefilter + decode-memmem verify
-#   fsst_like      interp     — compressed-domain automaton (DaMoN'26)
+#   fsst_like_tum  interp     — compressed-domain automaton (DaMoN'26)
 #   fsst           decode     — string-native codec, decompress-then-scan
 #   lz4 / zstd     decode     — general block codecs, decompress-then-scan
 #   cpp_identity   decode     — memcpy "decode": the decode-path floor
@@ -74,7 +74,7 @@ name = "onpair_spiral"
 configs = ['{"bits":12}', '{"bits":16}']
 
 [[candidates]]
-name = "fsst_like"
+name = "fsst_like_tum"
 
 [[candidates]]
 name = "fsst"

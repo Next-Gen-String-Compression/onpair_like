@@ -1426,19 +1426,24 @@ against *match-in-place* within the FSST family, next to the OnPair results.
   lz4/zstd shape. Wraps **cwida/fsst upstream** (the canonical reference
   implementation). It is the reference-standard decompress-then-eval line: the
   harness composes every scanner over its `decode()` output.
-- **`fsst_like`** — the DaMoN compressed-domain matcher. Wraps
+- **`fsst_like_tum`** — the DaMoN compressed-domain matcher, **match-in-place only**
+  (compressed-domain `run()` strategies, **no `decode()`/`view()`**). Wraps
   **`calin2110/FSST-LIKE-Matching`**, which transitively fetches
-  **`calin2110/fsst`** (a fork of cwida/fsst). It exposes compressed-domain
-  `run()` strategies (below) **and** `decode()` (it owns an FSST decoder).
+  **`calin2110/fsst`** (a fork of cwida/fsst). It is deliberately not a codec:
+  its whole point is answering LIKE queries *without* decompressing, so the
+  decode-then-scan baseline is left entirely to the `fsst` candidate rather than
+  duplicated here.
 
 The two deliberately link **different FSST forks**, so their compressed
 bytes / ratios are **not byte-identical** (different symbol-table trainers),
 though each is internally consistent and both report identical footprint
-components. The truly apples-to-apples "decode vs match-in-place on *identical*
-bytes" comparison therefore lives **inside `fsst_like`** — its own `decode`
-strategy versus its `run` strategies — while `fsst` (cwida) is the
-canonical-reference decode line. This split is intentional and is stated here so
-the ratio delta between the two rows is read as a trainer difference, not a bug.
+components. `fsst` (cwida) is the canonical-reference **decode** line;
+`fsst_like_tum` (calin) is the **match-in-place** line — the two axes of the FSST
+comparison, one candidate each. (An earlier revision also exposed a `decode`
+strategy on `fsst_like_tum` for a same-bytes decode-vs-match contrast; it was
+dropped because plain `fsst` already covers decode, and the cross-fork ratio
+delta below is the only thing that needs stating: read it as a trainer
+difference, not a bug.)
 
 Both C++ dependencies are `FetchContent`-pinned to explicit commits (like
 onpair), for reproducibility.
@@ -1455,7 +1460,7 @@ index)) works unchanged:
 | `symbol_table` | serialized symbol table (`fsst_export`, ≤ ~2 KB) |
 | `offsets` | compressed-row index, (rows+1)×8 B, **uncompressed** — the honest index cost, excluded from `payload×` |
 
-### 17.3 `fsst_like` backends, ops, and gating
+### 17.3 `fsst_like_tum` backends, ops, and gating
 
 The compressed-domain matcher is a per-pattern automaton run over each row's
 compressed bytes. It ships as one candidate declaring, per host, only the
@@ -1522,7 +1527,7 @@ for fixed input, so ratios are stable across runs.
 
 1. `fsst` (cwida) decode-only candidate + registration + `codecs.toml` entry.
    **Done (2026-07-09):** payload× ≈ 2.0 on msmarco, decode ~2.8 GB/s, gate passes.
-2. `fsst_like` interpreted `run()` + `decode()`; **correctness gate passes on all
+2. `fsst_like_tum` interpreted `run()` + `decode()`; **correctness gate passes on all
    four columns.** **Done (2026-07-09).** Finding (`fsst_like_query.toml`):
    compressed-domain `interp` beats decode-then-eval on short/medium rows
    (msmarco 13.4 vs 19.6 ms; url 22.6 vs 26.5; tpch 26.8 vs 31.7) but **loses on
@@ -1534,7 +1539,7 @@ for fixed input, so ratios are stable across runs.
    LLVM 16** (untestable on the arm64 dev box: LLVM 16 absent, SSE `_mm_cmpestrm`
    is x86-only, and `cpp` codegen shells out to `clang++` per query). Same
    deferral rationale as §16.4's vectorscan. Full handoff for the
-   x86 agent: **`TODO_fsst_like.md`** at the repo root (architecture, exact
+   x86 agent: **`TODO_fsst_like_tum.md`** at the repo root (architecture, exact
    FSST-LIKE codegen API, per-strategy gating, CMake/LLVM wiring, gotchas,
    validation steps).
 

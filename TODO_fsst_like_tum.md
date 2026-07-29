@@ -1,12 +1,20 @@
-# TODO: `fsst_like` codegen backends (cpp / llvm / SIMD) — x86 + LLVM 16 host
+# TODO: `fsst_like_tum` codegen backends (cpp / llvm / SIMD) — x86 + LLVM 16 host
+
+> **Note (post-rename):** this candidate was renamed `fsst_like` → `fsst_like_tum`.
+> Since this TODO was written it was also made **interp-only** — the `decode()`
+> path was removed (decode-then-scan is the `fsst` candidate's job) — and its FSST
+> front-end moved to the shared `candidates/common/fsst_common/fsst_build.hpp`.
+> Paths/names below are updated for the rename; any reference to a `decode`
+> strategy or the old inline build loop is historical. The spec file
+> `specs/compression/fsst_like_query.toml` keeps its name.
 
 **Audience:** a coding agent on an **x86-64 Linux (or x86 mac) host with LLVM 16
-installed**. You are picking up the `fsst_like` candidate where the arm64 dev box
+installed**. You are picking up the `fsst_like_tum` candidate where the arm64 dev box
 left off. Read this whole file, then `DESIGN.md` §17, before touching code.
 
 ## TL;DR
 
-`candidates/fsst_like` wires the DaMoN'26 **FSST-LIKE-Matching** compressed-domain
+`candidates/fsst_like_tum` wires the DaMoN'26 **FSST-LIKE-Matching** compressed-domain
 LIKE matcher. The **interpreted** backend (`interp` strategy) is **done, tested,
 and passes the correctness gate on all four columns**. Your job: add the three
 **codegen** backends the paper's headline numbers come from —
@@ -39,20 +47,20 @@ paper under-sells the technique. Short/medium rows already win with interp
 
 ## What already exists (don't rebuild it)
 
-- `candidates/fsst_like/cpp/fsst_like_candidate.cpp` — the vtable. `build()`
+- `candidates/fsst_like_tum/cpp/fsst_like_tum_candidate.cpp` — the vtable. `build()`
   trains an FSST table, compresses rows, writes the escaped-byte bitmap into
   `symbols[255]`, builds a FSST-LIKE `Encoder`. `run()` currently implements only
-  strategy 0 = `interp` via `LikePatternAutomatonParser`. `decode()` uses
-  `fsst_import`+`fsst_decompress`. `footprint()` reports `payload_fsst` +
-  `symbol_table` + `offsets`.
-- `candidates/fsst_like/cpp/CMakeLists.txt` — FetchContent-pins FSST-LIKE
+  strategy 0 = `interp` via `LikePatternAutomatonParser`. `footprint()` reports
+  `payload_fsst` + `symbol_table` + `offsets`. (Build/footprint are now the shared
+  `fsst_common` front-end; the candidate no longer exposes `decode()`.)
+- `candidates/fsst_like_tum/cpp/CMakeLists.txt` — FetchContent-pins FSST-LIKE
   (`b1eb3ab9…`), calin2110/fsst (`1755328b…`), fmt (`12.1.0`); compiles the
-  **interpreted subset** and **localizes all symbols except `lb_candidate_fsst_like`**
+  **interpreted subset** and **localizes all symbols except `lb_candidate_fsst_like_tum`**
   (see "Symbol localization" below — this is load-bearing, keep it).
-- `candidates/fsst_like/{Cargo.toml,build.rs,src/lib.rs}` — standard C++-candidate
+- `candidates/fsst_like_tum/{Cargo.toml,build.rs,src/lib.rs}` — standard C++-candidate
   glue (mirrors `candidates/onpair`). Registered in `harness/src/registry.rs`,
-  workspace `Cargo.toml`, `harness/Cargo.toml` (`cand-fsst-like`).
-- Specs: `specs/compression/codecs.toml` (fsst_like on the compression axis,
+  workspace `Cargo.toml`, `harness/Cargo.toml` (`cand-fsst-like-tum`).
+- Specs: `specs/compression/codecs.toml` (fsst_like_tum on the compression axis,
   `decode`) and `specs/compression/fsst_like_query.toml` (query axis:
   `strategies = ["interp","compressed","decode"]`). **Add `cpp`,`cpp-simd`,`llvm`,
   `llvm-simd` to that allowlist once wired.**
@@ -150,7 +158,7 @@ erroring) on arm64.
 
 ## CMake / build changes
 
-In `candidates/fsst_like/cpp/CMakeLists.txt`:
+In `candidates/fsst_like_tum/cpp/CMakeLists.txt`:
 
 1. Add the codegen sources to the `fl_objs` OBJECT library:
    `${fsst_like_src_SOURCE_DIR}/src/codegen/codegen.cpp`,
@@ -165,7 +173,7 @@ In `candidates/fsst_like/cpp/CMakeLists.txt`:
      target_compile_definitions(fl_objs PRIVATE HAVE_LLVM ${LLVM_DEFINITIONS})
      target_include_directories(fl_objs PRIVATE ${LLVM_INCLUDE_DIRS})
      llvm_map_components_to_libnames(LLVM_LIBS core orcjit native nativecodegen)
-     # link LLVM_LIBS into the final lb_fsst_like target (see localization note)
+     # link LLVM_LIBS into the final lb_fsst_like_tum target (see localization note)
    endif()
    ```
    Surface `HAVE_LLVM` to `build.rs`/the `.cpp` so the strategy list matches what
@@ -176,13 +184,13 @@ In `candidates/fsst_like/cpp/CMakeLists.txt`:
 
 ## Symbol localization (load-bearing — keep it, extend it)
 
-`fsst_like` and the `fsst` candidate each statically link a **different, full
+`fsst_like_tum` and the `fsst` candidate each statically link a **different, full
 FSST copy** (calin2110 vs cwida upstream), and both forks export the *identical*
 `fsst_*` C API **and** `libfsst::…` C++ symbols → a duplicate-symbol link error
 if left global. The CMake already fixes this by combining all objects with
-`ld -r` and exporting **only** `lb_candidate_fsst_like` (macOS:
-`ld -r -exported_symbol _lb_candidate_fsst_like`; Linux: `ld -r` +
-`objcopy --keep-global-symbol=lb_candidate_fsst_like`). Verify with
+`ld -r` and exporting **only** `lb_candidate_fsst_like_tum` (macOS:
+`ld -r -exported_symbol _lb_candidate_fsst_like_tum`; Linux: `ld -r` +
+`objcopy --keep-global-symbol=lb_candidate_fsst_like_tum`). Verify with
 `nm -gU <archive>` (or `nm -g --defined-only` on Linux) → only that one symbol.
 
 When you add **LLVM**, its static libs bring thousands of symbols; localizing
@@ -214,8 +222,9 @@ the single-global-symbol invariant either way.)
 - **Escaped-byte bitmap:** `build()` writes a 256-entry bitmap of escaped bytes
   into `symbols[255]` (`isEscapable()` reads it) — mirrors the repo's
   `fa-drawing/server.cpp compressFile()`. Keep this; the matcher needs it.
-- **Export before clobber:** `decode()` uses the symbol table serialized
-  (`fsst_export`) **before** the `symbols[255]` clobber, so decode is clean/standard.
+- **Export before clobber:** the shared `fsst_common::Build` serializes the symbol
+  table (`fsst_export`) **before** the `symbols[255]` clobber, so any decode is
+  clean/standard.
 - **The build path itself** (`fsst_create` → grab `((libfsst::Encoder*)enc)
   ->symbolTable` → `fsst_compress` → clobber → `Encoder`) is validated. Don't
   change it; just add codegen strategies to `run()`.
@@ -228,7 +237,7 @@ the single-global-symbol invariant either way.)
 
 ## How to validate (must pass before reporting any number)
 
-1. `cargo build --release` — both FSST candidates compile; `fsst_like` now
+1. `cargo build --release` — both FSST candidates compile; `fsst_like_tum` now
    registers `interp` + `cpp`(+`cpp-simd` on x86) + `llvm`(+`llvm-simd`) with
    LLVM 16 present. Verify the strategy list via a quick harness probe or by
    inspecting the run output's per-strategy cells.

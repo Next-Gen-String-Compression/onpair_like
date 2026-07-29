@@ -28,7 +28,7 @@ unsafe impl Sync for StaticVt {}
 /// This makes "OnPair used as a plain block codec" a first-class roster
 /// candidate — a peer of `lz4`/`zstd`/`fsst` — distinct from the `onpair`
 /// candidate's compressed-domain `compressed` strategy (cf. `fsst` vs
-/// `fsst_like`, DESIGN §17.1). Same handle/config semantics as `onpair`.
+/// `fsst_like_tum`, DESIGN §17.1). Same handle/config semantics as `onpair`.
 pub fn vtable_decode() -> &'static LbCandidate {
     static VT: OnceLock<StaticVt> = OnceLock::new();
     let s = VT.get_or_init(|| {

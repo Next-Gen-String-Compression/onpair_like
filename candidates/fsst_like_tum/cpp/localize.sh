@@ -18,6 +18,6 @@ set -eu
 obj="$1"
 list="$obj.localize"
 nm --defined-only "$obj" \
-  | awk '($2=="T" || $2=="D" || $2=="B") && $3 != "lb_candidate_fsst_like" { print $3 }' \
+  | awk '($2=="T" || $2=="D" || $2=="B") && $3 != "lb_candidate_fsst_like_tum" { print $3 }' \
   | sort -u > "$list"
 objcopy --localize-symbols="$list" "$obj"

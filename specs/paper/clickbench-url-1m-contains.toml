@@ -1,0 +1,51 @@
+# Same sweep as clickbench-url-1m.toml, but restricted to the 142 `contains`
+# queries via the filtered suite clickbench-url-1m-contains-s42.
+# The filtered suite is a copy of clickbench-url-1m-gen1-s42 with queries.jsonl
+# reduced to op == "contains" (truth is embedded per-query; binding is via the
+# dataset checksum only, so the reduction preserves validity).
+#
+#   cargo run --release --bin bench -- run specs/paper/clickbench-url-1m-contains.toml \
+#       -o results/paper/clickbench-url-1m-contains
+
+[[datasets]]
+path = "../../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../../suites/clickbench-url-1m-contains-s42"
+
+[[candidates]]
+name = "uncompressed"
+
+[[candidates]]
+name = "onpair"
+
+[[candidates]]
+name = "fsst"
+
+[[candidates]]
+name = "fsst_like_tum"
+
+[[candidates]]
+name = "lz4"
+
+[[candidates]]
+name = "zstd"
+
+[[candidates]]
+name = "onpair_spiral"
+
+[[candidates]]
+name = "dict"
+
+[[candidates]]
+name = "dict_fsst"
+
+[[scanners]]
+name = "memmem"
+
+[measure]
+chunk_rows = [0, 122880]  # 0 = whole column; 122880 = 60*2048 rows/chunk
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

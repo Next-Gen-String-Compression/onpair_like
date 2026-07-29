@@ -24,10 +24,31 @@ name = "uncompressed"
 [[candidates]]
 name = "onpair"
 
+[[candidates]]
+name = "fsst"
+
+[[candidates]]
+name = "fsst_like_tum"
+
+[[candidates]]
+name = "lz4"
+
+[[candidates]]
+name = "zstd"
+
+[[candidates]]
+name = "onpair_spiral"
+
 [[scanners]]
 name = "memmem"
 
 [measure]
 # Whole-column chunking for the headline sweep; add 65536 for the
 # chunking axis when the amortization figure is wanted.
-chunk_rows = [0]
+chunk_rows = [0, 122880]  # 0 = whole column; 122880 = 60*2048 rows/chunk
+# Fast-iteration settings (not paper-grade): 2 warmups + exactly 3 timed
+# samples per query. min_millis=0 so min_iters is the binding stop condition.
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

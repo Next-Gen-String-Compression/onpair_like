@@ -73,7 +73,7 @@ name = "zstd"
 configs = ['{"level":1}', '{"level":3}', '{"level":9}', '{"level":19}']
 
 # FSST (cwida/fsst upstream) — the string-native rival (DESIGN.md §17). Standard
-# decode-only baseline; the compressed-domain FSST-LIKE matcher is `fsst_like`.
+# decode-only baseline; the compressed-domain FSST-LIKE matcher is `fsst_like_tum`.
 [[candidates]]
 name = "fsst"
 
@@ -81,7 +81,7 @@ name = "fsst"
 # decode() baseline (same shape as fsst); its compressed-domain run() strategies
 # are measured on the query axis (specs/compression/fsst_like_query.toml).
 [[candidates]]
-name = "fsst_like"
+name = "fsst_like_tum"
 
 # OnPair (the paper's codec), swept across dictionary sizes (2^bits entries):
 # 9-bit (512) is the floor of the accepted range, 16-bit (65536) is the default.

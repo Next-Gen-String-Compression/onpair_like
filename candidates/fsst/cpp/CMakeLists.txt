@@ -34,6 +34,7 @@ add_library(lb_fsst STATIC
 target_include_directories(lb_fsst PRIVATE
     ${fsst_upstream_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../contract
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../common/fsst_common
 )
 set_target_properties(lb_fsst PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 target_compile_options(lb_fsst PRIVATE
