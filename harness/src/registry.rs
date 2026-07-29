@@ -36,6 +36,8 @@ pub fn candidates() -> Vec<Candidate> {
     v.push(lb_cand_fsst::vtable());
     #[cfg(feature = "cand-fsst-like-tum")]
     v.push(lb_cand_fsst_like_tum::vtable());
+    #[cfg(feature = "cand-fsst-like-utn")]
+    v.push(lb_cand_fsst_like_utn::vtable());
     #[cfg(feature = "cand-dict")]
     v.push(lb_cand_dict::vtable());
     #[cfg(feature = "cand-dict-fsst")]

@@ -806,6 +806,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "lb-cand-fsst-like-utn"
+version = "0.1.0"
+dependencies = [
+ "cmake",
+ "lb-abi",
+]
+
+[[package]]
 name = "lb-cand-gate-canary"
 version = "0.1.0"
 dependencies = [
@@ -870,6 +878,7 @@ dependencies = [
  "lb-cand-dict-fsst",
  "lb-cand-fsst",
  "lb-cand-fsst-like-tum",
+ "lb-cand-fsst-like-utn",
  "lb-cand-gate-canary",
  "lb-cand-lz4",
  "lb-cand-onpair",

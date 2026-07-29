@@ -24,6 +24,7 @@ default = [
     "cand-zstd",
     "cand-fsst",
     "cand-fsst-like-tum",
+    "cand-fsst-like-utn",
     "cand-dict",
     "cand-dict-fsst",
     "scan-memmem",
@@ -43,6 +44,7 @@ cand-lz4 = ["dep:lb-cand-lz4"]
 cand-zstd = ["dep:lb-cand-zstd"]
 cand-fsst = ["dep:lb-cand-fsst"]
 cand-fsst-like-tum = ["dep:lb-cand-fsst-like-tum"]
+cand-fsst-like-utn = ["dep:lb-cand-fsst-like-utn"]
 cand-dict = ["dep:lb-cand-dict"]
 cand-dict-fsst = ["dep:lb-cand-dict-fsst"]
 scan-memmem = ["dep:lb-scan-memmem"]
@@ -64,6 +66,7 @@ lb-cand-lz4 = { path = "../candidates/lz4", optional = true }
 lb-cand-zstd = { path = "../candidates/zstd", optional = true }
 lb-cand-fsst = { path = "../candidates/fsst", optional = true }
 lb-cand-fsst-like-tum = { path = "../candidates/fsst_like_tum", optional = true }
+lb-cand-fsst-like-utn = { path = "../candidates/fsst_like_utn", optional = true }
 lb-cand-dict = { path = "../candidates/dict", optional = true }
 lb-cand-dict-fsst = { path = "../candidates/dict_fsst", optional = true }
 lb-scan-memmem = { path = "../scanners/memmem", optional = true }

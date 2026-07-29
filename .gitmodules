@@ -1,0 +1,3 @@
+[submodule "candidates/fsst_like_utn/vendor/fsst-like"]
+	path = candidates/fsst_like_utn/vendor/fsst-like
+	url = https://github.com/utndatasystems/fsst-like.git

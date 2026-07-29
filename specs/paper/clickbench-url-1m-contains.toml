@@ -26,6 +26,9 @@ name = "fsst"
 name = "fsst_like_tum"
 
 [[candidates]]
+name = "fsst_like_utn"
+
+[[candidates]]
 name = "lz4"
 
 [[candidates]]

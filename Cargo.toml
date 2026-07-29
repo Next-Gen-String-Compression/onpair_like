@@ -12,6 +12,7 @@ members = [
     "candidates/zstd",
     "candidates/fsst",
     "candidates/fsst_like_tum",
+    "candidates/fsst_like_utn",
     "candidates/dict",
     "candidates/dict_fsst",
     "scanners/memmem",
