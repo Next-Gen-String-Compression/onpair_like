@@ -19,7 +19,7 @@ path = "../../datasets/clickbench-url-1m"
 path = "../../suites/clickbench-url-1m-gen1-s42"
 
 [[candidates]]
-name = "uncompressed"
+name = "uncompressed_memmem"
 
 [[candidates]]
 name = "onpair"

@@ -774,7 +774,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lb-cand-dict"
+name = "lb-cand-dict-fsst-like-tum"
 version = "0.1.0"
 dependencies = [
  "cmake",
@@ -782,7 +782,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "lb-cand-dict-fsst"
+name = "lb-cand-dict-onpair"
+version = "0.1.0"
+dependencies = [
+ "lb-abi",
+ "lb-cand-onpair",
+ "lb-cand-onpair-spiral",
+]
+
+[[package]]
+name = "lb-cand-dict-uncompressed-prefilter"
 version = "0.1.0"
 dependencies = [
  "cmake",
@@ -791,6 +800,14 @@ dependencies = [
 
 [[package]]
 name = "lb-cand-fsst"
+version = "0.1.0"
+dependencies = [
+ "cmake",
+ "lb-abi",
+]
+
+[[package]]
+name = "lb-cand-fsst-decode-prefilter"
 version = "0.1.0"
 dependencies = [
  "cmake",
@@ -807,6 +824,14 @@ dependencies = [
 
 [[package]]
 name = "lb-cand-fsst-like-utn"
+version = "0.1.0"
+dependencies = [
+ "cmake",
+ "lb-abi",
+]
+
+[[package]]
+name = "lb-cand-fsst-prefilter"
 version = "0.1.0"
 dependencies = [
  "cmake",
@@ -854,6 +879,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "lb-cand-uncompressed-memmem"
+version = "0.1.0"
+dependencies = [
+ "lb-abi",
+ "memchr",
+]
+
+[[package]]
+name = "lb-cand-uncompressed-prefilter"
+version = "0.1.0"
+dependencies = [
+ "cmake",
+ "lb-abi",
+]
+
+[[package]]
 name = "lb-cand-zstd"
 version = "0.1.0"
 dependencies = [
@@ -874,16 +915,21 @@ dependencies = [
  "humantime",
  "lb-abi",
  "lb-cand-cpp-identity",
- "lb-cand-dict",
- "lb-cand-dict-fsst",
+ "lb-cand-dict-fsst-like-tum",
+ "lb-cand-dict-onpair",
+ "lb-cand-dict-uncompressed-prefilter",
  "lb-cand-fsst",
+ "lb-cand-fsst-decode-prefilter",
  "lb-cand-fsst-like-tum",
  "lb-cand-fsst-like-utn",
+ "lb-cand-fsst-prefilter",
  "lb-cand-gate-canary",
  "lb-cand-lz4",
  "lb-cand-onpair",
  "lb-cand-onpair-spiral",
  "lb-cand-uncompressed",
+ "lb-cand-uncompressed-memmem",
+ "lb-cand-uncompressed-prefilter",
  "lb-cand-zstd",
  "lb-scan-classics",
  "lb-scan-composed",
@@ -891,6 +937,7 @@ dependencies = [
  "lb-scan-libc",
  "lb-scan-memmem",
  "lb-scan-multi",
+ "lb-scan-prefilter",
  "lb-scan-stringzilla",
  "parquet",
  "serde",
@@ -943,6 +990,14 @@ name = "lb-scan-multi"
 version = "0.1.0"
 dependencies = [
  "aho-corasick",
+ "lb-abi",
+]
+
+[[package]]
+name = "lb-scan-prefilter"
+version = "0.1.0"
+dependencies = [
+ "cmake",
  "lb-abi",
 ]
 

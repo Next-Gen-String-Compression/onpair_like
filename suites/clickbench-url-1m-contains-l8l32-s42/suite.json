@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "clickbench-url-1m-contains-l8l32-s42",
+  "description": "Fast subset: op=contains with needle length 8 or 32 (47 queries) from clickbench-url-1m-gen1-s42. Truth embedded per-query; binding via dataset checksum only.",
+  "dataset": {
+    "id": "clickbench-url-1m",
+    "checksum": "xxh3:d164c1b5dbd6aff2"
+  },
+  "provenance": {
+    "generator": {
+      "name": "gen1",
+      "ops": [
+        "prefix",
+        "suffix",
+        "contains",
+        "multi_contains",
+        "contains_any"
+      ],
+      "profile": "full",
+      "seed": 42
+    }
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-07-08T11:16:48Z"
+}

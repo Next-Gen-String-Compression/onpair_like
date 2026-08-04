@@ -1,17 +1,15 @@
-# Same sweep as clickbench-url-1m.toml, but restricted to the 142 `contains`
-# queries via the filtered suite clickbench-url-1m-contains-s42.
-# The filtered suite is a copy of clickbench-url-1m-gen1-s42 with queries.jsonl
-# reduced to op == "contains" (truth is embedded per-query; binding is via the
-# dataset checksum only, so the reduction preserves validity).
+# Fast subset of clickbench-url-1m-contains.toml: only the L8 + L32 contains
+# queries (47 of 142) via the clickbench-url-1m-contains-l8l32-s42 suite, so a
+# full-matrix run finishes ~3x sooner. Same candidates/scanners/measure config.
 #
-#   cargo run --release --bin bench -- run specs/paper/clickbench-url-1m-contains.toml \
-#       -o results/paper/clickbench-url-1m-contains
+#   cargo run --release --bin bench -- run specs/paper/clickbench-url-1m-contains-l8l32.toml \
+#       -o results/paper/clickbench-url-1m-contains-l8l32
 
 [[datasets]]
 path = "../../datasets/clickbench-url-1m"
 
 [[suites]]
-path = "../../suites/clickbench-url-1m-contains-s42"
+path = "../../suites/clickbench-url-1m-contains-l8l32-s42"
 
 # Self-contained Matcher-based pipelines (candidates/common/matcher): each owns
 # its scanner, so the [[scanners]] list below applies only to the decode/direct

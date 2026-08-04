@@ -1,0 +1,13 @@
+[package]
+name = "lb-cand-dict-uncompressed-prefilter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+links = "lb_dict_uncompressed_prefilter"
+
+[dependencies]
+lb-abi = { workspace = true }
+
+[build-dependencies]
+cmake = { workspace = true }

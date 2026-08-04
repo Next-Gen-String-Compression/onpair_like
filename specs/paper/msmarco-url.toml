@@ -8,7 +8,7 @@ path = "../../datasets/msmarco-url"
 path = "../../suites/msmarco-url-gen1-s42"
 
 [[candidates]]
-name = "uncompressed"
+name = "uncompressed_memmem"
 
 [[candidates]]
 name = "onpair"

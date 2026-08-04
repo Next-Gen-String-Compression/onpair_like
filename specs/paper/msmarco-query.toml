@@ -9,7 +9,7 @@ path = "../../datasets/msmarco-query"
 path = "../../suites/msmarco-query-gen1-s42"
 
 [[candidates]]
-name = "uncompressed"
+name = "uncompressed_memmem"
 
 [[candidates]]
 name = "onpair"

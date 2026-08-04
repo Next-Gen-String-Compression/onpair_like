@@ -8,7 +8,7 @@ path = "../../datasets/tpch-pname-sf10"
 path = "../../suites/tpch-pname-sf10-gen1-s42"
 
 [[candidates]]
-name = "uncompressed"
+name = "uncompressed_memmem"
 
 [[candidates]]
 name = "onpair"

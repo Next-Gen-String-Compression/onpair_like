@@ -15,6 +15,29 @@ pub fn candidates() -> Vec<Candidate> {
     let mut v: Vec<&'static LbCandidate> = Vec::new();
     #[cfg(feature = "cand-uncompressed")]
     v.push(lb_cand_uncompressed::vtable());
+    #[cfg(feature = "cand-uncompressed-memmem")]
+    v.push(lb_cand_uncompressed_memmem::vtable());
+    #[cfg(feature = "cand-uncompressed-prefilter")]
+    v.push(lb_cand_uncompressed_prefilter::vtable());
+    #[cfg(feature = "cand-dict-uncompressed-prefilter")]
+    v.push(lb_cand_dict_uncompressed_prefilter::vtable());
+    #[cfg(feature = "cand-dict-fsst-like-tum")]
+    v.push(lb_cand_dict_fsst_like_tum::vtable());
+    #[cfg(feature = "cand-fsst-decode-prefilter")]
+    {
+        v.push(lb_cand_fsst_decode_prefilter::vtable());
+        v.push(lb_cand_fsst_decode_prefilter::vtable_dict());
+    }
+    #[cfg(feature = "cand-fsst-prefilter")]
+    {
+        v.push(lb_cand_fsst_prefilter::vtable());
+        v.push(lb_cand_fsst_prefilter::vtable_dict());
+    }
+    #[cfg(feature = "cand-dict-onpair")]
+    {
+        v.push(lb_cand_dict_onpair::vtable());
+        v.push(lb_cand_dict_onpair::vtable_spiral());
+    }
     #[cfg(feature = "cand-gate-canary")]
     v.push(lb_cand_gate_canary::vtable());
     #[cfg(feature = "cand-cpp-identity")]
@@ -38,10 +61,6 @@ pub fn candidates() -> Vec<Candidate> {
     v.push(lb_cand_fsst_like_tum::vtable());
     #[cfg(feature = "cand-fsst-like-utn")]
     v.push(lb_cand_fsst_like_utn::vtable());
-    #[cfg(feature = "cand-dict")]
-    v.push(lb_cand_dict::vtable());
-    #[cfg(feature = "cand-dict-fsst")]
-    v.push(lb_cand_dict_fsst::vtable());
     v.into_iter()
         .map(|vt| Candidate::validate(vt).expect("registered candidate failed validation"))
         .collect()
@@ -54,6 +73,8 @@ pub fn scanners() -> Vec<Scanner> {
         v.push(lb_scan_memmem::vtable());
         v.push(lb_scan_memmem::vtable_hay());
     }
+    #[cfg(feature = "scan-prefilter")]
+    v.push(lb_scan_prefilter::vtable());
     #[cfg(feature = "scan-cpp-std-find")]
     v.push(lb_scan_cpp_std_find::vtable());
     #[cfg(feature = "scan-classics")]

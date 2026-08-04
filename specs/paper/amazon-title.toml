@@ -8,7 +8,7 @@ path = "../../datasets/amazon-title"
 path = "../../suites/amazon-title-gen1-s42"
 
 [[candidates]]
-name = "uncompressed"
+name = "uncompressed_memmem"
 
 [[candidates]]
 name = "onpair"
