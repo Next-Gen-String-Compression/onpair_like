@@ -2,15 +2,23 @@
 # comparison — compressed-domain match-in-place vs decode-then-eval on the SAME
 # FSST-compressed bytes.
 #
-# `interp` is fsst_like_tum's compressed-domain automaton (codegen backends cpp/llvm
-# join the allowlist once wired). `decode` is the harness-composed
-# decompress-then-scan over fsst_like_tum's own decode() output. Both are gated by
-# the correctness gate before any latency is recorded. onpair is included as the
-# other compressed-domain codec; fsst as the standard decode baseline.
+# `interp` is fsst_like_tum's interpreted compressed-domain automaton;
+# `cpp`/`cpp-simd` are its C++ codegen backends (per-query kernel compiled with
+# the host clang++ — absent from the roster if no runtime clang++) and
+# `llvm`/`llvm-simd` its ORC-JIT backends (absent unless built with LLVM 14–16).
+# `decode` is the harness-composed decompress-then-scan (the `fsst` candidate's
+# decode() output; fsst_like_tum is a matcher and exposes none). All are gated
+# by the correctness gate before any latency is recorded. onpair is included as
+# the other compressed-domain codec; fsst as the standard decode baseline.
+#
+# NOTE: every codegen (cpp/cpp-simd) run() invocation shells out to clang++
+# (~100 ms, reported in setup_ns); llvm* JITs in-process (cheaper). With
+# min_iters = 1 that is one compile per query cell; raising min_iters scales
+# compile count linearly.
 #
 # Lean contains suites keep the decode passes cheap; prefix/suffix/multi suites
 # can be added once generated (bench gen --ops prefix,suffix,multi_contains).
-strategies = ["interp", "compressed", "decode"]
+strategies = ["interp", "cpp", "cpp-simd", "llvm", "llvm-simd", "compressed", "decode"]
 
 [measure]
 chunk_rows = [0]

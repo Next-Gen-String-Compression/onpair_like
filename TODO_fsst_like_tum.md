@@ -1,5 +1,16 @@
 # TODO: `fsst_like_tum` codegen backends (cpp / llvm / SIMD) — x86 + LLVM 16 host
 
+> **✅ DONE (2026-08-04).** All four codegen strategies (`cpp`, `cpp-simd`,
+> `llvm`, `llvm-simd`) are implemented, registered with per-host gating, and the
+> correctness gate passes on every suite query on all four columns
+> (`fsst_like_query.toml`, exit 0); `cargo test` green. Results and findings:
+> DESIGN.md §17.6 item 3. One deviation from this handoff: the host had LLVM
+> **14** (not 16); the upstream codegen compiles against 14–16 with a single
+> version-guarded line (`toPtr<T>()` is 15+-only), applied via FetchContent
+> PATCH_COMMAND — see `candidates/fsst_like_tum/cpp/llvm14_compat.cmake`.
+> Validating against LLVM 16 exactly remains open but is not expected to change
+> anything. This file is retained as reference for the wiring/gotchas below.
+
 > **Note (post-rename):** this candidate was renamed `fsst_like` → `fsst_like_tum`.
 > Since this TODO was written it was also made **interp-only** — the `decode()`
 > path was removed (decode-then-scan is the `fsst` candidate's job) — and its FSST

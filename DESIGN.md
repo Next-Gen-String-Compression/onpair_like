@@ -1471,7 +1471,7 @@ compressed bytes. It ships as one candidate declaring, per host, only the
 | `interp` | interpreted automaton (`LikePatternAutomatonParser`) | always available; portable |
 | `cpp` | C++ codegen → compile `.so` → `dlopen` (no SIMD) | runtime C++ compiler present |
 | `cpp-simd` | as `cpp`, SSE `_mm_cmpestrm`/`_mm_cmpeq_epi8` | + `__x86_64__` |
-| `llvm` | LLVM ORC-JIT of the automaton (no SIMD) | built with LLVM 16 (`HAVE_LLVM`) |
+| `llvm` | LLVM ORC-JIT of the automaton (no SIMD) | built with LLVM 14–16 (`HAVE_LLVM`) |
 | `llvm-simd` | as `llvm`, SSE intrinsics | + `__x86_64__` |
 
 Gating follows §16.2's platform policy — **implement every backend, gate the
@@ -1535,17 +1535,30 @@ for fixed input, so ratios are stable across runs.
    overhead scales with row length, which is exactly the regime the codegen
    backends are built to win. So the interpreted number under-represents
    FSST-LIKE on long text.
-3. `cpp` / `llvm` / `-simd` codegen backends — **deferred to an x86 host with
-   LLVM 16** (untestable on the arm64 dev box: LLVM 16 absent, SSE `_mm_cmpestrm`
-   is x86-only, and `cpp` codegen shells out to `clang++` per query). Same
-   deferral rationale as §16.4's vectorscan. Full handoff for the
-   x86 agent: **`TODO_fsst_like_tum.md`** at the repo root (architecture, exact
-   FSST-LIKE codegen API, per-strategy gating, CMake/LLVM wiring, gotchas,
-   validation steps).
+3. `cpp` / `llvm` / `-simd` codegen backends — **Done (2026-08-04), validated on
+   an x86-64 Linux host (WSL2, clang++ 14, LLVM 14):** all four strategies
+   register, and the correctness gate passes on **every** suite query on all four
+   columns (`fsst_like_query.toml`, exit 0). Findings (suite-total of per-query
+   medians; match-only = headline − `setup_ns`):
+   - **Long rows (dbpedia): codegen reclaims the regime interp lost.**
+     Match-only `llvm-simd` 2.65 s vs `interp` 3.51 s vs decode-then-eval
+     (fsst+memmem) 4.50 s — and llvm-simd wins even at headline (3.08 s),
+     JIT cost included.
+   - `llvm`/`llvm-simd` per-query JIT is ~10–25 ms; the `cpp` backend's
+     per-query `clang++ -shared` is ~350–500 ms on this host and dominates its
+     headline, so `cpp`'s value is its match-only number (fastest of all on
+     msmarco: 0.15 s suite-total).
+   - Short/medium rows: `interp` remains the best headline choice; codegen
+     match-only is comparable (tpch, url) — consistent with the paper's
+     amortization story.
 
 Dependencies added (FetchContent-pinned): cwida/fsst, calin2110/FSST-LIKE-Matching
-(+ its calin2110/fsst, fmt). LLVM 16 is an *optional* build dependency (`llvm@16`
-brew / `llvm-16-dev` apt); absent ⇒ `llvm*` strategies absent, not a build
-failure. `vectorscan`/`hybrid_string_search` from the FSST-LIKE repo are **not**
+(+ its calin2110/fsst, fmt). LLVM **14–16** is an *optional* build dependency
+(`llvm-14-dev`/`llvm-16-dev` apt, `llvm@16` brew); absent (or ≥17, which removed
+APIs the upstream codegen uses) ⇒ `llvm*` strategies absent, not a build failure.
+The pin needs exactly one LLVM-version compat guard (`toPtr<T>()` is 15+-only),
+applied as a FetchContent `PATCH_COMMAND` — see
+`candidates/fsst_like_tum/cpp/llvm14_compat.cmake`, the sole source deviation
+from upstream. `vectorscan`/`hybrid_string_search` from the FSST-LIKE repo are **not**
 built — those are its own decode baselines, which our `fsst` candidate + the
 harness `decode` composition already cover.
