@@ -1,0 +1,50 @@
+# Narrow, fast confirmation run — NOT part of the tracked spec suite (lives in
+# scratchpad, untracked). Purpose: get real numbers for fsst_like_tum's new
+# codegen strategies (cpp/cpp-simd/llvm/llvm-simd) against a small baseline
+# roster, without the ~17-candidate x 2-chunk-size sweep that made
+# specs/paper/clickbench-url-1m-contains-l8l32.toml take 45+ minutes.
+#
+# Deviations from that spec, and why:
+#   - chunk_rows = [0] only (drop 122880): that second sweep rebuilds a fresh
+#     candidate instance per ~122880-row chunk (~9 chunks for this 1M-row
+#     dataset), and cpp/cpp-simd pay a full clang++ invocation per chunk
+#     regardless of chunk size — that's what actually blew up the wall time.
+#   - warmup = 0, min_iters = 1: cpp/cpp-simd recompile from scratch on EVERY
+#     run() call (no memoization, by ABI design), so 5x (warmup=2+min_iters=3)
+#     was multiplying the compile cost 5x for no measurement benefit here —
+#     we want one clean number per cell, not statistical robustness.
+#   - Small candidate roster: one baseline per family (uncompressed direct
+#     scan, onpair compressed-domain codec, fsst decode codec, fsst_like_utn
+#     comet matcher) plus fsst_like_tum itself (all 5 of its strategies:
+#     interp + cpp + cpp-simd + llvm + llvm-simd).
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-contains-l8l32-s42"
+
+[[candidates]]
+name = "uncompressed_memmem"
+
+[[candidates]]
+name = "onpair"
+
+[[candidates]]
+name = "fsst"
+
+[[candidates]]
+name = "fsst_like_utn"
+
+[[candidates]]
+name = "fsst_like_tum"
+
+[[scanners]]
+name = "memmem"
+
+[measure]
+chunk_rows = [0]
+warmup = 0
+min_iters = 1
+min_millis = 0
+skip_checksum_verify = true
