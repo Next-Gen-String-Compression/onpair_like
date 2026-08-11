@@ -13,8 +13,9 @@ so rows without one are never decoded. Two things can happen at a match:
 
 * **One token contains the whole pattern.** Those ids are mandatory members of
   every cover. They are deliberately *not* in the DAG — such a match crosses no
-  boundary, so no path stands for it and no cut could select it. They still count
-  in `CUT TOKEN FREQUENCY`.
+  boundary, so no path stands for it and no cut could select it. The figure draws
+  them as the teal `MANDATORY` card, railed straight into `MATCH`, because the
+  cover they are part of has to add up.
 * **The match crosses a boundary.** Then it begins at some feasible first-token
   alignment `k`, and greedy parsing of the rest is deterministic. Each such layout
   is one path from an alignment to an accepting terminal. A **cut** of this DAG is
@@ -30,12 +31,27 @@ Reading the figure:
 | teal filled `p=N`, `merge ×m` | `m` alignments converged here; one probe downstream blocks all of them |
 | callout card on an edge | the single interior token greedy parsing takes at that offset |
 | card in the bottom row | an accepting terminal: tokens whose prefix is the whole remaining needle |
-| **orange** outline, `CUT` badge | selected by the cut — this is the cover |
+| teal `MANDATORY` card | tokens holding the whole pattern: in every cover, in no cut |
+| **orange** outline, `CUT` badge | selected by the cut |
+| grey dashed, `PRUNED` badge | selected by the cut, then dropped — every id it names occurs nowhere |
 | faded node | downstream of the cut, so unreachable once the cover is in place |
-| `TF` / `DF` | token occurrences in the code stream / rows holding the token |
+| `TF` | token occurrences in the code stream |
+| `DF` | rows holding the token; shown only under a `df` metric, the only time it is counted |
 
-`STATE VISITS → MERGED` is the payoff of merging by byte offset: how many states
-the alignments would visit separately versus how many the DAG materializes.
+The **cut** is a set of DAG nodes and the **cover** is what the scan compares
+against. They are not the same set, which is why the two chips are named apart:
+
+| chip | what it counts |
+|---|---|
+| `WHOLE-NEEDLE TOKENS` | the mandatory ids, which no cut can select |
+| `CUT WEIGHT` | the min-cut objective. Zero means no occurrence crosses a token boundary in this column — not that nothing matches |
+
+So a cut of three nodes can compile to a cover of ten probes, and a cut of weight
+zero can still leave a cover with real work to do — both of which are figures this
+tool draws, and both of which read as errors until the two are kept apart. The
+cover itself — surviving cut ids plus the mandatory ones, merged into maximal runs,
+one probe per run — is what the picture shows; its counts are in the JSON and on
+the CLI line rather than in a chip.
 
 Why a *global* cut rather than the cheapest probe per alignment: local choices pay
 twice for alignments that converge, when one probe at the join blocks both, and
@@ -56,7 +72,7 @@ let figure = visualize(view, &frequencies, b"utm_source=", &Options::default())?
 std::fs::write("figure.svg", figure.svg.unwrap())?;
 ```
 
-`Figure` also carries the graph, the cut, the cover's SIMD cost, and the
+`Figure` also carries the graph, the cut, the cover's point/range shape, and the
 measurements below — it serializes to JSON as-is.
 
 The binary is glue for the common case, turning a text file into a column:
@@ -66,8 +82,8 @@ $ cargo run --release -- \
     --rows urls.txt --title "clickbench urls" --out figures --gallery \
     --pattern 'utm_source=newsletter' --pattern '/cart/checkout'
 column: 40000 rows, 181659 codes, 937 dictionary tokens
-  01-utm-source-newsletter: 4 alignments, 4 states, cut 3 probes weight 2432 · 2289 candidates (866 exact), onpair 2289, sound true
-  02-cart-checkout: 3 alignments, 3 states, cut 3 probes weight 4431 · 5571 candidates (5571 exact), onpair 5571, sound true
+  01-utm-source-newsletter: 4 alignments, cut 3 probes (2 pruned as never used) weight 2432 · cover 1 probes (0 whole-needle) · 2289 candidates (866 exact), onpair 2289, sound true
+  02-cart-checkout: 3 alignments, cut 3 probes (1 pruned as never used) weight 4431 · cover 3 probes (1 whole-needle) · 5571 candidates (5571 exact), onpair 5571, sound true
 ```
 
 One row per line; `--rows -` reads stdin. `--help` lists the rest: `--metric` for

@@ -235,7 +235,14 @@ pub fn visualize<O: Offset>(
     let members = graph.membership_for_cut(&cut.selected_nodes);
     let live = live_cover(&members, frequencies);
     let dead_probes = dead_probes(&graph, &cut.selected_nodes, &live);
-    let cut_member_frequency = weights.membership_term_frequency(&live.members);
+    let cover_frequency = weights.membership_term_frequency(&live.members);
+
+    // The mandatory ids on their own, so the figure can say where the difference
+    // between the cut's weight and the cover's frequency comes from.
+    let mut contained_members = vec![false; graph.dictionary_size];
+    for &id in &graph.contained {
+        contained_members[id as usize] = true;
+    }
 
     let measurement = options
         .measure
@@ -248,9 +255,12 @@ pub fn visualize<O: Offset>(
             .clone()
             .unwrap_or_else(|| default_subtitle(pattern)),
         options.metric,
-        cut_member_frequency,
-        live.shape.cmp_cost,
+        cover_frequency,
+        live.shape,
     );
+    summary.cut_value = cut.value;
+    summary.contained_tokens = graph.contained.len();
+    summary.contained_frequency = weights.membership_term_frequency(&contained_members);
     summary.dead_probes = dead_probes.len();
     if let Some(measurement) = &measurement {
         summary.cut_candidates = Some(measurement.candidates);

@@ -256,12 +256,16 @@ fn run() -> Result<(), String> {
         } else {
             format!(" ({} pruned as never used)", figure.dead_probes.len())
         };
+        // Cut and cover are separate counts on purpose: the cut is DAG nodes, the
+        // cover is what the scan compares against, and the mandatory whole-needle
+        // tokens are in the second without ever being in the first.
         println!(
-            "  {stem}: {} alignments, {} states, cut {} probes{pruned} weight {} · {measured}",
+            "  {stem}: {} alignments, cut {} probes{pruned} weight {} · cover {} probes ({} whole-needle) · {measured}",
             figure.graph.stats.feasible_alignments,
-            figure.states(),
             figure.cut.selected_nodes.len(),
-            figure.cut.value
+            figure.cut.value,
+            figure.cover.cmp_cost,
+            figure.graph.contained.len()
         );
 
         if let Some(svg_name) = svg_name {
@@ -273,11 +277,7 @@ fn run() -> Result<(), String> {
     }
 
     if args.gallery {
-        let mut index = String::from(
-            "# Min-cut graph gallery\n\nEach row is a feasible starting alignment. Paths merge at \
-             shared needle byte offsets; orange probes form the global cut, and faded nodes lie \
-             downstream of it.\n",
-        );
+        let mut index = String::from("# Min-cut graph gallery\n");
         for (stem, (pattern, svg)) in &gallery {
             let _ = write!(
                 index,

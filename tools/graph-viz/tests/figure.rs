@@ -55,6 +55,26 @@ impl Corpus {
     fn column(&self) -> Column<u32> {
         Column::compress(&self.bytes, &self.offsets, DEFAULT_CONFIG).expect("corpus compresses")
     }
+
+    /// A deliberately repetitive corpus, for the whole-needle case.
+    ///
+    /// Ten rows do not give OnPair enough evidence to merge a phrase into one long
+    /// token, so no needle over that corpus is ever *contained* — and the case that
+    /// most confuses a reader of these figures is exactly the contained one.
+    fn repetitive() -> Self {
+        let mut bytes = Vec::new();
+        let mut offsets = vec![0u32];
+        for row in 0..200 {
+            let text = if row % 2 == 0 {
+                format!("https://shop.example.org/cart/checkout?ref=newsletter&id={row}")
+            } else {
+                format!("https://shop.example.org/cart/basket?ref=google&id={row}")
+            };
+            bytes.extend_from_slice(text.as_bytes());
+            offsets.push(bytes.len() as u32);
+        }
+        Self { bytes, offsets }
+    }
 }
 
 /// The point of the whole exercise: a rendered cover must admit every true match.
@@ -185,6 +205,135 @@ fn probes_for_absent_tokens_are_pruned() {
             "{pattern:?}: the figure should mark what it dropped"
         );
     }
+}
+
+/// A token holding the whole needle is a mandatory member of every cover and has no
+/// node in the DAG, so nothing the graph draws accounts for it. That gap is what
+/// made a figure look wrong: a cut of three probes producing a cover of ten, or a
+/// cut of weight zero producing a cover at all. The figure has to name them.
+#[test]
+fn whole_needle_tokens_are_counted_and_drawn() {
+    let corpus = Corpus::repetitive();
+    let column = corpus.column();
+    let view = column.view();
+    let frequencies = index_for(view).expect("index builds");
+
+    // Frequent enough in this corpus to have been merged into single tokens, and
+    // short enough to fit in one.
+    let figure =
+        visualize(view, &frequencies, b"google", &Options::default()).expect("figure builds");
+    assert!(
+        !figure.graph.contained.is_empty(),
+        "some dictionary token should hold the whole needle"
+    );
+    assert_eq!(
+        figure.summary.contained_tokens,
+        figure.graph.contained.len()
+    );
+    assert!(
+        figure.summary.contained_frequency > 0,
+        "those tokens occur in this column"
+    );
+    assert!(
+        figure.summary.cover_frequency >= figure.summary.contained_frequency,
+        "the cover holds them, so it cannot weigh less"
+    );
+    assert_eq!(
+        figure.summary.cover_probes,
+        figure.summary.cover_points + figure.summary.cover_ranges,
+        "every probe is a point or a range"
+    );
+
+    let svg = figure.svg.expect("small graph renders");
+    assert!(svg.contains("MANDATORY"), "the card should be badged");
+    assert!(
+        svg.contains("contains the whole needle"),
+        "and should say what it is"
+    );
+    assert!(
+        svg.contains("WHOLE-NEEDLE TOKENS"),
+        "and the chip should count them"
+    );
+
+    // A needle past MAX_TOKEN_SIZE cannot be contained by construction, and then
+    // the figure has no reason to mention the case at all.
+    let options = Options {
+        max_states: None,
+        ..Options::default()
+    };
+    let figure = visualize(view, &frequencies, b"/cart/checkout?ref=newsletter", &options)
+        .expect("figure builds");
+    assert_eq!(figure.summary.contained_tokens, 0);
+    assert!(!figure.svg.expect("renders").contains("MANDATORY"));
+}
+
+/// A cut of weight zero says no occurrence crosses a token boundary — not that
+/// nothing matches. When every occurrence sits inside one token the cover is the
+/// mandatory ids alone, and it is exact.
+#[test]
+fn a_weightless_cut_still_covers_the_matches() {
+    let corpus = Corpus::repetitive();
+    let column = corpus.column();
+    let view = column.view();
+    let frequencies = index_for(view).expect("index builds");
+
+    // Every row holds "/cart/", so the dictionary holds it too and no occurrence of
+    // "cart" ever straddles two tokens.
+    let figure =
+        visualize(view, &frequencies, b"cart", &Options::default()).expect("figure builds");
+    let measurement = figure.measurement.as_ref().expect("measured by default");
+    assert_eq!(
+        figure.cut.value, 0,
+        "no boundary-crossing occurrence to pay for"
+    );
+    assert!(
+        figure.cover.cmp_cost > 0,
+        "yet the cover still has probes to issue"
+    );
+    assert_eq!(
+        (measurement.candidates, measurement.exact_rows),
+        (view.num_rows(), view.num_rows()),
+        "and every row matches, all of them admitted exactly"
+    );
+    assert!(measurement.sound);
+
+    let svg = figure.svg.expect("small graph renders");
+    assert!(
+        svg.contains("The cut weighs nothing"),
+        "the figure has to say why a zero weight is not an empty answer"
+    );
+}
+
+/// Row frequency is not in OnPair's index, so under a `tf` metric there is nothing
+/// to print — and printing the term frequency again under a `DF` label, as this
+/// once did, is a measurement the figure never took.
+#[test]
+fn row_frequency_is_shown_only_when_it_was_counted() {
+    let corpus = Corpus::new();
+    let column = corpus.column();
+    let view = column.view();
+    let frequencies = index_for(view).expect("index builds");
+
+    let figure = visualize(view, &frequencies, b"utm_source=", &Options::default())
+        .expect("figure builds");
+    let svg = figure.svg.expect("small graph renders");
+    assert!(svg.contains("TF "), "term frequency always comes from the index");
+    assert!(
+        !svg.contains("DF "),
+        "no rows were counted, so no row frequency should be claimed"
+    );
+
+    let options = Options {
+        metric: ProbeWeight::RowFrequency,
+        ..Options::default()
+    };
+    let figure =
+        visualize(view, &frequencies, b"utm_source=", &options).expect("figure builds");
+    let svg = figure.svg.expect("small graph renders");
+    assert!(
+        svg.contains("DF "),
+        "the df metric counts rows, so the figure may report them"
+    );
 }
 
 /// Needles taken from a real column carry raw bytes, and XML 1.0 has no escape for
@@ -357,3 +506,4 @@ fn golden_figure() {
         .expect("golden figure missing — regenerate with UPDATE_GOLDEN=1");
     assert_eq!(svg, expected, "the rendered figure changed");
 }
+

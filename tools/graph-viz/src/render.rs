@@ -14,14 +14,20 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
+use onpair::Token;
 use serde::Serialize;
 
-use crate::graph::{NodeKind, PathGraph, Probe, ProbeSet, ProbeWeight};
+use crate::graph::{CoverShape, NodeKind, PathGraph, Probe, ProbeSet, ProbeWeight};
 
 const ENTRY_X: f64 = 28.0;
 const ENTRY_W: f64 = 250.0;
 const GRAPH_LEFT: f64 = 350.0;
-const HEADER_H: f64 = 202.0;
+/// Header height with one caption line; every other line adds or reclaims one
+/// [`CAPTION_LINE_H`], down to a figure that needs no caption at all.
+const HEADER_BASE_H: f64 = 175.0;
+/// Baseline of the first caption line, just under the chip row.
+const CAPTION_TOP: f64 = 152.0;
+const CAPTION_LINE_H: f64 = 17.0;
 const LANE_GAP: f64 = 108.0;
 const STATE_W: f64 = 54.0;
 const STATE_H: f64 = 34.0;
@@ -29,12 +35,20 @@ const PROBE_W: f64 = 152.0;
 const PROBE_H: f64 = 70.0;
 const TERMINAL_W: f64 = 200.0;
 const TERMINAL_H: f64 = 72.0;
+const CONTAINED_W: f64 = 200.0;
+const CONTAINED_H: f64 = 76.0;
 
 /// The numbers printed in the figure's header, around the graph itself.
 ///
-/// Only [`metric`](Self::metric), the two weights and the labels are required.
-/// The optional fields are measurements over a column; when absent their chips
-/// are left out rather than shown as zero.
+/// The distinction the chips are careful about: the **cut** is a set of DAG nodes
+/// and the **cover** is what OnPair actually probes for — the cut's ids, minus the
+/// ones pruned as never used, plus the mandatory tokens that hold the whole needle
+/// and are therefore not in the DAG at all. They are different sets, so a cut of
+/// weight zero can still leave a cover with several probes.
+///
+/// Only [`metric`](Self::metric), the weights and the labels are required. The
+/// optional fields are measurements over a column; when absent their chips are
+/// left out rather than shown as zero.
 #[derive(Clone, Debug, Serialize)]
 pub struct RenderSummary {
     /// Headline, e.g. the column or corpus this dictionary was trained on.
@@ -43,10 +57,23 @@ pub struct RenderSummary {
     pub subtitle: String,
     /// Which weight the cut minimized.
     pub metric: ProbeWeight,
-    /// Term frequency of the cut's full token membership, contained ids included.
-    pub cut_member_frequency: u64,
-    /// SIMD comparisons the cover costs.
-    pub cut_cmp_cost: usize,
+    /// The minimum cut's objective value under [`metric`](Self::metric). Zero
+    /// means no occurrence crosses a token boundary in this column — not that
+    /// nothing matches.
+    pub cut_value: u64,
+    /// Dictionary tokens holding the whole needle. Mandatory members of every
+    /// cover, and outside the DAG, so no drawn probe stands for them.
+    pub contained_tokens: usize,
+    /// Their term frequency.
+    pub contained_frequency: u64,
+    /// Term frequency of the whole cover, contained ids included.
+    pub cover_frequency: u64,
+    /// Probes the cover compiles to: one per maximal run of member ids.
+    pub cover_probes: usize,
+    /// Single-id probes among them.
+    pub cover_points: usize,
+    /// Id-range probes among them.
+    pub cover_ranges: usize,
     /// Cut probes the planner pruned as unusable, of the ones drawn.
     pub dead_probes: usize,
     /// Fraction of rows that truly match, if measured.
@@ -58,20 +85,29 @@ pub struct RenderSummary {
 }
 
 impl RenderSummary {
-    /// A summary with labels and weights only, no column measurements.
+    /// A summary with labels and cover weights only.
+    ///
+    /// [`cut_value`](Self::cut_value), the contained-token fields and
+    /// [`dead_probes`](Self::dead_probes) default to zero; the caller fills in
+    /// what it knows.
     pub fn new(
         title: impl Into<String>,
         subtitle: impl Into<String>,
         metric: ProbeWeight,
-        cut_member_frequency: u64,
-        cut_cmp_cost: usize,
+        cover_frequency: u64,
+        cover: CoverShape,
     ) -> Self {
         Self {
             title: title.into(),
             subtitle: subtitle.into(),
             metric,
-            cut_member_frequency,
-            cut_cmp_cost,
+            cut_value: 0,
+            contained_tokens: 0,
+            contained_frequency: 0,
+            cover_frequency,
+            cover_probes: cover.cmp_cost,
+            cover_points: cover.points,
+            cover_ranges: cover.ranges,
             dead_probes: 0,
             selectivity: None,
             cut_candidates: None,
@@ -229,7 +265,7 @@ fn incoming_counts(graph: &PathGraph) -> Vec<usize> {
     counts
 }
 
-fn alignments(graph: &PathGraph, adjacent: &[Vec<usize>]) -> Vec<Alignment> {
+fn alignments(graph: &PathGraph, adjacent: &[Vec<usize>], header_h: f64) -> Vec<Alignment> {
     let mut entries = Vec::new();
     for node in &graph.nodes {
         let NodeKind::Junction {
@@ -267,7 +303,7 @@ fn alignments(graph: &PathGraph, adjacent: &[Vec<usize>]) -> Vec<Alignment> {
     }
     entries.sort_by_key(|entry| entry.offset);
     for (index, entry) in entries.iter_mut().enumerate() {
-        entry.y = HEADER_H + 60.0 + index as f64 * LANE_GAP;
+        entry.y = header_h + 60.0 + index as f64 * LANE_GAP;
     }
     entries
 }
@@ -391,6 +427,7 @@ fn point_layouts(
     state_x: &BTreeMap<usize, f64>,
     states: &HashMap<usize, Box2d>,
     state_by_offset: &HashMap<usize, usize>,
+    header_h: f64,
     graph_bottom: f64,
 ) -> HashMap<usize, PointLayout> {
     let mut point_nodes: Vec<_> = graph
@@ -427,7 +464,7 @@ fn point_layouts(
             anchor_y,
             index % 2 == 0,
             &obstacles,
-            HEADER_H + 12.0,
+            header_h + 12.0,
             graph_bottom - 16.0,
         );
         obstacles.push(placed.padded(5.0));
@@ -601,17 +638,31 @@ fn edge(path: &str, tone: EdgeTone, arrow: bool) -> String {
     )
 }
 
-fn probe_frequency(graph: &PathGraph, probe: &Probe) -> String {
-    let pct = if graph.total_codes == 0 {
+fn share_of_codes(graph: &PathGraph, frequency: u64) -> f64 {
+    if graph.total_codes == 0 {
         0.0
     } else {
-        probe.term_frequency as f64 * 100.0 / graph.total_codes as f64
-    };
-    format!(
-        "TF {} · DF {} · {pct:.4}%",
-        compact_u64(probe.term_frequency),
-        compact_u64(probe.row_frequency)
-    )
+        frequency as f64 * 100.0 / graph.total_codes as f64
+    }
+}
+
+/// `TF … · DF … · …%`, with the `DF` field left out when no rows were counted.
+///
+/// Row frequency is not in OnPair's index, so it only exists when the weights came
+/// from a column ([`Weights::from_column`](crate::Weights::from_column), which the
+/// `df` metrics require). Under a `tf` metric the field would otherwise print the
+/// term frequency again, which reads as a measurement and is not one.
+fn probe_frequency(graph: &PathGraph, probe: &Probe) -> String {
+    let pct = share_of_codes(graph, probe.term_frequency);
+    if graph.total_rows == 0 {
+        format!("TF {} · {pct:.4}%", compact_u64(probe.term_frequency))
+    } else {
+        format!(
+            "TF {} · DF {} · {pct:.4}%",
+            compact_u64(probe.term_frequency),
+            compact_u64(probe.row_frequency)
+        )
+    }
 }
 
 fn token_preview(probe: &Probe) -> String {
@@ -653,11 +704,8 @@ impl CutMark {
     }
 }
 
-/// The `CUT` / `PRUNED` badge, hung off the top-right corner of `rect`.
-fn cut_badge(rect: Box2d, cut: CutMark) -> String {
-    let Some((label, width, class)) = cut.badge() else {
-        return String::new();
-    };
+/// A pill badge hung off the top-right corner of `rect`.
+fn corner_badge(rect: Box2d, label: &str, width: f64, class: &str) -> String {
     format!(
         "<rect x=\"{:.1}\" y=\"{:.1}\" width=\"{width:.1}\" height=\"15\" rx=\"7.5\" class=\"{class}\"/><text x=\"{:.1}\" y=\"{:.1}\" class=\"cut-badge\">{label}</text>",
         rect.right() - width - 5.0,
@@ -665,6 +713,117 @@ fn cut_badge(rect: Box2d, cut: CutMark) -> String {
         rect.right() - width / 2.0 - 5.0,
         rect.y + 3.0
     )
+}
+
+/// The `CUT` / `PRUNED` badge, hung off the top-right corner of `rect`.
+fn cut_badge(rect: Box2d, cut: CutMark) -> String {
+    match cut.badge() {
+        Some((label, width, class)) => corner_badge(rect, label, width, class),
+        None => String::new(),
+    }
+}
+
+/// `ids` as a compact list, consecutive ids collapsed into ranges and the tail
+/// dropped once the text would outgrow `budget` characters.
+fn id_preview(ids: &[Token], budget: usize) -> String {
+    let mut groups = Vec::new();
+    let mut index = 0usize;
+    while index < ids.len() {
+        let begin = ids[index];
+        let mut last = begin;
+        while index + 1 < ids.len() && ids[index + 1] == last + 1 {
+            index += 1;
+            last = ids[index];
+        }
+        index += 1;
+        groups.push(if begin == last {
+            begin.to_string()
+        } else {
+            format!("{begin}–{last}")
+        });
+    }
+
+    let mut shown = 0usize;
+    let mut length = 0usize;
+    for group in &groups {
+        // Characters, not bytes: the range separator is an en dash.
+        let next = length + group.chars().count() + usize::from(shown > 0) * 2;
+        if shown > 0 && next > budget {
+            break;
+        }
+        length = next;
+        shown += 1;
+    }
+    let hidden = groups.len() - shown;
+    groups.truncate(shown);
+    if hidden == 0 {
+        groups.join(", ")
+    } else {
+        format!("{}, +{hidden} more", groups.join(", "))
+    }
+}
+
+/// `text` broken into lines of at most `max_chars`, on word boundaries.
+///
+/// The figure's width comes from the graph, not the prose, so a caption long
+/// enough to leave the canvas is a real possibility on a short needle.
+fn wrap(text: &str, max_chars: usize) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for word in text.split_whitespace() {
+        match lines.last_mut() {
+            Some(line) if line.chars().count() + 1 + word.chars().count() <= max_chars => {
+                line.push(' ');
+                line.push_str(word);
+            }
+            _ => lines.push(word.to_string()),
+        }
+    }
+    lines
+}
+
+/// The mandatory-token card: the ids that hold the whole needle.
+///
+/// These are not DAG nodes and never can be — a token containing the needle
+/// matches without crossing a boundary, so no path represents it and no cut could
+/// select it. They are still in every cover, which is why the figure has to show
+/// them: otherwise the cover's probe count and frequency come from nowhere.
+fn render_contained(graph: &PathGraph, rect: Box2d, summary: &RenderSummary) -> String {
+    let pct = share_of_codes(graph, summary.contained_frequency);
+    let mut out = format!(
+        "<g class=\"contained\"><title>{} dictionary token(s) contain the whole needle; mandatory members of every cover</title><rect x=\"{:.1}\" y=\"{:.1}\" width=\"{:.1}\" height=\"{:.1}\" rx=\"8\"/>",
+        summary.contained_tokens,
+        rect.x,
+        rect.y,
+        rect.w,
+        rect.h
+    );
+    out.push_str(&format!(
+        "<text x=\"{:.1}\" y=\"{:.1}\" class=\"probe-title\">contains the whole needle</text>",
+        rect.cx(),
+        rect.y + 22.0
+    ));
+    out.push_str(&format!(
+        "<text x=\"{:.1}\" y=\"{:.1}\" class=\"probe-detail\">{} token{} · TF {} · {pct:.4}%</text>",
+        rect.cx(),
+        rect.y + 42.0,
+        summary.contained_tokens,
+        if summary.contained_tokens == 1 { "" } else { "s" },
+        compact_u64(summary.contained_frequency)
+    ));
+    out.push_str(&format!(
+        "<text x=\"{:.1}\" y=\"{:.1}\" class=\"probe-freq\">ids {}</text>",
+        rect.cx(),
+        rect.y + 60.0,
+        xml(&id_preview(&graph.contained, 24))
+    ));
+    out.push_str(&corner_badge(
+        rect,
+        "MANDATORY",
+        66.0,
+        "cut-badge-bg mandatory",
+    ));
+    out.push_str("</g>");
+    out
 }
 
 fn render_probe(
@@ -841,6 +1000,36 @@ fn summary_chip(x: f64, y: f64, width: f64, label: &str, value: &str) -> String 
     )
 }
 
+/// The caption lines under the chips: only a number the drawing cannot walk back.
+///
+/// Everything the badges and colours already say is left to them, so most figures
+/// get no caption at all. What survives is the reading that would otherwise be
+/// wrong rather than merely unexplained — a cut of weight zero looks like "nothing
+/// matches" and is not.
+///
+/// Each is wrapped to `max_chars`, so the returned count is what the header has to
+/// make room for.
+fn captions(summary: &RenderSummary, max_chars: usize) -> Vec<String> {
+    let mut paragraphs: Vec<String> = Vec::new();
+    if summary.cover_probes == 0 {
+        paragraphs.push(
+            "Pruning left the cover empty: every token the cut named occurs nowhere here, so no \
+             row can match and no scan is needed."
+                .to_string(),
+        );
+    } else if summary.cut_value == 0 {
+        paragraphs.push(
+            "The cut weighs nothing: no occurrence crosses a token boundary in this column, so \
+             the cover is exactly the mandatory tokens."
+                .to_string(),
+        );
+    }
+    paragraphs
+        .iter()
+        .flat_map(|paragraph| wrap(paragraph, max_chars))
+        .collect()
+}
+
 /// Render `graph` with `selected_cut` highlighted, as one self-contained SVG.
 ///
 /// # Panics
@@ -852,11 +1041,21 @@ pub fn render_svg(
     pruned_cut: &[usize],
     summary: &RenderSummary,
 ) -> String {
+    // Width comes from the graph, so it is known before anything is placed — which
+    // is what lets the captions wrap to it and the header size itself to the result.
+    let state_x = state_positions(graph);
+    let last_state_x = state_x.values().next_back().copied().unwrap_or(GRAPH_LEFT);
+    let accept_x = last_state_x + 235.0;
+    let width = (accept_x + 95.0).max(1_150.0);
+    // A caption glyph is about 5.9 units wide at 10.5px in the font stack below.
+    let captions = captions(summary, (((width - 60.0) / 5.9) as usize).max(40));
+    // One caption line is baked into the base; a figure that needs none gets it back.
+    let header_h = HEADER_BASE_H + (captions.len() as f64 - 1.0) * CAPTION_LINE_H;
+
     let adjacent = adjacency(graph);
-    let entries = alignments(graph, &adjacent);
+    let entries = alignments(graph, &adjacent, header_h);
     let users = state_users(graph, &adjacent, &entries);
     let incoming = incoming_counts(graph);
-    let state_x = state_positions(graph);
     let states = state_boxes(graph, &state_x, &users, &entries);
     let state_by_offset: HashMap<usize, usize> = graph
         .nodes
@@ -866,20 +1065,33 @@ pub fn render_svg(
             _ => None,
         })
         .collect();
-    let main_bottom = HEADER_H + 92.0 + entries.len().max(1) as f64 * LANE_GAP;
-    let points = point_layouts(graph, &state_x, &states, &state_by_offset, main_bottom);
+    let main_bottom = header_h + 92.0 + entries.len().max(1) as f64 * LANE_GAP;
+    let points = point_layouts(
+        graph,
+        &state_x,
+        &states,
+        &state_by_offset,
+        header_h,
+        main_bottom,
+    );
     let selected: HashSet<usize> = selected_cut.iter().copied().collect();
     let pruned: HashSet<usize> = pruned_cut.iter().copied().collect();
     let reachable = reachable_without_cut(graph, &selected);
 
-    let last_state_x = state_x.values().next_back().copied().unwrap_or(GRAPH_LEFT);
-    let accept_x = last_state_x + 235.0;
-    let width = (accept_x + 95.0).max(1_150.0);
     let terminal_y = main_bottom + 34.0;
     let terminal_boxes = terminal_boxes(graph, &state_x, terminal_y);
+    // The mandatory tokens share the terminal row: like a terminal probe, holding
+    // one is a match, but it is reached without walking the DAG at all.
+    let contained_box = (!graph.contained.is_empty()).then_some(Box2d {
+        x: ENTRY_X,
+        y: terminal_y,
+        w: CONTAINED_W,
+        h: CONTAINED_H,
+    });
     let terminal_bottom = terminal_boxes
         .values()
         .map(|rect| rect.bottom())
+        .chain(contained_box.map(Box2d::bottom))
         .fold(terminal_y, f64::max);
     let rail_y = terminal_bottom + 52.0;
     let height = rail_y + 92.0;
@@ -964,8 +1176,10 @@ pub fn render_svg(
   .probe-title {{ font-size:11px; font-weight:700; text-anchor:middle; }}
   .probe-detail {{ font-size:9.5px; fill:#52666d; text-anchor:middle; }}
   .probe-freq {{ font-size:8.8px; fill:#718388; text-anchor:middle; font-variant-numeric:tabular-nums; }}
+  .contained rect:first-of-type {{ fill:#f2f7f6; stroke:#176f73; stroke-width:2.2; }}
   .cut-badge-bg {{ fill:#d55e00 !important; stroke:none !important; }}
   .cut-badge-bg.pruned {{ fill:#8d989c !important; }}
+  .cut-badge-bg.mandatory {{ fill:#176f73 !important; }}
   .cut-badge {{ font-size:8px; font-weight:800; fill:#ffffff; text-anchor:middle; }}
   .terminal-label {{ font-size:9.5px; font-weight:700; fill:#718388; letter-spacing:0.7px; }}
   .accept rect {{ fill:#20363c; stroke:#20363c; }}
@@ -1002,37 +1216,15 @@ pub fn render_svg(
     let chip_y = 96.0;
     let mut chips = vec![
         (
-            132.0,
-            "ALIGNMENTS",
-            graph.stats.feasible_alignments.to_string(),
-        ),
-        (
-            164.0,
-            "STATE VISITS → MERGED",
-            format!(
-                "{} → {}",
-                graph.stats.state_visits_before_merge, graph.stats.unique_states
-            ),
-        ),
-        (
-            if summary.dead_probes > 0 {
-                152.0
-            } else {
-                118.0
-            },
-            "CUT PROBES",
-            if summary.dead_probes > 0 {
-                format!("{} · {} pruned", selected_cut.len(), summary.dead_probes)
-            } else {
-                selected_cut.len().to_string()
-            },
-        ),
-        (
             154.0,
-            "CUT TOKEN FREQUENCY",
-            compact_u64(summary.cut_member_frequency),
+            "WHOLE-NEEDLE TOKENS",
+            if summary.contained_tokens == 0 {
+                "none".to_string()
+            } else {
+                summary.contained_tokens.to_string()
+            },
         ),
-        (118.0, "SIMD COST", summary.cut_cmp_cost.to_string()),
+        (118.0, "CUT WEIGHT", compact_u64(summary.cut_value)),
     ];
     if let (Some(candidates), Some(exact)) = (summary.cut_candidates, summary.exact_rows) {
         chips.push((
@@ -1045,16 +1237,16 @@ pub fn render_svg(
         svg.push_str(&summary_chip(chip_x, chip_y, chip_width, label, &value));
         chip_x += chip_width + 8.0;
     }
-    let pruned_note = if summary.dead_probes > 0 {
-        " Grey dashed PRUNED probes name only tokens absent from the column, so the scan never compares against them."
-    } else {
-        ""
-    };
+    for (line, text) in captions.iter().enumerate() {
+        svg.push_str(&format!(
+            "<text x=\"28\" y=\"{:.1}\" class=\"caption\">{}</text>",
+            CAPTION_TOP + line as f64 * CAPTION_LINE_H,
+            xml(text)
+        ));
+    }
+    let label_y = header_h - 4.0;
     svg.push_str(&format!(
-        "<text x=\"28\" y=\"162\" class=\"caption\">Each row is a feasible starting alignment. Paths funnel together when greedy tokenization reaches the same needle byte offset.</text><text x=\"28\" y=\"179\" class=\"caption\">The orange probe set is a vertex cut: every route from an alignment to an accepting terminal range crosses it. Faded nodes lie downstream of the cut.{pruned_note}</text>"
-    ));
-    svg.push_str(&format!(
-        "<text x=\"{:.1}\" y=\"198\" class=\"section-label\">ALIGNMENT ENTRY</text><text x=\"{:.1}\" y=\"198\" class=\"section-label\">TOKENIZED NEEDLE DAG  →</text>",
+        "<text x=\"{:.1}\" y=\"{label_y:.1}\" class=\"section-label\">ALIGNMENT ENTRY</text><text x=\"{:.1}\" y=\"{label_y:.1}\" class=\"section-label\">TOKENIZED NEEDLE DAG  →</text>",
         ENTRY_X,
         GRAPH_LEFT - STATE_W / 2.0
     ));
@@ -1122,9 +1314,19 @@ pub fn render_svg(
             _ => {}
         }
     }
+    // The mandatory tokens reach MATCH without any DAG edge — that is the point of
+    // drawing them — so they get their own drop onto the accept rail.
+    if let Some(rect) = contained_box {
+        svg.push_str(&edge(
+            &format!("M {:.1} {:.1} V {rail_y:.1}", rect.cx(), rect.bottom()),
+            EdgeTone::Active,
+            false,
+        ));
+    }
+    let rail_left = state_x.values().next().copied().unwrap_or(GRAPH_LEFT) - 82.0;
     svg.push_str(&format!(
         "<line x1=\"{:.1}\" y1=\"{rail_y:.1}\" x2=\"{:.1}\" y2=\"{rail_y:.1}\" class=\"accept-rail\"/>",
-        state_x.values().next().copied().unwrap_or(GRAPH_LEFT) - 82.0,
+        contained_box.map_or(rail_left, |rect| rect.cx().min(rail_left)),
         accept_box.x
     ));
 
@@ -1167,7 +1369,8 @@ pub fn render_svg(
     }
     if !terminal_boxes.is_empty() {
         svg.push_str(&format!(
-            "<text x=\"28\" y=\"{:.1}\" class=\"terminal-label\">ACCEPTING TERMINAL PROBES</text>",
+            "<text x=\"{:.1}\" y=\"{:.1}\" class=\"terminal-label\">ACCEPTING TERMINAL PROBES</text>",
+            GRAPH_LEFT - STATE_W / 2.0,
             terminal_y - 15.0
         ));
     }
@@ -1182,6 +1385,13 @@ pub fn render_svg(
             ));
         }
     }
+    if let Some(rect) = contained_box {
+        svg.push_str(&format!(
+            "<text x=\"{ENTRY_X:.1}\" y=\"{:.1}\" class=\"terminal-label\">MANDATORY MEMBERS</text>",
+            terminal_y - 15.0
+        ));
+        svg.push_str(&render_contained(graph, rect, summary));
+    }
     svg.push_str(&format!(
         "<g class=\"accept\"><rect x=\"{:.1}\" y=\"{:.1}\" width=\"{:.1}\" height=\"{:.1}\" rx=\"17\"/><text x=\"{:.1}\" y=\"{:.1}\">MATCH</text></g>",
         accept_box.x,
@@ -1191,8 +1401,13 @@ pub fn render_svg(
         accept_box.cx(),
         accept_box.cy() + 4.0
     ));
+    let row_frequency_note = if graph.total_rows == 0 {
+        ""
+    } else {
+        " DF sums per-token row frequencies."
+    };
     svg.push_str(&format!(
-        "<text x=\"28\" y=\"{:.1}\" class=\"caption\">p denotes a needle byte offset. TF counts token occurrences; DF sums per-token row frequencies. The percentage is TF / encoded token count, not row selectivity.</text>",
+        "<text x=\"28\" y=\"{:.1}\" class=\"caption\">p denotes a needle byte offset. TF counts token occurrences.{row_frequency_note} The percentage is TF / encoded token count, not row selectivity.</text>",
         height - 22.0
     ));
     svg.push_str("</svg>\n");
