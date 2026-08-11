@@ -7,8 +7,8 @@
 
 use onpair::{Column, DEFAULT_CONFIG, DictionaryView};
 use onpair_graph_viz::{
-    Error, Options, ProbeWeight, build_path_graph, candidate_rows, index_for, minimum_vertex_cut,
-    visualize,
+    Error, Options, ProbeWeight, build_path_graph, candidate_rows, index_for, live_cover,
+    minimum_vertex_cut, visualize,
 };
 
 const ROWS: &[&str] = &[
@@ -135,6 +135,131 @@ fn selectivity_matches_onpair() {
             );
         }
     }
+}
+
+/// A cut is free to select tokens the code stream never uses — they weigh nothing,
+/// so its objective is indifferent between naming them and not — and OnPair takes
+/// them back out before scanning. A figure that kept them would draw comparisons
+/// that never happen, so it prunes too, and says which probes went.
+///
+/// These patterns cannot match anything, and neither can the tokens their cut
+/// picks, so the whole cover is pruned away. That OnPair then admits no rows is
+/// the part worth asserting: it is the only outside evidence that this crate's
+/// copy of the pruning rule agrees with the library's.
+#[test]
+fn probes_for_absent_tokens_are_pruned() {
+    let corpus = Corpus::new();
+    let column = corpus.column();
+    let view = column.view();
+    let frequencies = index_for(view).expect("index builds");
+
+    for pattern in ["zz", "q=z", "zzz-absent"] {
+        let figure = visualize(view, &frequencies, pattern.as_bytes(), &Options::default())
+            .expect("figure builds");
+        let measurement = figure.measurement.as_ref().expect("measured by default");
+
+        assert!(
+            !figure.cut.selected_nodes.is_empty(),
+            "{pattern:?}: the cut should still name the probes it chose"
+        );
+        assert_eq!(
+            figure.dead_probes, figure.cut.selected_nodes,
+            "{pattern:?}: every probe the cut chose occurs nowhere"
+        );
+        assert_eq!(
+            (figure.cover.cmp_cost, figure.cover.member_ids),
+            (0, 0),
+            "{pattern:?}: a fully pruned cover costs nothing to check"
+        );
+        assert!(
+            figure.cover.dead_ids > 0,
+            "{pattern:?}: nothing was dropped"
+        );
+        assert_eq!(
+            (measurement.candidates, measurement.onpair_candidates),
+            (0, Some(0)),
+            "{pattern:?}: an empty cover admits no rows, and OnPair should agree"
+        );
+        assert!(
+            figure.svg.expect("small graph renders").contains("PRUNED"),
+            "{pattern:?}: the figure should mark what it dropped"
+        );
+    }
+}
+
+/// Needles taken from a real column carry raw bytes, and XML 1.0 has no escape for
+/// a C0 control character — a figure with one in a label is rejected outright by
+/// every viewer, not merely ugly. So they are written as `\xNN` instead. A
+/// ClickBench URL needle with a `0x0e` in it is what found this.
+#[test]
+fn control_bytes_in_a_needle_do_not_break_the_svg() {
+    let corpus = Corpus::new();
+    let column = corpus.column();
+    let view = column.view();
+    let frequencies = index_for(view).expect("index builds");
+
+    let figure =
+        visualize(view, &frequencies, b"sho\x0ep?q=", &Options::default()).expect("figure builds");
+    let svg = figure.svg.expect("small graph renders");
+
+    assert!(
+        svg.contains("\\x0e"),
+        "the byte should be shown, not dropped"
+    );
+    let stray = svg
+        .chars()
+        .find(|character| character.is_control() && *character != '\n');
+    assert_eq!(stray, None, "a control character reached the SVG");
+}
+
+/// Where the trimming rule copied from OnPair is pinned: runs merge, unused ids
+/// leave the *ends* of a run, and an unused id between two used ones stays — a
+/// range costs one comparison however wide it is, but splitting it costs two.
+#[test]
+fn live_cover_trims_run_ends_only() {
+    // Ids 2, 3 and 5 are used; every other id in an eight-token dictionary is not.
+    let frequencies =
+        onpair::search::build_token_frequency_index(&[2u16, 3, 5, 5], 8).expect("index builds");
+
+    // Runs 1..=5 and 7..=7. The first keeps 2..=5 — id 1 is trimmed, id 4 rides
+    // along — and the second goes entirely.
+    let live = live_cover(
+        &[false, true, true, true, true, true, false, true],
+        &frequencies,
+    );
+    assert_eq!(
+        live.members,
+        [false, false, true, true, true, true, false, false]
+    );
+    assert_eq!(
+        (live.shape.points, live.shape.ranges, live.shape.cmp_cost),
+        (0, 1, 1)
+    );
+    assert_eq!((live.shape.member_ids, live.shape.dead_ids), (4, 2));
+    assert!(!live.is_empty());
+
+    // Trimmed down to one id, a range is probed as a point instead: run 1..=2 loses
+    // its unused first id and leaves id 2 alone.
+    let live = live_cover(
+        &[false, true, true, false, false, false, false, false],
+        &frequencies,
+    );
+    assert_eq!(
+        (
+            live.shape.points,
+            live.shape.ranges,
+            live.shape.member_ids,
+            live.shape.dead_ids
+        ),
+        (1, 0, 1, 1)
+    );
+
+    let live = live_cover(
+        &[true, true, false, false, false, false, true, true],
+        &frequencies,
+    );
+    assert!(live.is_empty(), "no used id survives");
+    assert_eq!(live.shape.dead_ids, 4);
 }
 
 /// Past the guard the graph is still returned; only the drawing is skipped.

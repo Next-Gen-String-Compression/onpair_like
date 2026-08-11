@@ -251,8 +251,13 @@ fn run() -> Result<(), String> {
         if figure.measurement.as_ref().is_some_and(|m| !m.sound) {
             unsound += 1;
         }
+        let pruned = if figure.dead_probes.is_empty() {
+            String::new()
+        } else {
+            format!(" ({} pruned as never used)", figure.dead_probes.len())
+        };
         println!(
-            "  {stem}: {} alignments, {} states, cut {} probes weight {} · {measured}",
+            "  {stem}: {} alignments, {} states, cut {} probes{pruned} weight {} · {measured}",
             figure.graph.stats.feasible_alignments,
             figure.states(),
             figure.cut.selected_nodes.len(),

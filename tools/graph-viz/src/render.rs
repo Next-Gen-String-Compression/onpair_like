@@ -47,6 +47,8 @@ pub struct RenderSummary {
     pub cut_member_frequency: u64,
     /// SIMD comparisons the cover costs.
     pub cut_cmp_cost: usize,
+    /// Cut probes the planner pruned as unusable, of the ones drawn.
+    pub dead_probes: usize,
     /// Fraction of rows that truly match, if measured.
     pub selectivity: Option<f64>,
     /// Rows the cover admits, if measured.
@@ -70,6 +72,7 @@ impl RenderSummary {
             metric,
             cut_member_frequency,
             cut_cmp_cost,
+            dead_probes: 0,
             selectivity: None,
             cut_candidates: None,
             exact_rows: None,
@@ -152,11 +155,28 @@ impl EdgeTone {
     }
 }
 
+/// `text` as XML character data.
+///
+/// Control characters are written as `\xNN` rather than escaped, because there is
+/// no escape for them: XML 1.0 forbids the C0 range outright, entity reference or
+/// not, and a real needle taken from a column of URLs or titles will contain them.
+/// A viewer that rejects the whole figure over one stray byte is worse than a
+/// figure that shows the byte.
 fn xml(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
+    let mut out = String::with_capacity(text.len());
+    for character in text.chars() {
+        match character {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            control if control.is_control() => {
+                out.push_str(&format!("\\x{:02x}", control as u32));
+            }
+            other => out.push(other),
+        }
+    }
+    out
 }
 
 fn needle_preview(bytes: &[u8]) -> String {
@@ -543,13 +563,12 @@ fn callout_leader(layout: PointLayout, class: &str) -> String {
     )
 }
 
-fn render_probe_anchor(layout: PointLayout, selected: bool, reachable: bool) -> String {
-    let class = if selected {
-        "probe-anchor selected"
-    } else if reachable {
-        "probe-anchor"
-    } else {
-        "probe-anchor downstream"
+fn render_probe_anchor(layout: PointLayout, cut: CutMark, reachable: bool) -> String {
+    let class = match cut {
+        CutMark::Probed => "probe-anchor selected",
+        CutMark::Pruned => "probe-anchor pruned",
+        CutMark::No if reachable => "probe-anchor",
+        CutMark::No => "probe-anchor downstream",
     };
     format!(
         "<g class=\"{class}\"><rect x=\"{:.1}\" y=\"{:.1}\" width=\"10\" height=\"10\" rx=\"1.5\" transform=\"rotate(45 {:.1} {:.1})\"/></g>",
@@ -604,21 +623,64 @@ fn token_preview(probe: &Probe) -> String {
         .to_string()
 }
 
+/// Whether a node is in the cut, and whether the planner kept it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CutMark {
+    /// Not in the cut.
+    No,
+    /// In the cut and probed for.
+    Probed,
+    /// In the cut, but every id it names occurs nowhere, so no probe is issued.
+    Pruned,
+}
+
+impl CutMark {
+    fn of(node: usize, selected: &HashSet<usize>, pruned: &HashSet<usize>) -> Self {
+        match (selected.contains(&node), pruned.contains(&node)) {
+            (_, true) => Self::Pruned,
+            (true, false) => Self::Probed,
+            (false, false) => Self::No,
+        }
+    }
+
+    /// The badge to stamp on the node, if any.
+    fn badge(self) -> Option<(&'static str, f64, &'static str)> {
+        match self {
+            Self::No => None,
+            Self::Probed => Some(("CUT", 30.0, "cut-badge-bg")),
+            Self::Pruned => Some(("PRUNED", 50.0, "cut-badge-bg pruned")),
+        }
+    }
+}
+
+/// The `CUT` / `PRUNED` badge, hung off the top-right corner of `rect`.
+fn cut_badge(rect: Box2d, cut: CutMark) -> String {
+    let Some((label, width, class)) = cut.badge() else {
+        return String::new();
+    };
+    format!(
+        "<rect x=\"{:.1}\" y=\"{:.1}\" width=\"{width:.1}\" height=\"15\" rx=\"7.5\" class=\"{class}\"/><text x=\"{:.1}\" y=\"{:.1}\" class=\"cut-badge\">{label}</text>",
+        rect.right() - width - 5.0,
+        rect.y - 7.5,
+        rect.right() - width / 2.0 - 5.0,
+        rect.y + 3.0
+    )
+}
+
 fn render_probe(
     graph: &PathGraph,
     node_id: usize,
     rect: Box2d,
-    selected: bool,
+    cut: CutMark,
     reachable: bool,
 ) -> String {
     let node = &graph.nodes[node_id];
     let probe = node.probe.as_ref().expect("probe node has probe metadata");
-    let class = if selected {
-        "probe selected"
-    } else if reachable {
-        "probe"
-    } else {
-        "probe downstream"
+    let class = match cut {
+        CutMark::Probed => "probe selected",
+        CutMark::Pruned => "probe pruned",
+        CutMark::No if reachable => "probe",
+        CutMark::No => "probe downstream",
     };
     let (title, detail) = match (&node.kind, &probe.set) {
         (
@@ -664,15 +726,7 @@ fn render_probe(
         rect.y + 58.0,
         xml(&probe_frequency(graph, probe))
     ));
-    if selected {
-        out.push_str(&format!(
-            "<rect x=\"{:.1}\" y=\"{:.1}\" width=\"30\" height=\"15\" rx=\"7.5\" class=\"cut-badge-bg\"/><text x=\"{:.1}\" y=\"{:.1}\" class=\"cut-badge\">CUT</text>",
-            rect.right() - 35.0,
-            rect.y - 7.5,
-            rect.right() - 20.0,
-            rect.y + 3.0
-        ));
-    }
+    out.push_str(&cut_badge(rect, cut));
     out.push_str("</g>");
     out
 }
@@ -681,13 +735,16 @@ fn render_alignment(
     graph: &PathGraph,
     entry: &Alignment,
     rect: Box2d,
-    cut: &HashSet<usize>,
+    selected: &HashSet<usize>,
+    pruned: &HashSet<usize>,
 ) -> String {
-    let selected = entry.first_set.is_some_and(|node| cut.contains(&node));
-    let class = if selected {
-        "alignment selected"
-    } else {
-        "alignment"
+    let cut = entry
+        .first_set
+        .map_or(CutMark::No, |node| CutMark::of(node, selected, pruned));
+    let class = match cut {
+        CutMark::Probed => "alignment selected",
+        CutMark::Pruned => "alignment pruned",
+        CutMark::No => "alignment",
     };
     let (detail, frequency) = if let Some(first_set) = entry.first_set {
         let probe = graph.nodes[first_set].probe.as_ref().unwrap();
@@ -728,15 +785,7 @@ fn render_alignment(
             xml(&frequency)
         ));
     }
-    if selected {
-        out.push_str(&format!(
-            "<rect x=\"{:.1}\" y=\"{:.1}\" width=\"30\" height=\"15\" rx=\"7.5\" class=\"cut-badge-bg\"/><text x=\"{:.1}\" y=\"{:.1}\" class=\"cut-badge\">CUT</text>",
-            rect.right() - 35.0,
-            rect.y - 7.5,
-            rect.right() - 20.0,
-            rect.y + 3.0
-        ));
-    }
+    out.push_str(&cut_badge(rect, cut));
     out.push_str("</g>");
     out
 }
@@ -797,7 +846,12 @@ fn summary_chip(x: f64, y: f64, width: f64, label: &str, value: &str) -> String 
 /// # Panics
 /// If `graph` is not a DAG the builder could have produced — the layout asserts
 /// its structural invariants rather than drawing something misleading.
-pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSummary) -> String {
+pub fn render_svg(
+    graph: &PathGraph,
+    selected_cut: &[usize],
+    pruned_cut: &[usize],
+    summary: &RenderSummary,
+) -> String {
     let adjacent = adjacency(graph);
     let entries = alignments(graph, &adjacent);
     let users = state_users(graph, &adjacent, &entries);
@@ -815,6 +869,7 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
     let main_bottom = HEADER_H + 92.0 + entries.len().max(1) as f64 * LANE_GAP;
     let points = point_layouts(graph, &state_x, &states, &state_by_offset, main_bottom);
     let selected: HashSet<usize> = selected_cut.iter().copied().collect();
+    let pruned: HashSet<usize> = pruned_cut.iter().copied().collect();
     let reachable = reachable_without_cut(graph, &selected);
 
     let last_state_x = state_x.values().next_back().copied().unwrap_or(GRAPH_LEFT);
@@ -877,6 +932,7 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
   .chip-value {{ font-size:12px; font-weight:650; fill:#20363c; }}
   .alignment rect {{ fill:#f8faf9; stroke:#aabbbc; stroke-width:1.2; }}
   .alignment.selected rect:first-child {{ fill:#fff1e8; stroke:#d55e00; stroke-width:2.5; }}
+  .alignment.pruned rect:first-child {{ fill:#f4f6f6; stroke:#8d989c; stroke-width:2.2; stroke-dasharray:5 3.5; }}
   .alignment-title {{ font-size:12px; font-weight:700; text-anchor:start; }}
   .alignment-detail {{ font-size:10.5px; fill:#52666d; text-anchor:start; }}
   .alignment-freq {{ font-size:9.5px; fill:#718388; text-anchor:start; font-variant-numeric:tabular-nums; }}
@@ -893,6 +949,7 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
   .callout-leader.muted {{ stroke:#cbd5d7; }}
   .probe-anchor rect {{ fill:#ffffff; stroke:#45666d; stroke-width:1.6; }}
   .probe-anchor.selected rect {{ fill:#d55e00; stroke:#a94700; stroke-width:2; }}
+  .probe-anchor.pruned rect {{ fill:#ffffff; stroke:#8d989c; stroke-width:2; stroke-dasharray:2 1.8; }}
   .probe-anchor.downstream {{ opacity:0.42; }}
   .state rect {{ fill:#f2f7f6; stroke:#36747a; stroke-width:1.4; }}
   .state.merge rect {{ fill:#176f73; stroke:#0d595d; stroke-width:1.6; }}
@@ -902,11 +959,13 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
   .merge-label {{ font-size:9px; font-weight:700; fill:#176f73; text-anchor:middle; }}
   .probe rect:first-of-type {{ fill:#ffffff; stroke:#84999e; stroke-width:1.2; }}
   .probe.selected rect:first-of-type {{ fill:#fff1e8; stroke:#d55e00; stroke-width:2.5; }}
+  .probe.pruned rect:first-of-type {{ fill:#f4f6f6; stroke:#8d989c; stroke-width:2.4; stroke-dasharray:5 3.5; }}
   .probe.downstream {{ opacity:0.42; }}
   .probe-title {{ font-size:11px; font-weight:700; text-anchor:middle; }}
   .probe-detail {{ font-size:9.5px; fill:#52666d; text-anchor:middle; }}
   .probe-freq {{ font-size:8.8px; fill:#718388; text-anchor:middle; font-variant-numeric:tabular-nums; }}
   .cut-badge-bg {{ fill:#d55e00 !important; stroke:none !important; }}
+  .cut-badge-bg.pruned {{ fill:#8d989c !important; }}
   .cut-badge {{ font-size:8px; font-weight:800; fill:#ffffff; text-anchor:middle; }}
   .terminal-label {{ font-size:9.5px; font-weight:700; fill:#718388; letter-spacing:0.7px; }}
   .accept rect {{ fill:#20363c; stroke:#20363c; }}
@@ -955,7 +1014,19 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
                 graph.stats.state_visits_before_merge, graph.stats.unique_states
             ),
         ),
-        (118.0, "CUT PROBES", selected_cut.len().to_string()),
+        (
+            if summary.dead_probes > 0 {
+                152.0
+            } else {
+                118.0
+            },
+            "CUT PROBES",
+            if summary.dead_probes > 0 {
+                format!("{} · {} pruned", selected_cut.len(), summary.dead_probes)
+            } else {
+                selected_cut.len().to_string()
+            },
+        ),
         (
             154.0,
             "CUT TOKEN FREQUENCY",
@@ -974,9 +1045,14 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
         svg.push_str(&summary_chip(chip_x, chip_y, chip_width, label, &value));
         chip_x += chip_width + 8.0;
     }
-    svg.push_str(
-        "<text x=\"28\" y=\"162\" class=\"caption\">Each row is a feasible starting alignment. Paths funnel together when greedy tokenization reaches the same needle byte offset.</text><text x=\"28\" y=\"179\" class=\"caption\">The orange probe set is a vertex cut: every route from an alignment to an accepting terminal range crosses it. Faded nodes lie downstream of the cut.</text>",
-    );
+    let pruned_note = if summary.dead_probes > 0 {
+        " Grey dashed PRUNED probes name only tokens absent from the column, so the scan never compares against them."
+    } else {
+        ""
+    };
+    svg.push_str(&format!(
+        "<text x=\"28\" y=\"162\" class=\"caption\">Each row is a feasible starting alignment. Paths funnel together when greedy tokenization reaches the same needle byte offset.</text><text x=\"28\" y=\"179\" class=\"caption\">The orange probe set is a vertex cut: every route from an alignment to an accepting terminal range crosses it. Faded nodes lie downstream of the cut.{pruned_note}</text>"
+    ));
     svg.push_str(&format!(
         "<text x=\"{:.1}\" y=\"198\" class=\"section-label\">ALIGNMENT ENTRY</text><text x=\"{:.1}\" y=\"198\" class=\"section-label\">TOKENIZED NEEDLE DAG  →</text>",
         ENTRY_X,
@@ -1058,6 +1134,7 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
             entry,
             entry_boxes[&entry.junction],
             &selected,
+            &pruned,
         ));
     }
     for node in &graph.nodes {
@@ -1076,14 +1153,14 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
         if matches!(node.kind, NodeKind::Point { .. }) {
             svg.push_str(&render_probe_anchor(
                 points[&node.id],
-                selected.contains(&node.id),
+                CutMark::of(node.id, &selected, &pruned),
                 reachable.contains(&node.id),
             ));
             svg.push_str(&render_probe(
                 graph,
                 node.id,
                 points[&node.id].card,
-                selected.contains(&node.id),
+                CutMark::of(node.id, &selected, &pruned),
                 reachable.contains(&node.id),
             ));
         }
@@ -1100,7 +1177,7 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
                 graph,
                 node.id,
                 terminal_boxes[&node.id],
-                selected.contains(&node.id),
+                CutMark::of(node.id, &selected, &pruned),
                 reachable.contains(&node.id),
             ));
         }

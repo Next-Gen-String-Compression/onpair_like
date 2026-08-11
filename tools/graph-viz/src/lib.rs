@@ -45,6 +45,18 @@
 //! frequency index) and is free to be as verbose as a picture wants. The cost is
 //! duplicated logic, kept honest by checking each rendered cover against ground
 //! truth — see [`Measurement`].
+//!
+//! # Keeping up with the pin
+//! `Cargo.toml` pins `onpair` to one revision, and the figures are only as
+//! truthful as this crate's copy of that revision's planning rules. Everything the
+//! library exposes is called, not reimplemented — the dictionary, `prefix_range`,
+//! the frequency index, [`BytesVerifier`], `prefilter_candidates` — but the DAG,
+//! the cut and the cover shape are re-derived, so **moving the pin means reviewing
+//! them**. The two places that copy a private rule say so at their definitions:
+//! [`live_cover`] (run merging and zero-frequency trimming) and
+//! [`mincut`]. [`Measurement`] catches divergence that changes which rows are
+//! admitted; it cannot catch divergence that only changes the probes, since a
+//! probe for a token that occurs nowhere admits nothing either way.
 
 #![deny(missing_docs)]
 
@@ -59,7 +71,9 @@ use onpair::search::{
 use onpair::{ColumnView, DictionaryView, Offset};
 use serde::Serialize;
 
-pub use graph::{CoverShape, PathGraph, ProbeWeight, Weights, build_path_graph, normalized_shape};
+pub use graph::{
+    CoverShape, LiveCover, PathGraph, ProbeWeight, Weights, build_path_graph, live_cover,
+};
 pub use mincut::{CutResult, minimum_vertex_cut};
 pub use render::{RenderSummary, render_svg};
 
@@ -169,8 +183,13 @@ pub struct Figure {
     pub graph: PathGraph,
     /// Its minimum cut under [`Options::metric`].
     pub cut: CutResult,
-    /// The cover's point/range shape and SIMD comparison cost.
+    /// The cover's point/range shape and SIMD comparison cost, after pruning.
     pub cover: CoverShape,
+    /// Cut nodes pruning left with nothing to probe for — every id they named
+    /// occurs nowhere in the code stream, so OnPair issues no comparison for them.
+    /// Drawn as dead rather than hidden: the picture should say why the cut named
+    /// something the scan then ignored.
+    pub dead_probes: Vec<usize>,
     /// The header numbers.
     pub summary: RenderSummary,
     /// Measurements, when [`Options::measure`] was set.
@@ -209,13 +228,18 @@ pub fn visualize<O: Offset>(
     let graph = build_path_graph(view.dict, pattern, &weights)?;
     let cut = minimum_vertex_cut(&graph, options.metric);
 
+    // The cut's ids, then the ones OnPair keeps: a cut is free to select tokens the
+    // code stream never uses, since they weigh nothing by its objective, and the
+    // planner takes them back out. Everything downstream measures and draws the
+    // kept set, so the figure is about the probes the scan really issues.
     let members = graph.membership_for_cut(&cut.selected_nodes);
-    let cover = normalized_shape(&members);
-    let cut_member_frequency = weights.membership_term_frequency(&members);
+    let live = live_cover(&members, frequencies);
+    let dead_probes = dead_probes(&graph, &cut.selected_nodes, &live);
+    let cut_member_frequency = weights.membership_term_frequency(&live.members);
 
     let measurement = options
         .measure
-        .then(|| measure(view, frequencies, pattern, &members));
+        .then(|| measure(view, frequencies, pattern, &live.members));
 
     let mut summary = RenderSummary::new(
         options.title.clone(),
@@ -225,8 +249,9 @@ pub fn visualize<O: Offset>(
             .unwrap_or_else(|| default_subtitle(pattern)),
         options.metric,
         cut_member_frequency,
-        cover.cmp_cost,
+        live.shape.cmp_cost,
     );
+    summary.dead_probes = dead_probes.len();
     if let Some(measurement) = &measurement {
         summary.cut_candidates = Some(measurement.candidates);
         summary.exact_rows = Some(measurement.exact_rows);
@@ -237,16 +262,36 @@ pub fn visualize<O: Offset>(
     let too_wide = options
         .max_states
         .is_some_and(|limit| graph.stats.unique_states > limit);
-    let svg = (!too_wide).then(|| render_svg(&graph, &cut.selected_nodes, &summary));
+    let svg = (!too_wide).then(|| render_svg(&graph, &cut.selected_nodes, &dead_probes, &summary));
 
     Ok(Figure {
         graph,
         cut,
-        cover,
+        cover: live.shape,
+        dead_probes,
         summary,
         measurement,
         svg,
     })
+}
+
+/// The cut nodes with no surviving id in `live` — selected by the cut, dropped by
+/// the planner. Ascending, as [`CutResult::selected_nodes`] is.
+fn dead_probes(graph: &PathGraph, selected_nodes: &[usize], live: &LiveCover) -> Vec<usize> {
+    selected_nodes
+        .iter()
+        .copied()
+        .filter(|&node| {
+            let mut alive = false;
+            graph.nodes[node]
+                .probe
+                .as_ref()
+                .expect("cut selected a non-probe node")
+                .set
+                .for_each(|id| alive |= live.members[id as usize]);
+            !alive
+        })
+        .collect()
 }
 
 /// Rows holding at least one token from `members`.

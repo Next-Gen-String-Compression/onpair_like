@@ -422,44 +422,98 @@ pub fn membership_frequency(members: &[bool], cumulative: &[u64]) -> u64 {
 /// How a membership table looks once expressed as points and ranges.
 #[derive(Clone, Copy, Debug, Default, Serialize)]
 pub struct CoverShape {
-    /// Token ids in the cover.
+    /// Token ids actually probed for.
     pub member_ids: usize,
     /// Runs of length one.
     pub points: usize,
     /// Runs of length two or more.
     pub ranges: usize,
-    /// SIMD comparisons the cover costs: one per point, two per range.
+    /// SIMD comparisons the cover costs: one per point, one per range.
     pub cmp_cost: usize,
+    /// Ids the cut selected that pruning took back out.
+    pub dead_ids: usize,
 }
 
-/// Best exact point/range representation of a membership table when a range
-/// costs two SIMD comparisons. Runs of length two become one range: same compare
-/// cost, fewer logical probes and constants.
-pub fn normalized_shape(members: &[bool]) -> CoverShape {
-    let mut shape = CoverShape {
-        member_ids: members.iter().filter(|&&member| member).count(),
-        ..CoverShape::default()
-    };
-    let mut i = 0usize;
-    while i < members.len() {
-        if !members[i] {
-            i += 1;
+/// A cut's membership as OnPair actually probes for it.
+#[derive(Clone, Debug)]
+pub struct LiveCover {
+    /// The surviving ids — what the kernels compare codes against.
+    pub members: Vec<bool>,
+    /// Their point/range shape and comparison cost.
+    pub shape: CoverShape,
+}
+
+impl LiveCover {
+    /// Whether pruning left nothing to probe for, which settles the query: no row
+    /// holds a covered code, so no row matches.
+    pub fn is_empty(&self) -> bool {
+        self.shape.cmp_cost == 0
+    }
+}
+
+/// The cover OnPair compiles from a cut's `members`: every maximal run of set ids
+/// as one probe, minus the ids `frequencies` counts no occurrences of.
+///
+/// # Mirrored from OnPair, by hand
+/// Two rules of the pinned library are reproduced here — `ProbeCover::from_membership`
+/// merging membership into maximal runs, and `plan::live_span` trimming unused ids
+/// off their ends — because both are crate-private there, and a figure drawing
+/// probes the scan does not issue is a figure that lies. **When the `onpair` pin in
+/// `Cargo.toml` moves, re-read those two functions and reconcile this one.** The
+/// crate's own soundness check cannot catch a mismatch: pruned ids occur nowhere,
+/// so keeping them changes no candidate row.
+///
+/// The trim deliberately stops at run ends, which is OnPair's reasoning too. A
+/// range costs the same single comparison however wide it is, so an unused id
+/// between two used ones rides along for free — dropping it would split the run
+/// and add a comparison to every vector of the scan.
+pub fn live_cover(members: &[bool], frequencies: &TokenFrequencyIndex) -> LiveCover {
+    let unused = |id: usize| frequencies.frequency(id as Token) == 0;
+    let mut live = members.to_vec();
+    let mut shape = CoverShape::default();
+
+    let mut id = 0usize;
+    while id < live.len() {
+        if !live[id] {
+            id += 1;
             continue;
         }
-        let begin = i;
-        while i + 1 < members.len() && members[i + 1] {
-            i += 1;
+        let begin = id;
+        while id < live.len() && live[id] {
+            id += 1;
         }
-        if i == begin {
+        let last = id - 1;
+
+        let mut lo = begin;
+        let mut hi = last;
+        while lo <= hi && unused(lo) {
+            lo += 1;
+        }
+        if lo > hi {
+            live[begin..=last].fill(false);
+            shape.dead_ids += last - begin + 1;
+            continue;
+        }
+        while unused(hi) {
+            hi -= 1;
+        }
+
+        live[begin..lo].fill(false);
+        live[hi + 1..=last].fill(false);
+        shape.dead_ids += (lo - begin) + (last - hi);
+        shape.member_ids += hi - lo + 1;
+        if lo == hi {
             shape.points += 1;
-            shape.cmp_cost += 1;
         } else {
             shape.ranges += 1;
-            shape.cmp_cost += 2;
         }
-        i += 1;
+        shape.cmp_cost += 1;
     }
-    shape
+
+    LiveCover {
+        members: live,
+        shape,
+    }
 }
 
 fn preview(bytes: &[u8], max: usize) -> String {

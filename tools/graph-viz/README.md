@@ -89,6 +89,18 @@ match fell outside the cover, and the binary exits non-zero when that happens.
 Differing candidate counts are reported but not treated as failure — several cuts
 can tie on weight, and both would be sound.
 
+That check has a blind spot, and it is worth knowing where. It compares *rows*, so
+it catches any divergence that changes which rows are admitted — but not one that
+only changes the probes. Zero-frequency pruning is exactly that kind: OnPair drops
+cut probes whose tokens occur nowhere in the column, which cannot change a
+candidate set, so a figure still drawing them would measure as perfectly sound
+while showing comparisons the scan never issues. `live_cover` mirrors that rule by
+hand and the figures mark what it drops (grey, dashed, `PRUNED`).
+
+**So when the `onpair` pin in `Cargo.toml` moves, re-read the planner.** The two
+functions this crate copies from it are flagged at their definitions:
+`graph::live_cover` (run merging plus the zero-frequency trim) and `mincut`.
+
 ## Notes
 
 * **Size guard.** Each byte-offset state is about 148 units of width, so a long
