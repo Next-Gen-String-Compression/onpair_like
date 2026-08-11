@@ -1,4 +1,8 @@
 /target
+# nested cargo workspaces (tools pinning their own OnPair revision) build here,
+# and write figures to ./out by default
+tools/*/target/
+tools/*/out/
 /results
 .DS_Store
 /.venv
