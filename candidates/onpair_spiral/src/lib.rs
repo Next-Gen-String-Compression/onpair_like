@@ -38,7 +38,8 @@ use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
 
 use lb_abi::*;
-use onpair::{Column, Config, MaxDictBits, Threshold, Token};
+use onpair::search::build_token_frequency_index;
+use onpair::{search::TokenFrequencyIndex, Column, Config, MaxDictBits, Threshold, Token};
 
 // ------------------------------------------------------------------ config
 
@@ -72,10 +73,9 @@ fn default_seed() -> u64 {
 fn parse_config(json: &str) -> Result<Config, String> {
     let json = json.trim();
     let json = if json.is_empty() { "{}" } else { json };
-    let raw: RawConfig =
-        serde_json::from_str(json).map_err(|e| format!("invalid config: {e}"))?;
-    let max_dict_bits =
-        MaxDictBits::new(raw.bits).map_err(|_| "\"bits\" must be an integer in [9, 16]".to_string())?;
+    let raw: RawConfig = serde_json::from_str(json).map_err(|e| format!("invalid config: {e}"))?;
+    let max_dict_bits = MaxDictBits::new(raw.bits)
+        .map_err(|_| "\"bits\" must be an integer in [9, 16]".to_string())?;
     let threshold = Threshold::new(raw.threshold)
         .map_err(|_| "\"threshold\" must be in (0.0, 1.0]".to_string())?;
     Ok(Config {
@@ -89,6 +89,7 @@ fn parse_config(json: &str) -> Result<Config, String> {
 
 struct Handle {
     col: Column<u32>,
+    frequencies: TokenFrequencyIndex,
     num_rows: u64,
 }
 
@@ -122,8 +123,11 @@ fn build_inner(v: &LbChunkView, cfg_json: &str) -> Result<Handle, String> {
     let offsets32: Vec<u32> = offsets.iter().map(|&o| o as u32).collect();
     let col = Column::<u32>::compress(bytes, &offsets32, cfg)
         .map_err(|e| format!("compress failed: {e}"))?;
+    let frequencies = build_token_frequency_index(&col.codes, col.dict.num_tokens())
+        .map_err(|e| format!("frequency index failed: {e}"))?;
     Ok(Handle {
         col,
+        frequencies,
         num_rows: v.num_rows,
     })
 }
@@ -153,9 +157,10 @@ unsafe extern "C" fn footprint(
     let dict = &h.col.dict;
     // Mirrors the `onpair` candidate's split. Codes are stored one u16 per token
     // (this port does not bit-pack the resident stream); the dictionary is a
-    // byte blob plus u32 offsets; `cum_token_freq` is the prefilter's per-token
-    // frequency prefix sums — the substring prefilter's resident cost, named so
-    // it is attributable (DESIGN.md §7).
+    // byte blob plus u32 offsets; the frequency index is the prefilter's
+    // per-token frequency prefix sums — the substring prefilter's resident cost, named so
+    // it is attributable (DESIGN.md §7). The frequency index stores one u32
+    // cumulative entry per token plus a sentinel.
     let components = [
         LbFootprintComponent::new(
             "codes",
@@ -167,7 +172,10 @@ unsafe extern "C" fn footprint(
         ),
         LbFootprintComponent::new("dict_bytes", dict.logical_len() as u64),
         LbFootprintComponent::new("dict_offsets", (dict.offsets().len() * 4) as u64),
-        LbFootprintComponent::new("prefilter", (h.col.cum_token_freq.len() * 8) as u64),
+        LbFootprintComponent::new(
+            "prefilter",
+            ((h.frequencies.num_tokens() + 1) * core::mem::size_of::<u32>()) as u64,
+        ),
     ];
     for (i, c) in components.iter().take(capacity as usize).enumerate() {
         *out.add(i) = *c;
@@ -207,12 +215,13 @@ unsafe extern "C" fn run(
     let rows = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let view = h.col.view();
         match strategy_index {
-            0 => view.rows_containing_prefiltered(needle),
-            1 => view.rows_containing_prefiltered_memmem(needle),
-            _ => view.rows_containing(needle), // 2 = kmp, no prefilter
+            0 => view.rows_containing_prefiltered(needle, &h.frequencies),
+            1 => view.rows_containing_prefiltered_memmem(needle, &h.frequencies),
+            _ => Ok(view.rows_containing(needle)), // 2 = kmp, no prefilter
         }
     })) {
-        Ok(rows) => rows,
+        Ok(Ok(rows)) => rows,
+        Ok(Err(_)) => return 13,
         Err(_) => return 13,
     };
     let bm = core::slice::from_raw_parts_mut(out_bitmap_words, bitmap_words(h.num_rows));
@@ -244,7 +253,7 @@ static STRATEGIES: [LbStrategy; 3] = [
 static VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
     name: c"onpair_spiral".as_ptr(),
-    version: c"0.1.0+39180b1".as_ptr(),
+    version: c"0.1.0+1960bf0".as_ptr(),
     // Prefilter kernels dispatch on x86 runtime feature detection with a scalar
     // fallback, so no host feature is required.
     cpu_features: core::ptr::null(),

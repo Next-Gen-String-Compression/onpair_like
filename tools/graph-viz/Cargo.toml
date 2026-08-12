@@ -5,13 +5,12 @@ edition = "2024"
 publish = false
 description = "Render OnPair's substring-prefilter alignment DAG and its minimum vertex cut"
 
-# Own workspace: this crate pins a newer OnPair revision than the benchmark
-# candidates do, and Cargo will not resolve two revisions of one git repository
-# in a single lockfile.
+# Own workspace: this crate has its own lockfile so it can pin the same OnPair
+# revision as the benchmark without colliding with the repository lockfile.
 [workspace]
 
 [dependencies]
-onpair = { git = "https://github.com/spiraldb/onpair.git", rev = "9d761e936688b42bdaa49bfe8df2e22b5471cb86" }
+onpair = { git = "https://github.com/spiraldb/onpair.git", rev = "1960bf00070aff174ec2ee5bb888bbba58a6f736" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
