@@ -846,6 +846,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "lb-cand-llm-token-tum"
+version = "0.1.0"
+dependencies = [
+ "cmake",
+ "lb-abi",
+]
+
+[[package]]
 name = "lb-cand-lz4"
 version = "0.1.0"
 dependencies = [
@@ -924,6 +932,7 @@ dependencies = [
  "lb-cand-fsst-like-utn",
  "lb-cand-fsst-prefilter",
  "lb-cand-gate-canary",
+ "lb-cand-llm-token-tum",
  "lb-cand-lz4",
  "lb-cand-onpair",
  "lb-cand-onpair-spiral",

@@ -1,0 +1,13 @@
+[package]
+name = "lb-cand-llm-token-tum"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+links = "lb_llm_token_tum"
+
+[dependencies]
+lb-abi = { workspace = true }
+
+[build-dependencies]
+cmake = { workspace = true }

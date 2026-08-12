@@ -20,6 +20,7 @@ members = [
     "candidates/fsst",
     "candidates/fsst_like_tum",
     "candidates/fsst_like_utn",
+    "candidates/llm_token_tum",
     "scanners/memmem",
     "scanners/prefilter",
     "scanners/cpp_std_find",

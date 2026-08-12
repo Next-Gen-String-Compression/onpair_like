@@ -61,6 +61,8 @@ pub fn candidates() -> Vec<Candidate> {
     v.push(lb_cand_fsst_like_tum::vtable());
     #[cfg(feature = "cand-fsst-like-utn")]
     v.push(lb_cand_fsst_like_utn::vtable());
+    #[cfg(feature = "cand-llm-token-tum")]
+    v.push(lb_cand_llm_token_tum::vtable());
     v.into_iter()
         .map(|vt| Candidate::validate(vt).expect("registered candidate failed validation"))
         .collect()

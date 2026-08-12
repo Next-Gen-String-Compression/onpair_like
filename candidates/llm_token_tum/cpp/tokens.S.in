@@ -1,0 +1,14 @@
+/* Embeds the vendored openai100kpatched token table into .rodata.
+ * Upstream (token-vldb2026) embeds these .bin files with C++26 `#embed`,
+ * which needs GCC 15+/Clang 19+; `.incbin` is the toolchain-portable
+ * equivalent on GNU as. Configured by CMake (absolute paths baked in). */
+    .section .rodata
+    .balign 64
+    .globl lb_llm_token_dict
+lb_llm_token_dict:
+    .incbin "@LB_TOKEN_DIR@/openai100kpatched_dict.bin"
+    .balign 64
+    .globl lb_llm_token_lengths
+lb_llm_token_lengths:
+    .incbin "@LB_TOKEN_DIR@/openai100kpatched_lengths.bin"
+    .section .note.GNU-stack,"",@progbits

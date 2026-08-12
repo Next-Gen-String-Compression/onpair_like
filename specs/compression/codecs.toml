@@ -83,6 +83,14 @@ name = "fsst"
 [[candidates]]
 name = "fsst_like_tum"
 
+# SGTT LLM-token-table compression (TUM token-vldb2026): greedy tokenization
+# against a static 65536-entry table from the OpenAI cl100k vocabulary, 2 B per
+# token ID. No per-chunk training; the 576 KB decode-side table is static and
+# global, reported per chunk (amortized in practice — this spec runs one
+# chunk per column).
+[[candidates]]
+name = "llm_token_tum"
+
 # OnPair (the paper's codec), swept across dictionary sizes (2^bits entries):
 # 9-bit (512) is the floor of the accepted range, 16-bit (65536) is the default.
 # This is OnPair's ratio/speed knob, analogous to zstd's level. seed defaults to

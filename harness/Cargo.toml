@@ -32,6 +32,7 @@ default = [
     "cand-fsst",
     "cand-fsst-like-tum",
     "cand-fsst-like-utn",
+    "cand-llm-token-tum",
     "scan-memmem",
     "scan-prefilter",
     "scan-cpp-std-find",
@@ -58,6 +59,7 @@ cand-zstd = ["dep:lb-cand-zstd"]
 cand-fsst = ["dep:lb-cand-fsst"]
 cand-fsst-like-tum = ["dep:lb-cand-fsst-like-tum"]
 cand-fsst-like-utn = ["dep:lb-cand-fsst-like-utn"]
+cand-llm-token-tum = ["dep:lb-cand-llm-token-tum"]
 scan-memmem = ["dep:lb-scan-memmem"]
 scan-prefilter = ["dep:lb-scan-prefilter"]
 scan-cpp-std-find = ["dep:lb-scan-cpp-std-find"]
@@ -86,6 +88,7 @@ lb-cand-zstd = { path = "../candidates/zstd", optional = true }
 lb-cand-fsst = { path = "../candidates/fsst", optional = true }
 lb-cand-fsst-like-tum = { path = "../candidates/fsst_like_tum", optional = true }
 lb-cand-fsst-like-utn = { path = "../candidates/fsst_like_utn", optional = true }
+lb-cand-llm-token-tum = { path = "../candidates/llm_token_tum", optional = true }
 lb-scan-memmem = { path = "../scanners/memmem", optional = true }
 lb-scan-prefilter = { path = "../scanners/prefilter", optional = true }
 lb-scan-cpp-std-find = { path = "../scanners/cpp_std_find", optional = true }
