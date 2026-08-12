@@ -1,0 +1,33 @@
+# Quick sanity check (untracked): clickbench URL contains, 20-query lean
+# suite, minimal candidate set — is llm_token_prefilter working and are its
+# numbers logical next to fsst_prefilter and the decode peers?
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/compression/clickbench-url-1m"
+
+[[candidates]]
+name = "uncompressed"
+
+[[candidates]]
+name = "fsst"
+
+[[candidates]]
+name = "llm_token_tum"
+
+[[candidates]]
+name = "fsst_prefilter"
+
+[[candidates]]
+name = "llm_token_prefilter"
+
+[[scanners]]
+name = "memmem"
+
+[measure]
+chunk_rows = [0]
+warmup = 1
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

@@ -13,12 +13,12 @@ What is vendored (verbatim, unmodified):
 | `src/util/Hash.hpp` | `fasthash`, `log2ceil` (used by both hash maps) |
 | `src/util/LossyHashMap.hpp` | lossy static hash map (3-byte token lookup) |
 | `src/util/MultiHashMap.hpp` | static bucketed multimap (4..7-byte token lookup) |
-| `src/compressor/TokenizerCompressor.{cpp,hpp}` | REFERENCE ONLY — not compiled; the candidate in `../../cpp/` adapts its logic (see header comment there for the delta) |
+| `src/compressor/TokenizerCompressor.{cpp,hpp}` | REFERENCE ONLY — not compiled; the shared core in `../../llm_token_table.hpp` adapts its logic (see header comment there for the deltas) |
 | `src/tokens/openai100kpatched/*_dict.bin`, `*_lengths.bin` | the token table: 65536 tokens, 16-byte stride, lengths 1..7 |
-| `src/tokens/openai100kpatched/openai100kpatched.{hpp,cpp}` | REFERENCE ONLY — upstream embeds the .bin via `#embed` (needs GCC 15+/Clang 19+); this candidate embeds them via `.incbin` in `../../cpp/tokens.S.in` instead |
+| `src/tokens/openai100kpatched/openai100kpatched.{hpp,cpp}` | REFERENCE ONLY — upstream embeds the .bin via `#embed` (needs GCC 15+/Clang 19+); the candidates embed them via `.incbin` in `../../tokens.S.in` instead |
 
 Token-table invariants (verified against the vendored .bin files; the
-candidate re-checks them at init and fails build() if violated):
+candidates re-check them at init and fail build() if violated):
 
 - 65536 tokens, dict stride 16 bytes, lengths in [1, 7]
 - token IDs 0..255 are the identity single-byte tokens (`dict[16*i] == i`),
