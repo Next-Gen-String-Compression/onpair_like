@@ -41,6 +41,18 @@ name = "fsst_prefilter"
 [[candidates]]
 name = "dict_fsst_prefilter"
 
+# SGTT LLM-token-table pipelines: static-dictionary tokenizer codec
+# (llm_token_tum, decode-then-eval) and its compressed-domain mandatory-chain
+# prefilter (llm_token_prefilter, plus the encoded-domain dict_ peer).
+[[candidates]]
+name = "llm_token_tum"
+
+[[candidates]]
+name = "llm_token_prefilter"
+
+[[candidates]]
+name = "dict_llm_token_prefilter"
+
 [[candidates]]
 name = "onpair"
 
