@@ -38,17 +38,21 @@ set_source_files_properties(${fsst_upstream_SOURCE_DIR}/fsst_avx512.cpp
     PROPERTIES COMPILE_FLAGS "-O1")
 
 set(COMBINED ${CMAKE_CURRENT_BINARY_DIR}/lb_fsst_prefilter_combined${CMAKE_CXX_OUTPUT_EXTENSION})
+# DEPENDS names the object files as well as the target: a bare target name is
+# only an ordering dependency, so an edited source would recompile the objects
+# and still leave this combined object -- and the archive built from it --
+# stale, silently linking the previous build's code.
 if(APPLE)
     add_custom_command(OUTPUT ${COMBINED}
         COMMAND ld -r -exported_symbol _lb_candidate_fsst_prefilter
                 -exported_symbol _lb_candidate_dict_fsst_prefilter
                 $<TARGET_OBJECTS:fp_objs> -o ${COMBINED}
-        DEPENDS fp_objs COMMAND_EXPAND_LISTS VERBATIM)
+        DEPENDS fp_objs $<TARGET_OBJECTS:fp_objs> COMMAND_EXPAND_LISTS VERBATIM)
 else()
     add_custom_command(OUTPUT ${COMBINED}
         COMMAND ${CMAKE_LINKER} -r $<TARGET_OBJECTS:fp_objs> -o ${COMBINED}
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/localize.sh ${COMBINED}
-        DEPENDS fp_objs ${CMAKE_CURRENT_SOURCE_DIR}/localize.sh COMMAND_EXPAND_LISTS VERBATIM)
+        DEPENDS fp_objs $<TARGET_OBJECTS:fp_objs> ${CMAKE_CURRENT_SOURCE_DIR}/localize.sh COMMAND_EXPAND_LISTS VERBATIM)
 endif()
 set_source_files_properties(${COMBINED} PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
 
