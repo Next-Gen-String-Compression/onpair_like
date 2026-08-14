@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Benchmark explorer</title>
+  <style>__BENCH_VIZ_CSS__</style>
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <div>
+        <div class="eyebrow"><span class="pulse"></span> RESULT LAB</div>
+        <h1>Benchmark explorer</h1>
+        <p>Shape a single comparison, then export exactly what you see.</p>
+      </div>
+      <div class="export-cluster">
+        <label class="compact-field">
+          <span>PNG size</span>
+          <select id="export-scale" aria-label="PNG export scale">
+            <option value="1">1200 px</option>
+            <option value="2">2400 px</option>
+            <option value="3" selected>3600 px</option>
+            <option value="4">4800 px</option>
+          </select>
+        </label>
+        <button id="export-png" class="primary-button" type="button">
+          <span>Export PNG</span><span aria-hidden="true">↗</span>
+        </button>
+      </div>
+    </header>
+
+    <section class="control-card" aria-label="Plot configuration">
+      <div class="filter-grid">
+        <label><span>Run</span><select id="source-select"></select></label>
+        <label><span>Dataset</span><select id="dataset-select"></select></label>
+        <label><span>Operation</span><select id="op-select"></select></label>
+        <label><span>Chunk rows</span><select id="chunk-select"></select></label>
+        <label><span>X measure</span><select id="x-metric">
+          <option value="selectivity">Selectivity</option>
+          <option value="needle_len">Needle length</option>
+        </select></label>
+        <label><span>Y measure</span><select id="y-metric">
+          <option value="gbps">Throughput (GB/s)</option>
+          <option value="ns_per_row">Latency (ns/row)</option>
+        </select></label>
+        <label><span>Aggregate</span><select id="bin-count">
+          <option value="exact">Exact x values</option>
+          <option value="8">8 bins</option>
+          <option value="12" selected>12 bins</option>
+          <option value="16">16 bins</option>
+        </select></label>
+      </div>
+
+      <div class="control-divider"></div>
+
+      <div class="scale-row">
+        <div class="scale-control">
+          <span class="control-label">X scale</span>
+          <div class="segmented" role="group" aria-label="X axis scale">
+            <button type="button" data-axis="x" data-scale="linear">Linear</button>
+            <button type="button" data-axis="x" data-scale="log">Log</button>
+          </div>
+        </div>
+        <div class="scale-control">
+          <span class="control-label">Y scale</span>
+          <div class="segmented" role="group" aria-label="Y axis scale">
+            <button type="button" data-axis="y" data-scale="linear">Linear</button>
+            <button type="button" data-axis="y" data-scale="log">Log</button>
+          </div>
+        </div>
+        <div class="focus-control">
+          <span id="focus-label" class="control-label">Focus X (%)</span>
+          <input id="focus-min" type="number" inputmode="decimal" placeholder="auto" aria-label="Minimum X value">
+          <span class="range-separator">to</span>
+          <input id="focus-max" type="number" inputmode="decimal" placeholder="auto" aria-label="Maximum X value">
+          <button id="focus-reset" class="range-reset" type="button">reset</button>
+          <span id="focus-error" class="focus-error" role="status"></span>
+        </div>
+        <label class="check-control"><input id="show-points" type="checkbox" checked><span>Raw points</span></label>
+        <label class="check-control"><input id="show-band" type="checkbox" checked><span>IQR band</span></label>
+        <button id="edit-labels" class="quiet-button" type="button" aria-expanded="false">Edit labels</button>
+      </div>
+
+      <div id="label-editor" class="label-editor" hidden>
+        <label><span>Title</span><input id="title-input" type="text"></label>
+        <label><span>Subtitle</span><input id="subtitle-input" type="text"></label>
+        <label><span>X-axis label</span><input id="x-label-input" type="text"></label>
+        <label><span>Y-axis label</span><input id="y-label-input" type="text"></label>
+      </div>
+    </section>
+
+    <section class="series-card" aria-label="Visible series">
+      <div class="series-heading">
+        <div>
+          <span class="section-kicker">QUERY LINES</span>
+          <span id="series-count" class="series-count"></span>
+        </div>
+        <div class="series-actions">
+          <input id="series-search" type="search" placeholder="Find a candidate…" aria-label="Find a candidate">
+          <button id="series-all" type="button">all</button>
+          <button id="series-none" type="button">none</button>
+        </div>
+      </div>
+      <div id="series-chips" class="chip-cloud"></div>
+
+      <div id="decode-section" class="decode-section">
+        <div class="series-heading minor">
+          <div>
+            <span class="section-kicker">DECOMPRESSION ONLY</span>
+            <span class="explanation">instrumented decode phase, excluding scan</span>
+          </div>
+          <div class="series-actions">
+            <button id="decode-all" type="button">all</button>
+            <button id="decode-none" type="button">none</button>
+          </div>
+        </div>
+        <div id="decode-chips" class="chip-cloud"></div>
+      </div>
+    </section>
+
+    <section class="plot-card">
+      <div id="plot-wrap" class="plot-wrap">
+        <svg id="plot" role="img" aria-labelledby="plot-accessible-title"></svg>
+      </div>
+      <div class="plot-footer">
+        <span id="plot-status"></span>
+        <span>Median line · interquartile band · hover for values</span>
+      </div>
+    </section>
+  </main>
+
+  <div id="tooltip" class="tooltip" role="status" hidden></div>
+
+  <script id="bench-viz-data" type="application/json">__BENCH_VIZ_DATA__</script>
+  <script id="bench-viz-defaults" type="application/json">__BENCH_VIZ_DEFAULTS__</script>
+  <script>__BENCH_VIZ_JS__</script>
+</body>
+</html>
