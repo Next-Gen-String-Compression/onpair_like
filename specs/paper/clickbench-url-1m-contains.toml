@@ -7,6 +7,44 @@
 #   cargo run --release --bin bench -- run specs/paper/clickbench-url-1m-contains.toml \
 #       -o results/paper/clickbench-url-1m-contains
 
+# Every strategy the candidates below declare, MINUS fsst_like_tum's `cpp`
+# codegen backend (and its `cpp-simd` / `llvm*` siblings on hosts that register
+# them). `cpp` emits a specialized kernel per query and shells out to
+# `clang++ -shared` to build it; hygiene rule 1 (no memoization across calls)
+# means it must redo that on every run(), i.e. once per chunk. Measured here:
+# 552 ms of the 552 ms whole-column median is that compile, and at
+# chunk_rows = 122880 the nine chunks push it to ~4,900 ms of a 4,821 ms median —
+# ~83 minutes for the 142 queries, more than the other 19 candidates combined.
+# The cost is real and self-timed into setup_ns, so it belongs in a run that is
+# about compile-vs-match attribution; it does not belong in this sweep.
+#
+# This must stay ABOVE the first [[table]] header: a root-level key placed after
+# one is parsed as a key OF that table, and serde drops it silently.
+#
+# NOTE: allowlist, not denylist — a candidate added below will not run until its
+# strategy names are added here too.
+strategies = [
+  "memmem",
+  "prefilter",
+  "dict+prefilter",
+  "interp",
+  "dict+interp",
+  "decode",
+  "decode+prefilter",
+  "dict+decode+prefilter",
+  "fsst-prefilter",
+  "dict+fsst-prefilter",
+  "llm-token-prefilter",
+  "dict+llm-token-prefilter",
+  "compressed",
+  "dict+compressed",
+  "comet",
+  "kmp",
+  "pf_kmp",
+  "pf_memmem",
+  "dict+pf_kmp",
+]
+
 [[datasets]]
 path = "../../datasets/clickbench-url-1m"
 
@@ -80,11 +118,15 @@ name = "dict_onpair"
 [[candidates]]
 name = "dict_onpair_spiral"
 
+# memmem only. These scanners feed the harness-composed `decode` strategy of the
+# pure codecs (fsst, lz4, zstd, llm_token_tum, onpair), and adding `prefilter`
+# there only appends a filtering pass over already-decoded plaintext: it was
+# 6-10% slower than memmem for all five, with identical match counts. The one
+# thing those cells cross-checked — harness composition vs a self-contained
+# implementation — is covered by fsst_decode_prefilter, which computes the same
+# answer as fsst/decode+prefilter did (prune 0.75398, FPR 0.390383, both).
 [[scanners]]
 name = "memmem"
-
-[[scanners]]
-name = "prefilter"
 
 [measure]
 chunk_rows = [0, 122880]  # 0 = whole column; 122880 = 60*2048 rows/chunk

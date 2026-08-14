@@ -19,4 +19,5 @@ analysis/summary.json
 analysis/report.html
 analysis/*.log
 analysis/*.out
+analysis/__marimo__/
 .idea

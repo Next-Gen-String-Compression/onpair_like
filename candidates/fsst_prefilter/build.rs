@@ -14,6 +14,6 @@ fn main() {
     println!("cargo:rerun-if-changed=../common/fsst_common/fsst_mandatory_chain.hpp");
     println!("cargo:rerun-if-changed=../common/matcher/matcher.hpp");
     println!("cargo:rerun-if-changed=../common/matcher/dict_matcher.hpp");
-    println!("cargo:rerun-if-changed=../common/prefilter/prefilter.hpp");
+    println!("cargo:rerun-if-changed=../common/prefilter/vendor/fsst_prefilter/src/contains");
     println!("cargo:rerun-if-changed=../../contract/lb_candidate.h");
 }

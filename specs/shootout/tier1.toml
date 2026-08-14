@@ -12,6 +12,10 @@
 #
 # Prereqs: ./reproduce.sh datasets && ./reproduce.sh suites
 
+# Root-level key, so it MUST come before the first [[table]] header: TOML would
+# otherwise attach it to the last table opened (see harness/src/spec.rs).
+strategies = ["direct"]
+
 [[datasets]]
 path = "../../datasets/msmarco-query"      # short rows (~36 B)
 [[datasets]]
@@ -66,8 +70,6 @@ name = "pf-rare-byte"
 name = "pf-first-last"
 [[scanners]]
 name = "pf-rare-pair"
-
-strategies = ["direct"]
 
 [measure]
 chunk_rows = [0]

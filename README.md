@@ -33,6 +33,26 @@ per gated query cell) + `manifest.json` (environment, versions, checksums,
 spec hash). Every run also loads itself into `results/bench.duckdb`, the
 queryable index over all runs — see [analysis/db/README.md](analysis/db/README.md).
 
+## Dashboard
+
+```sh
+.venv/bin/pip install -r analysis/requirements.txt
+.venv/bin/marimo run analysis/dashboard.py        # http://localhost:2718
+```
+
+Reads `results/bench.duckdb` read-only. Pick one run (newest first), then read
+selectivity against GB/s per evaluation: raw per-query points, the median per
+selectivity bin as a line, and the 25/75 percentile as a band behind it. Bins
+are three per log decade, drawn as vertical gridlines; the x axis toggles
+between log and linear. Chips pick which kernels are drawn, and the table under
+the chart gives each one's strategy, scanner, version, config, compression ratio
+and build time. The machine and run environment sit above the chart.
+
+Whole-column measurements are shown when the run has them, else its smallest
+`chunk_rows`; queries that match nothing are absent, since a log axis has no
+room for selectivity 0. Stop the app before starting a `bench run` — DuckDB
+will not grant the loader a write lock while the dashboard holds the file open.
+
 ## Reproducing everything
 
 ```sh
@@ -56,7 +76,7 @@ header of [reproduce.sh](reproduce.sh) for stages and wall-clock estimates.
 | `suites/` | query suites (`suite.json` + `queries.jsonl`, truth blessed in) — curated, or swept via `bench gen` (seed-deterministic grid + `gen-report.json` coverage matrix) |
 | `specs/` | run specs: candidates × configs × scanners × datasets × chunk sizes |
 | `datasets/` | `sources.yaml` (pinned URLs + sha256 + licenses + canonical checksums) + `prepare.py` (download → extract → ingest → verify); artifacts and raw downloads are gitignored |
-| `analysis/` | reporting over finished runs. `db/` is the queryable store: `schema.sql` + `load.py` build `results/bench.duckdb` (5 dimensions + measurements + the `v` view) from `results/**`, automatically at the end of each run; `analyze.py`/`report.py` are the older stdlib summary + HTML report |
+| `analysis/` | reporting over finished runs. `db/` is the queryable store: `schema.sql` + `load.py` build `results/bench.duckdb` (5 dimensions + measurements + the `v` view) from `results/**`, automatically at the end of each run; `dashboard.py` is the marimo dashboard over it; `analyze.py`/`report.py` are the older stdlib summary + HTML report |
 
 ## Adding a candidate or scanner
 
