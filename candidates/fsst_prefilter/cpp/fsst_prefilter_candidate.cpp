@@ -9,8 +9,9 @@
 //      (fsst_mandatory_chain.hpp) — the run of codes that MUST appear in any
 //      matching row's compressed stream — and pack the first 4 (or 2) codes into
 //      a 2/4-byte code.
-//   3. scan every row's COMPRESSED bytes for that code with the byte-domain
-//      prefilter (prefilter.hpp). No decompression on rejected rows.
+//   3. scan the COMPRESSED stream for those codes with the vendored FLAT
+//      VECTORIZED prefilter kernel (see below). No decompression on rejected
+//      rows.
 //   4. decompress only the SURVIVORS (per row) and verify the real needle.
 // This mirrors DuckDB's ContainsPrefilterExecptor FSST path (see
 // candidates/common/fsst_common/table_filter_state.cpp): mandatory-chain codes
@@ -18,6 +19,25 @@
 //
 //   dict_fsst_prefilter : the same matcher as a DictMatcher child, so chain
 //                         building + the compressed scan run once per UNIQUE value.
+//
+// THE SCAN: `u{16,32}::flat::simd::contains` from
+// candidates/common/prefilter/vendor/fsst_prefilter (linked, not re-included —
+// the kernel keeps the codegen it was tuned and disassembled with). `flat` is
+// the buffer-at-a-time layout: base + n+1 offsets, rows back to back, pass 1
+// sweeping 128-byte superblocks with no idea rows exist and pass 2 mapping the
+// hit positions back to rows through the offsets. `simd` is the NEON/SSE2
+// spelling, which fuses all K codes into shared block accumulators — the
+// marginal cost of a code is its compares, not another pass over the bytes.
+// That combination is the fastest cell of the vendor's grid at both widths
+// (u32: 5.8 ms vs 15.1 for the row/scalar shape this candidate used before).
+//
+// Two contracts the flat layout imposes, both satisfied in build():
+//   * 32-bit offsets into one contiguous buffer -> coff32_.
+//   * BUFFER_SLACK readable bytes past the last row, because a superblock read
+//     at the buffer end runs CODE_LEN-1 bytes over -> the padded compressed
+//     vector (footprint() reports the unpadded size).
+// The flat kernels keep a static position scratch and are NOT thread-safe; the
+// harness evaluates one candidate at a time on one thread.
 //
 // A needle with no usable chain (< 2 mandatory codes for this symbol table)
 // degrades to pass-through (every row a survivor); the verify is the correctness
@@ -32,13 +52,34 @@
 
 #include "matcher.hpp"
 #include "dict_matcher.hpp"
-#include "prefilter.hpp"
 
+#include "contains/kernel.hpp"             // VECTOR_SIZE, BUFFER_SLACK
+#include "contains/kernels/geometry.hpp"   // pf::MAX_SYMBOLS
+#include "contains/kernels/simd_shim.hpp"  // PREFILTER_HAVE_SIMD
+
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <memory>
 #include <string_view>
 #include <vector>
+
+#if !defined(PREFILTER_HAVE_SIMD)
+#error "fsst_prefilter needs the vendored simd kernels (NEON on aarch64, SSE2 on x86-64)"
+#endif
+
+// The vendored kernels' public entry points, defined in
+// vendor/fsst_prefilter/src/contains/kernels/candidates/candidates_u{16,32}.cpp.
+// That project exports them by definition only — there is no header — so they
+// are declared here; the signatures are fixed by its kernel.hpp contract.
+namespace u32::flat::simd {
+uint32_t contains(const char* base, const uint32_t* offsets, uint32_t n,
+                  const uint32_t* codes, uint32_t k, uint32_t* sel);
+}  // namespace u32::flat::simd
+namespace u16::flat::simd {
+uint32_t contains(const char* base, const uint32_t* offsets, uint32_t n,
+                  const uint16_t* codes, uint32_t k, uint32_t* sel);
+}  // namespace u16::flat::simd
 
 namespace {
 
@@ -63,6 +104,24 @@ class FsstPrefilter final : public lb::Matcher {
       if (len > max_row) max_row = len;
     }
     rowbuf_.resize(max_row + LB_DECODE_PAD);
+
+    // Flat-scan plumbing. The kernels index one contiguous buffer with 32-bit
+    // absolute offsets, so the u64 compressed-row offsets are narrowed once
+    // here and then released (resident cost unchanged).
+    cbytes_ = b_.coffsets[n];
+    if (cbytes_ > uint64_t{UINT32_MAX} - BUFFER_SLACK) {
+      if (ec > 0)
+        std::snprintf(eb, ec, "compressed chunk is %llu B, past the flat kernels' 32-bit offsets",
+                      static_cast<unsigned long long>(cbytes_));
+      return false;
+    }
+    coff32_.resize(n + 1);
+    for (uint64_t i = 0; i <= n; i++) coff32_[i] = static_cast<uint32_t>(b_.coffsets[i]);
+    b_.coffsets.clear();
+    b_.coffsets.shrink_to_fit();
+    // Readable slack past the last row: a superblock probe starting inside the
+    // buffer reads up to CODE_LEN-1 bytes past its end.
+    b_.compressed.resize(cbytes_ + BUFFER_SLACK, 0);
     return true;
   }
 
@@ -97,33 +156,31 @@ class FsstPrefilter final : public lb::Matcher {
     }
     const bool passthrough = t32.empty() && t16.empty();
 
+    const char* base = reinterpret_cast<const char*>(b_.compressed.data());
+    if (passthrough) {
+      // No usable chain for some needle: every row is a survivor, so there is
+      // nothing to scan and no selection to materialize — straight to verify.
+      for (uint64_t i = 0; i < b_.num_rows; i++) verify(q, base, i, out);
+      if (stats) stats->prefilter_candidates = b_.num_rows;
+      return 0;
+    }
+
+    uint32_t sel[VECTOR_SIZE];
+    uint8_t marks[VECTOR_SIZE];
     uint64_t candidates = 0;
-    for (uint64_t i = 0; i < b_.num_rows; i++) {
-      const char* cp = reinterpret_cast<const char*>(b_.compressed.data()) + b_.coffsets[i];
-      const uint32_t clen = static_cast<uint32_t>(b_.coffsets[i + 1] - b_.coffsets[i]);
-      // Compressed-domain prefilter: does this row's code stream contain any target?
-      bool pf = passthrough;
-      if (!pf) {
-        if (!t32.empty()) {
-          for (uint32_t c : t32) if (prefilter::contains<uint32_t>(cp, clen, c)) { pf = true; break; }
-        } else {
-          for (uint16_t c : t16) if (prefilter::contains<uint16_t>(cp, clen, c)) { pf = true; break; }
-        }
-      }
-      if (!pf) continue;
-      candidates++;
-      // Verify: decompress this one row, then exact substring check.
-      const size_t declen = fsst_decompress(
-          &decoder_, clen, reinterpret_cast<const unsigned char*>(cp), rowbuf_.size(),
-          rowbuf_.data());
-      const std::string_view row(reinterpret_cast<const char*>(rowbuf_.data()), declen);
-      bool hit = false;
-      for (uint32_t k = 0; k < q->needle_count && !hit; k++) {
-        const std::string_view needle(reinterpret_cast<const char*>(q->needles[k].ptr),
-                                      static_cast<size_t>(q->needles[k].len));
-        hit = row.find(needle) != std::string_view::npos;
-      }
-      if (hit) out[i >> 6] |= uint64_t{1} << (i & 63);
+    // A vector at a time, as a DBMS pipeline does: the flat scan selects the
+    // survivors of 2048 compressed rows, then each survivor is decompressed and
+    // exactly checked.
+    for (uint64_t row0 = 0; row0 < b_.num_rows; row0 += VECTOR_SIZE) {
+      const uint32_t vn =
+          static_cast<uint32_t>(std::min<uint64_t>(VECTOR_SIZE, b_.num_rows - row0));
+      const uint32_t* voff = coff32_.data() + row0;
+      const uint32_t nsel =
+          !t32.empty()
+              ? scan(base, voff, vn, t32.data(), static_cast<uint32_t>(t32.size()), sel, marks)
+              : scan(base, voff, vn, t16.data(), static_cast<uint32_t>(t16.size()), sel, marks);
+      candidates += nsel;
+      for (uint32_t s = 0; s < nsel; s++) verify(q, base, row0 + sel[s], out);
     }
     if (stats) stats->prefilter_candidates = candidates;
     return 0;
@@ -136,15 +193,75 @@ class FsstPrefilter final : public lb::Matcher {
   void footprint(std::vector<lb_footprint_component>& out) const override {
     lb_footprint_component comps[3];
     const uint32_t n = fsst_common::Footprint(b_, comps, 3);
-    for (uint32_t i = 0; i < n; i++) out.push_back(comps[i]);
+    // Undo the scan slack: `compressed` is oversized by BUFFER_SLACK so the
+    // flat kernels can over-read the buffer end, which is not payload.
+    for (uint32_t i = 0; i < n; i++) {
+      if (std::strcmp(comps[i].name, "payload_fsst") == 0) comps[i].bytes = cbytes_;
+      out.push_back(comps[i]);
+    }
   }
 
   uint64_t num_rows() const override { return b_.num_rows; }
 
  private:
+  // The correctness authority: decompress ONE survivor row and check the real
+  // needles against the plaintext. The prefilter only ever narrows what gets
+  // here, so this is what decides the output bitmap.
+  void verify(const lb_query* q, const char* base, uint64_t i, uint64_t* out) {
+    const char* cp = base + coff32_[i];
+    const uint32_t clen = coff32_[i + 1] - coff32_[i];
+    const size_t declen =
+        fsst_decompress(&decoder_, clen, reinterpret_cast<const unsigned char*>(cp),
+                        rowbuf_.size(), rowbuf_.data());
+    const std::string_view row(reinterpret_cast<const char*>(rowbuf_.data()), declen);
+    for (uint32_t k = 0; k < q->needle_count; k++) {
+      const std::string_view needle(reinterpret_cast<const char*>(q->needles[k].ptr),
+                                    static_cast<size_t>(q->needles[k].len));
+      if (row.find(needle) != std::string_view::npos) {
+        out[i >> 6] |= uint64_t{1} << (i & 63);
+        return;
+      }
+    }
+  }
+
+  // One flat scan over a vector of rows: which of them contain ANY target code?
+  // The vendored kernels take at most MAX_SYMBOLS codes per call (a wider k is
+  // out of contract and aborts), and a CONTAINS_ANY query may carry more than
+  // that, so the OR is split into groups of MAX_SYMBOLS and merged through the
+  // mark array. Returns ascending vector-relative indices in `sel`.
+  template <typename CodeT>
+  static uint32_t scan(const char* base, const uint32_t* voff, uint32_t vn, const CodeT* codes,
+                       uint32_t k, uint32_t* sel, uint8_t* marks) {
+    if (k <= pf::MAX_SYMBOLS) return flat_simd(base, voff, vn, codes, k, sel);
+    std::memset(marks, 0, vn);
+    for (uint32_t g = 0; g < k; g += pf::MAX_SYMBOLS) {
+      const uint32_t gk = std::min(pf::MAX_SYMBOLS, k - g);
+      const uint32_t m = flat_simd(base, voff, vn, codes + g, gk, sel);
+      for (uint32_t j = 0; j < m; j++) marks[sel[j]] = 1;
+    }
+    uint32_t nsel = 0;
+    for (uint32_t i = 0; i < vn; i++) {
+      sel[nsel] = i;
+      nsel += marks[i];
+    }
+    return nsel;
+  }
+
+  // Width dispatch: the two kernels differ only in their code type.
+  static uint32_t flat_simd(const char* base, const uint32_t* off, uint32_t n,
+                            const uint32_t* codes, uint32_t k, uint32_t* sel) {
+    return u32::flat::simd::contains(base, off, n, codes, k, sel);
+  }
+  static uint32_t flat_simd(const char* base, const uint32_t* off, uint32_t n,
+                            const uint16_t* codes, uint32_t k, uint32_t* sel) {
+    return u16::flat::simd::contains(base, off, n, codes, k, sel);
+  }
+
   fsst_common::FsstBuilt b_;
   fsst_decoder_t decoder_{};
   std::vector<uint8_t> rowbuf_;
+  std::vector<uint32_t> coff32_;  // num_rows + 1, 32-bit offsets for the flat scan
+  uint64_t cbytes_ = 0;           // compressed payload without the scan slack
 };
 
 void* build_plain(const lb_chunk_view* view, const char*, char* eb, uint64_t ec) {
@@ -159,13 +276,13 @@ const uint32_t kOps = LB_OP_BIT(LB_CONTAINS) | LB_OP_BIT(LB_CONTAINS_ANY);
 
 const lb_strategy kPlainStrats[] = {{"fsst-prefilter", kOps}};
 const lb_candidate kPlainVtable = {
-    LB_ABI_VERSION, "fsst_prefilter", "0.1.0+e638d4c", nullptr,
+    LB_ABI_VERSION, "fsst_prefilter", "0.2.0+e638d4c", nullptr,
     kPlainStrats, 1, build_plain, lb::adapter_footprint, lb::adapter_run,
     nullptr, nullptr, lb::adapter_destroy};
 
 const lb_strategy kDictStrats[] = {{"dict+fsst-prefilter", kOps}};
 const lb_candidate kDictVtable = {
-    LB_ABI_VERSION, "dict_fsst_prefilter", "0.1.0+e638d4c", nullptr,
+    LB_ABI_VERSION, "dict_fsst_prefilter", "0.2.0+e638d4c", nullptr,
     kDictStrats, 1, build_dict, lb::adapter_footprint, lb::adapter_run,
     nullptr, nullptr, lb::adapter_destroy};
 

@@ -1,3 +1,6 @@
 [submodule "candidates/fsst_like_utn/vendor/fsst-like"]
 	path = candidates/fsst_like_utn/vendor/fsst-like
 	url = https://github.com/utndatasystems/fsst-like.git
+[submodule "candidates/common/prefilter/vendor/fsst_prefilter"]
+	path = candidates/common/prefilter/vendor/fsst_prefilter
+	url = https://github.com/Next-Gen-String-Compression/fsst_prefilter.git

@@ -1,10 +1,23 @@
 # Author-owned build for fsst_prefilter + dict_fsst_prefilter: cwida/fsst
-# upstream (the `fsst` candidate's fork) + the Matcher core + prefilter.hpp +
-# the mandatory-chain port. A SECOND/THIRD cwida FSST copy in the harness, so
-# all FSST symbols are localized at link, leaving only the two lb_candidate_*
-# entry points exported (cf. fsst_decode_prefilter/CMakeLists.txt).
+# upstream (the `fsst` candidate's fork) + the Matcher core + the vendored flat
+# SIMD prefilter kernels + the mandatory-chain port. A SECOND/THIRD cwida FSST
+# copy in the harness, so all FSST symbols are localized at link, leaving only
+# the two lb_candidate_* entry points exported (cf.
+# fsst_decode_prefilter/CMakeLists.txt).
 cmake_minimum_required(VERSION 3.21)
 project(lb_fsst_prefilter CXX)
+
+# The prefilter kernels are LINKED, not re-included: their public `contains`
+# entry points are externally linked on purpose, so a consumer gets the codegen
+# they were tuned and disassembled with. Both width registries are compiled
+# because the candidate picks 2- or 4-byte codes per query; every include in
+# that project is spelled from its src/, hence the single -I.
+set(PREFILTER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../common/prefilter/vendor/fsst_prefilter)
+if(NOT EXISTS ${PREFILTER_DIR}/src/contains/kernel.hpp)
+    message(FATAL_ERROR
+        "vendored prefilter kernels missing — run: git submodule update --init "
+        "candidates/common/prefilter/vendor/fsst_prefilter")
+endif()
 
 include(FetchContent)
 FetchContent_Declare(
@@ -20,6 +33,8 @@ check_cxx_compiler_flag("-march=native" LB_FSST_MARCH_NATIVE)
 
 add_library(fp_objs OBJECT
     fsst_prefilter_candidate.cpp
+    ${PREFILTER_DIR}/src/contains/kernels/candidates/candidates_u16.cpp
+    ${PREFILTER_DIR}/src/contains/kernels/candidates/candidates_u32.cpp
     ${fsst_upstream_SOURCE_DIR}/libfsst.cpp
     ${fsst_upstream_SOURCE_DIR}/fsst_avx512.cpp
 )
@@ -28,7 +43,7 @@ target_include_directories(fp_objs PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../contract
     ${CMAKE_CURRENT_SOURCE_DIR}/../../common/fsst_common
     ${CMAKE_CURRENT_SOURCE_DIR}/../../common/matcher
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../common/prefilter
+    ${PREFILTER_DIR}/src
 )
 set_target_properties(fp_objs PROPERTIES
     CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON POSITION_INDEPENDENT_CODE ON)
