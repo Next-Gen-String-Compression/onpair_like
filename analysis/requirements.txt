@@ -1,0 +1,8 @@
+# Dependencies of the marimo dashboard (analysis/dashboard.py). duckdb comes
+# from datasets/requirements.txt, which the .venv already installs.
+#   marimo          the notebook/app runtime
+#   altair          the layered chart (points + median line + IQR band)
+#   pandas          altair's frame format; duckdb's .df() needs it
+marimo>=0.23
+altair>=6
+pandas>=2
