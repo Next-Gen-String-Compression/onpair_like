@@ -704,9 +704,11 @@ prepare + the query over all chunks, §6):
   Headline number: **median**, with min reported alongside as the noise
   floor and the stored distribution (p99 etc.) there for comparing tails
   across candidates. *(Confirmed in review.)*
-- Derived per-row normalizations stored with each result: `ns_per_row` and
-  effective bytes/s over the *raw* payload — these make cross-dataset
-  comparison meaningful regardless of each candidate's compression.
+- Derived per-value normalizations stored with each result: `ns_per_value`
+  (median over the column's rows), `ns_per_domain_value` (median over the
+  values actually *evaluated* — see §10's evaluation domain), and effective
+  bytes/s over the *raw* payload — these make cross-dataset comparison
+  meaningful regardless of each candidate's compression.
 - Clock: monotonic (`Instant`); the timing loop is ~30 lines used by every
   candidate identically. Hardware counters (instructions, cache misses via
   `perf_event`) are a natural later extension of the same loop, not a
@@ -728,6 +730,25 @@ prepare + the query over all chunks, §6):
   re-running anything.
 - Hot-cache latency is the phase-1 definition (data resident, candidate
   built). Cold-start behavior is a future dimension, noted, not designed here.
+
+### The result store: a derived index, not a second source of truth
+
+`results.jsonl` is the record; `results/bench.duckdb` is a rebuildable index
+over it, loaded at the end of every `bench run` (`analysis/db/`). Five
+dimensions — platform, run, dataset, system, query — plus one measurement table
+whose rows carry latency *and* the footprint of the build they were answered
+from, so the two axes of §9 sit side by side without a join. The store adds no
+information: it can be deleted and reproduced from `results/**` at any time, and
+it is gitignored for that reason.
+
+Two properties follow from this section rather than from convenience. The DB
+never aggregates across platforms — every row carries its `hostname`/`arch` and
+the store offers no view that merges them, because cross-machine comparison is
+side-by-side and explicit. And it keeps what a rerun destroys: a run overwrites
+`results.jsonl` in place, so each ingest is a new `run` row (the newest per
+output directory flagged `is_latest`), preserving history the wire format
+cannot. Rows a run *withheld* stay visible: `unsupported` cells and the
+recorded absences (§9's module gating) are loaded, not filtered.
 
 ### Threading policy (a decision, not an accident)
 
@@ -776,7 +797,7 @@ the same entry point:
   latency samples come from this mode.
 - **Instrumented mode** (`stats != NULL`, run once per query *per strategy*,
   outside the timing loop): the candidate fills whatever it can of
-  `lb_run_stats` — minimally `prefilter_candidates` (rows surviving its
+  `lb_run_stats` — minimally `prefilter_candidates` (values surviving its
   prefilter), optionally self-timed `decode_ns` / `prefilter_ns` /
   `verify_ns` phase splits. Every field defaults to UNSET; a candidate with
   no prefilter reports nothing and appears as such.
@@ -791,15 +812,44 @@ directly by the harness clock, and prefilter counters come from the scanner
 counters are comparable across candidates by construction. Result rows look
 identical either way; phase splits are labeled by origin.
 
-**Derived attribution — computed by the harness, not trusted from the
-candidate.** From `prefilter_candidates` plus the (gated, therefore true)
-match count, the harness derives per query:
+**The evaluation domain (ABI v5).** A candidate does not necessarily
+evaluate one value per row. A dictionary front-end answers the predicate
+once per *unique* value and scatters the verdict to rows through the codes,
+so everything it counts — survivors included — is in that reduced domain.
+Such a module declares `eval_domain` (the values it evaluated) and
+`eval_domain_matches` (the true matches among them); leaving both UNSET
+asserts one evaluation per row. These are structural counters, identical in
+every sample, which is why they are the one instrumented-mode quantity the
+harness *does* divide into the timing-mode median.
 
-- prune rate: `1 − candidates/num_rows`
-- false-positive rate of the prefilter: `(candidates − true_matches) / candidates`
+That gives two per-value costs, and their ratio is the dictionary's whole
+contribution:
+
+- `ns_per_value` = median / num_rows — the end-to-end cost. Evaluating
+  fewer values for the same answer shows up here, as it should.
+- `ns_per_domain_value` = median / eval_domain — the cost per value
+  actually evaluated, so it compares *engines* rather than pipelines. Equal
+  to `ns_per_value` for every row-domain module.
+- `ns_per_value = ns_per_domain_value / (num_rows / eval_domain)` — so a
+  `dict_X`-vs-`X` speedup factors into the dedup it bought and the change in
+  the engine's own per-value cost (scatter overhead, and the cache locality
+  of a smaller working set).
+
+**Derived attribution — computed by the harness, not trusted from the
+candidate.** From `prefilter_candidates` plus the true match count in the
+same domain, the harness derives per query:
+
+- prune rate: `1 − candidates/eval_domain`
+- false-positive rate of the prefilter:
+  `(candidates − domain_matches) / candidates`
 - verify cost per survivor: timing-mode latency divided by candidates
   (an honest approximation; exact splits come from the optional self-timed
   phases, clearly labeled as self-reported)
+
+All three take their denominator from the domain the work happened in.
+Scoring a dictionary's unique-domain survivor count against the row count
+is what made `false_positive_rate` come out negative for the `dict_*`
+candidates before v5.
 
 **Where the insight comes from:** every result row carries both these
 prefilter metrics and the query's `derived` metadata (true selectivity,

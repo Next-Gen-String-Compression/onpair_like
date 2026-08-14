@@ -138,14 +138,14 @@ pub struct Candidate {
 
 impl Candidate {
     fn validate(vt: &'static LbCandidate) -> Result<Candidate> {
+        let name = unsafe { cstr(vt.name) }.ok_or("candidate name missing")?.to_string();
         if vt.abi_version != LB_ABI_VERSION {
             return Err(format!(
-                "candidate ABI version {} != harness {}",
+                "candidate {name}: ABI version {} != harness {}",
                 vt.abi_version, LB_ABI_VERSION
             )
             .into());
         }
-        let name = unsafe { cstr(vt.name) }.ok_or("candidate name missing")?.to_string();
         let version = unsafe { cstr(vt.version) }.unwrap_or("0").to_string();
         let cpu_features = unsafe { cstr(vt.cpu_features) }
             .map(str::to_string)

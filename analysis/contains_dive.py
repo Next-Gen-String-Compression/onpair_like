@@ -27,7 +27,7 @@ for r in build:
         if off: rowlen[r["dataset"]]=(r["raw_bytes"]-off)/(off/8)
 
 q=[r for r in rows if r.get("kind")=="query" and r.get("op")=="contains"
-   and r.get("status")=="ok" and r.get("ns_per_row") is not None]
+   and r.get("status")=="ok" and r.get("ns_per_value") is not None]
 
 def sel(r): return (r.get("derived",{}) or {}).get("selectivity",0) or 0
 def nlen(r): return (r.get("derived",{}) or {}).get("needle_len_total") or 1
@@ -39,7 +39,7 @@ def scan_rows(ds=None,scanner=None):
 
 def best_scanner(ds):
     by=defaultdict(list)
-    for r in scan_rows(ds): by[r['scanner']].append(r['ns_per_row'])
+    for r in scan_rows(ds): by[r['scanner']].append(r['ns_per_value'])
     by={k:v for k,v in by.items()}
     if len(by)<2: return None
     bs=min(by,key=lambda s:med(by[s])); return bs,med(by[bs])
@@ -49,8 +49,8 @@ print("CONTAINS per column — onpair·compressed vs memmem vs best scanner")
 print("="*78)
 print(f"{'column':<20}{'rowlen':>7}{'ratio':>6}{'onpair':>8}{'memmem':>8}{'onp/mm':>7}{'best-scanner':>19}{'onp/best':>9}")
 for ds in sorted({r['dataset'] for r in q}):
-    o=med([r['ns_per_row'] for r in onp_rows(ds)])
-    mm=med([r['ns_per_row'] for r in scan_rows(ds,'memmem')])
+    o=med([r['ns_per_value'] for r in onp_rows(ds)])
+    mm=med([r['ns_per_value'] for r in scan_rows(ds,'memmem')])
     b=best_scanner(ds)
     rl=rowlen.get(ds,0); rt=ratio.get(ds,0)
     bt=f"{b[1]:.2f} ({b[0]})" if b else "(memmem only)"
@@ -68,11 +68,11 @@ for ds in ["clickbench-url-1m","dbpedia-abstract","msmarco-query"]:
     print(f"\n[{ds}]  (best scanner overall: {b[0]})")
     print(f"  {'needle_len':<12}{'onpair':>9}{'best-scan':>11}{'onp/best':>9}{'n':>4}")
     for lo,hi,lab in LB:
-        orows=[r['ns_per_row'] for r in onp_rows(ds) if lo<=nlen(r)<=hi]
+        orows=[r['ns_per_value'] for r in onp_rows(ds) if lo<=nlen(r)<=hi]
         # best scanner per this bucket
         by=defaultdict(list)
         for r in scan_rows(ds):
-            if lo<=nlen(r)<=hi: by[r['scanner']].append(r['ns_per_row'])
+            if lo<=nlen(r)<=hi: by[r['scanner']].append(r['ns_per_value'])
         if not orows or not by: continue
         o=med(orows); bs=min(by,key=lambda s:med(by[s])); bm=med(by[bs])
         print(f"  {lab:<12}{o:>9.2f}{bm:>9.2f}({bs[:3]}){o/bm:>8.2f}x{len(orows):>4}")
@@ -89,10 +89,10 @@ for ds in ["clickbench-url-1m","dbpedia-abstract"]:
     for lo,hi,lab in SB:
         def inb(r):
             s=sel(r); return (s==0 and lab=="zero") or (lo<s<=hi and lab!="zero")
-        orows=[r['ns_per_row'] for r in onp_rows(ds) if inb(r)]
+        orows=[r['ns_per_value'] for r in onp_rows(ds) if inb(r)]
         by=defaultdict(list)
         for r in scan_rows(ds):
-            if inb(r): by[r['scanner']].append(r['ns_per_row'])
+            if inb(r): by[r['scanner']].append(r['ns_per_value'])
         if not orows or not by: continue
         o=med(orows); bs=min(by,key=lambda s:med(by[s])); bm=med(by[bs])
         print(f"  {lab:<12}{o:>9.2f}{bm:>9.2f}({bs[:4]}){o/bm:>8.2f}x{len(orows):>4}")

@@ -11,11 +11,11 @@ q=[r for r in rows if r.get("kind")=="query" and r.get("status")=="ok" and (r.ge
 print("total rows:",len(rows),"ok-query:",len(q))
 print("gate_fail:",sum(1 for r in rows if r.get("kind")=="query" and (r.get("gate") or {}).get("hash_ok") is False))
 print("datasets:",sorted({r['dataset'] for r in q}))
-# anomaly scan: median/max ns_per_row and max_ns outliers. A sleep-poisoned sample
+# anomaly scan: median/max ns_per_value and max_ns outliers. A sleep-poisoned sample
 # would show max_ns in the 100s of ms..minutes; ns/row wildly above the column norm.
 for ds in sorted({r['dataset'] for r in q}):
     qq=[r for r in q if r['dataset']==ds]
-    nspr=sorted(r['ns_per_row'] for r in qq if r.get('ns_per_row'))
+    nspr=sorted(r['ns_per_value'] for r in qq if r.get('ns_per_value'))
     maxns=sorted(((r['latency']['max_ns'],r['latency']['median_ns'],r.get('scanner'),r.get('op'),r.get('query_id')) for r in qq))
     med=nspr[len(nspr)//2]
     p99=nspr[int(len(nspr)*0.99)]

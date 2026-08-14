@@ -303,6 +303,48 @@ fn run_worker_process(
     Ok(ExitCode::SUCCESS)
 }
 
+/// Load this run into `results/bench.duckdb` (DESIGN.md §9): the JSONL stays
+/// the source of truth, the DB is the derived index every analysis reads. The
+/// measurement binary owns no DB code — it calls the loader, which is
+/// idempotent, so a repeat is a no-op.
+fn ingest_into_db(out_dir: &std::path::Path) -> Result<(), Error> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or("harness crate has no parent directory")?
+        .to_path_buf();
+    // The DB indexes this repo's results/ tree. A run written elsewhere (a
+    // scratch directory, an integration test's tempdir) is out of its scope —
+    // say so rather than inserting rows nobody can locate again.
+    let results_root = std::fs::canonicalize(root.join("results"))?;
+    if !std::fs::canonicalize(out_dir)?.starts_with(&results_root) {
+        println!(
+            "not ingested: {} is outside {} (the DB indexes that tree only)",
+            out_dir.display(),
+            results_root.display()
+        );
+        return Ok(());
+    }
+    let python = root.join(".venv/bin/python");
+    let loader = root.join("analysis/db/load.py");
+    if !python.exists() {
+        return Err(format!(
+            "ingest: {} not found — create it with `python3 -m venv .venv && \
+             .venv/bin/pip install -r datasets/requirements.txt`",
+            python.display()
+        )
+        .into());
+    }
+    let status = std::process::Command::new(&python)
+        .arg(&loader)
+        .arg(out_dir)
+        .current_dir(&root)
+        .status()?;
+    if !status.success() {
+        return Err(format!("ingest: {} exited with {status}", loader.display()).into());
+    }
+    Ok(())
+}
+
 fn run_parent(loaded: &LoadedSpec, out_dir: &std::path::Path, fail_fast: bool) -> Result<ExitCode, Error> {
     let spec = &loaded.spec;
     let started_at = humantime::format_rfc3339_seconds(std::time::SystemTime::now()).to_string();
@@ -491,6 +533,13 @@ fn run_parent(loaded: &LoadedSpec, out_dir: &std::path::Path, fail_fast: bool) -
         serde_json::to_string_pretty(&manifest)?,
     )?;
     println!("results: {}", results_path.display());
+
+    if let Err(e) = ingest_into_db(out_dir) {
+        eprintln!("error: {e}");
+        eprintln!("       results.jsonl and manifest.json are intact; re-ingest with");
+        eprintln!("       .venv/bin/python analysis/db/load.py {}", out_dir.display());
+        any_error = true;
+    }
 
     if any_gate_failure {
         eprintln!("RUN FAILED: at least one correctness gate fired (exit {EXIT_GATE_FAILURE})");

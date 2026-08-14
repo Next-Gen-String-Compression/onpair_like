@@ -71,6 +71,19 @@ class DictMatcher final : public Matcher {
       const uint32_t c = codes_[i];
       if ((ubits[c >> 6] >> (c & 63)) & 1) out[i >> 6] |= uint64_t{1} << (i & 63);
     }
+    // Instrumented mode: declare the reduced evaluation domain (SEMANTICS
+    // rule 10). The child ran once per UNIQUE value, so everything it
+    // counted — including its prefilter survivors — is unique-domain, and
+    // the harness needs the denominator to match. Unconditional: the domain
+    // is a property of the dictionary, not of whether the child prefilters.
+    if (stats) {
+      stats->eval_domain = num_unique_;
+      uint64_t matches = 0;
+      for (size_t w = 0; w < uwords; w++) {
+        matches += static_cast<uint64_t>(__builtin_popcountll(ubits[w]));
+      }
+      stats->eval_domain_matches = matches;
+    }
     return 0;
   }
 

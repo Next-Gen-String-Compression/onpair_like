@@ -12,7 +12,7 @@ use crate::chunks::{self, Chunks};
 use crate::dataset::PreparedDataset;
 use crate::registry::{self, BuiltChunk, Candidate, QueryFfi, Scanner};
 use crate::results::{
-    CellKey, GateReport, PhaseNs, PrefilterReport, Row, Status, Writer,
+    CellKey, GateReport, PhaseNs, PrefilterReport, Row, Speed, Status, Writer,
 };
 use crate::spec::{config_hash, LoadedSpec};
 use crate::suite::{PreparedQuery, Suite};
@@ -77,6 +77,10 @@ struct StatsAgg {
     prefilter_ns: Option<u64>,
     verify_ns: Option<u64>,
     setup_ns: Option<u64>,
+    /// Summing these across chunks is the right composition: each chunk has
+    /// its own dictionary, so the domains add up exactly the way rows do.
+    eval_domain: Option<u64>,
+    eval_domain_matches: Option<u64>,
 }
 
 impl StatsAgg {
@@ -91,6 +95,8 @@ impl StatsAgg {
         add(&mut self.prefilter_ns, s.prefilter_ns);
         add(&mut self.verify_ns, s.verify_ns);
         add(&mut self.setup_ns, s.setup_ns);
+        add(&mut self.eval_domain, s.eval_domain);
+        add(&mut self.eval_domain_matches, s.eval_domain_matches);
     }
 }
 
@@ -240,9 +246,7 @@ fn exec_once(
             }
         }
     }
-    let elapsed = timed.elapsed();
-    bitmap.clear_padding();
-    Ok(elapsed)
+    Ok(timed.elapsed())
 }
 
 /// Execute the whole matrix slice owned by one worker.
@@ -455,7 +459,7 @@ fn run_cell(
         scanner: strat.scanner_name(),
         ..base_key.clone()
     };
-    let mk_row = |status, gate, latency, ns_per_row, gbps, prefilter, error| Row::Query {
+    let mk_row = |status, gate, latency, speed, prefilter, error| Row::Query {
         key: key.clone(),
         query_id: query.record.id.clone(),
         op: query.record.op.clone(),
@@ -464,8 +468,7 @@ fn run_cell(
         status,
         gate,
         latency,
-        ns_per_row,
-        gbps_raw: gbps,
+        speed,
         prefilter,
         error,
     };
@@ -475,7 +478,7 @@ fn run_cell(
     // scanner that declares this specific query out of its envelope makes
     // the cell Unsupported, not Error.
     if !strat.supports(query.op) || !strat.supports_query(&qffi.query) {
-        return Ok(mk_row(Status::Unsupported, None, None, None, None, None, None));
+        return Ok(mk_row(Status::Unsupported, None, None, None, None, None));
     }
 
     let truth = query.record.truth.as_ref().expect("suite loaded for run");
@@ -483,7 +486,7 @@ fn run_cell(
     // ---- 1. verification pass: gate before any number exists ----
     if let Err(e) = exec_once(strat, handles, chunks, &qffi, scratch, bitmap, Mode::Timing) {
         eprintln!("error: {}/{}: {e}", candidate.name, query.record.id);
-        return Ok(mk_row(Status::Error, None, None, None, None, None, Some(e.to_string())));
+        return Ok(mk_row(Status::Error, None, None, None, None, Some(e.to_string())));
     }
     let count = bitmap.count();
     let hash = bitmap.truth_hash();
@@ -494,6 +497,9 @@ fn run_cell(
         let oracle_bm = crate::oracle::eval(query.op, &needles, ds.num_rows(), ds.rows());
         let div = bitmap.first_divergence(&oracle_bm);
         let (div_bytes, expected) = match div {
+            // A divergent bit at or past num_rows is a padding scribble — an
+            // out-of-range write; there is no row to print.
+            Some(i) if i >= ds.num_rows() => (Some("<padding bit past num_rows — out-of-range write>".into()), Some(false)),
             Some(i) => {
                 let raw = ds.row(i);
                 let printable = String::from_utf8_lossy(&raw[..raw.len().min(128)]).into_owned();
@@ -522,7 +528,7 @@ fn run_cell(
                 first_divergent_row_bytes: div_bytes,
                 expected_match: expected,
             }),
-            None, None, None, None, None,
+            None, None, None, None,
         ));
     }
     let gate = GateReport {
@@ -541,7 +547,7 @@ fn run_cell(
         strat, handles, chunks, &qffi, scratch, bitmap,
         Mode::Instrumented(&mut agg, &mut phases),
     ) {
-        return Ok(mk_row(Status::Error, Some(gate), None, None, None, None, Some(e.to_string())));
+        return Ok(mk_row(Status::Error, Some(gate), None, None, None, Some(e.to_string())));
     }
 
     // ---- 3. timing loop: uninstrumented samples only ----
@@ -559,7 +565,7 @@ fn run_cell(
         }
     });
     if let Some(e) = exec_error {
-        return Ok(mk_row(Status::Error, Some(gate), None, None, None, None, Some(e)));
+        return Ok(mk_row(Status::Error, Some(gate), None, None, None, Some(e)));
     }
 
     // ---- derived attribution: harness-computed from the gated truth ----
@@ -567,11 +573,20 @@ fn run_cell(
     let num_rows = ds.num_rows();
     let composed = matches!(strat, Strat::Direct(_) | Strat::Decode(_));
     let prefilter_candidates = agg.prefilter_candidates;
+    // The values this strategy evaluated, and the true matches among them.
+    // A module that reports neither asserts one evaluation per row
+    // (SEMANTICS rule 10); a dictionary front-end declares its unique count,
+    // and every per-value metric below is scored against it — otherwise a
+    // dict pipeline's unique-domain survivor count would be divided by the
+    // row count, which is how `false_positive_rate` used to come out
+    // negative for `dict_*`.
+    let domain = agg.eval_domain.unwrap_or(num_rows);
+    let domain_matches = agg.eval_domain_matches.unwrap_or(truth.count);
     let prefilter = {
-        let prune_rate = prefilter_candidates.map(|c| 1.0 - c as f64 / num_rows as f64);
+        let prune_rate = prefilter_candidates.map(|c| 1.0 - c as f64 / domain as f64);
         let fp_rate = prefilter_candidates
             .filter(|&c| c > 0)
-            .map(|c| (c as f64 - truth.count as f64) / c as f64);
+            .map(|c| (c as f64 - domain_matches as f64) / c as f64);
         let verify_per_survivor = prefilter_candidates
             .filter(|&c| c > 0)
             .map(|c| median as f64 / c as f64);
@@ -613,8 +628,13 @@ fn run_cell(
         Status::Ok,
         Some(gate),
         Some(latency),
-        Some(median as f64 / num_rows as f64),
-        Some(ds.manifest.payload_bytes as f64 / (median as f64 / 1e9) / 1e9),
+        Some(Speed {
+            ns_per_value: median as f64 / num_rows as f64,
+            ns_per_domain_value: median as f64 / domain as f64,
+            gbps_raw: ds.manifest.payload_bytes as f64 / (median as f64 / 1e9) / 1e9,
+            eval_domain: agg.eval_domain,
+            eval_domain_matches: agg.eval_domain_matches,
+        }),
         prefilter,
         None,
     ))

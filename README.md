@@ -30,7 +30,8 @@ cargo build --release
 
 Outputs: `results/<run>/results.jsonl` (one self-contained row per build /
 per gated query cell) + `manifest.json` (environment, versions, checksums,
-spec hash).
+spec hash). Every run also loads itself into `results/bench.duckdb`, the
+queryable index over all runs — see [analysis/db/README.md](analysis/db/README.md).
 
 ## Reproducing everything
 
@@ -55,6 +56,7 @@ header of [reproduce.sh](reproduce.sh) for stages and wall-clock estimates.
 | `suites/` | query suites (`suite.json` + `queries.jsonl`, truth blessed in) — curated, or swept via `bench gen` (seed-deterministic grid + `gen-report.json` coverage matrix) |
 | `specs/` | run specs: candidates × configs × scanners × datasets × chunk sizes |
 | `datasets/` | `sources.yaml` (pinned URLs + sha256 + licenses + canonical checksums) + `prepare.py` (download → extract → ingest → verify); artifacts and raw downloads are gitignored |
+| `analysis/` | reporting over finished runs. `db/` is the queryable store: `schema.sql` + `load.py` build `results/bench.duckdb` (5 dimensions + measurements + the `v` view) from `results/**`, automatically at the end of each run; `analyze.py`/`report.py` are the older stdlib summary + HTML report |
 
 ## Adding a candidate or scanner
 

@@ -128,19 +128,19 @@ def collect_points(queries):
             "engine":engine_id(cl,q.get("strategy",""),q.get("scanner","")),
             "needle_len":nlt,"len_bucket":len_bucket(nlt),
             "selectivity":sel,"sel_band":sel_band(sel),
-            "median_ns":med,"ns_per_row":q.get("ns_per_row"),"gbps_raw":q.get("gbps_raw"),
+            "median_ns":med,"ns_per_value":q.get("ns_per_value"),"gbps_raw":q.get("gbps_raw"),
         })
     return pts
 
 def winner_map(points):
     cells = defaultdict(list)
     for p in points:
-        if p["ns_per_row"] is not None:
+        if p["ns_per_value"] is not None:
             cells[(p["dataset"],p["op"],p["len_bucket"],p["sel_band"])].append(p)
     out = []
     for (ds,op,lb,sb),ps in cells.items():
         by = defaultdict(list)
-        for p in ps: by[p["engine"]].append(p["ns_per_row"])
+        for p in ps: by[p["engine"]].append(p["ns_per_value"])
         rank = sorted(({"engine":e,"ns":median(v),"n":len(v)} for e,v in by.items()), key=lambda r:r["ns"])
         out.append({"dataset":ds,"op":op,"len_bucket":lb,"sel_band":sb,
                     "winner":rank[0]["engine"],"winner_ns":rank[0]["ns"],
@@ -153,9 +153,9 @@ def onpair_vs_unc(points):
     for p in points:
         k = (p["dataset"],p["op"],p["len_bucket"],p["sel_band"])
         if p["candidate"].startswith("onpair") and p["strategy"] in ("compressed","interp"):
-            grp[k]["onpair"].append(p["ns_per_row"])
+            grp[k]["onpair"].append(p["ns_per_value"])
         elif p["candidate"]=="uncompressed" and p["strategy"]=="direct":
-            grp[k]["unc"].append(p["ns_per_row"])
+            grp[k]["unc"].append(p["ns_per_value"])
     out = []
     for (ds,op,lb,sb),v in grp.items():
         o,u = median([x for x in v["onpair"] if x is not None]), median([x for x in v["unc"] if x is not None])
@@ -172,7 +172,7 @@ def pareto(builds, queries):
     lat = defaultdict(lambda: defaultdict(list))  # (cand,cfg,ds) -> strat -> [ns/row]
     for q in queries:
         if q.get("op")!="contains" or q.get("status")!="ok": continue
-        npr = q.get("ns_per_row")
+        npr = q.get("ns_per_value")
         if npr is None: continue
         lat[(q["candidate"],q.get("config","{}"),q["dataset"])][q.get("strategy","")].append(npr)
     out = defaultdict(list)
@@ -186,7 +186,7 @@ def pareto(builds, queries):
         ratio = c["ratio_total"] if c else None
         out[ds].append({
             "candidate":cand,"config":cfg,"label":cfg_label(cand,cfg),
-            "ratio":ratio,"ns_per_row":strat_med[best_s],"strategy":best_s,
+            "ratio":ratio,"ns_per_value":strat_med[best_s],"strategy":best_s,
             "all_strategies":{s:m for s,m in strat_med.items()},
             "decode_mbps": c["decode_mbps"] if c else None,
             "build_mbps": c["build_mbps"] if c else None,
@@ -204,7 +204,7 @@ def candidate_matrix(comp, pareto_by_ds, points):
     for ds,rows in pareto_by_ds.items():
         for r in rows:
             base = r["candidate"]
-            if r["ns_per_row"] is not None: cands[base]["contains"].append((ds,r["ns_per_row"],r["strategy"]))
+            if r["ns_per_value"] is not None: cands[base]["contains"].append((ds,r["ns_per_value"],r["strategy"]))
     for p in points:
         base = p["candidate"].split("-")[0].split("[")[0]
         cands[base]["ops"].add(p["op"]); cands[base]["strategies"].add(p["strategy"])

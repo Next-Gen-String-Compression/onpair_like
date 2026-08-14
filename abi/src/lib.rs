@@ -8,7 +8,7 @@
 
 use core::ffi::c_char;
 
-pub const LB_ABI_VERSION: u32 = 4;
+pub const LB_ABI_VERSION: u32 = 5;
 
 /// Guaranteed writable headroom past the decoded payload in `decode()`
 /// output buffers (mirrors `LB_DECODE_PAD`; SEMANTICS.md rule 8).
@@ -156,6 +156,14 @@ pub struct LbRunStats {
     /// Per-query setup (pattern/automaton compilation) before any row or
     /// token is examined (ABI v3).
     pub setup_ns: u64,
+    /// The column values this strategy actually evaluated (ABI v5). UNSET
+    /// means one per row; a reduced domain (a dictionary front-end
+    /// evaluating once per unique value) declares its size here, and it is
+    /// the denominator for the prefilter rates and `ns_per_domain_value`.
+    /// A structural counter, not a measurement.
+    pub eval_domain: u64,
+    /// True matches within `eval_domain`.
+    pub eval_domain_matches: u64,
 }
 
 impl LbRunStats {
@@ -166,6 +174,8 @@ impl LbRunStats {
             prefilter_ns: LB_STAT_UNSET,
             verify_ns: LB_STAT_UNSET,
             setup_ns: LB_STAT_UNSET,
+            eval_domain: LB_STAT_UNSET,
+            eval_domain_matches: LB_STAT_UNSET,
         }
     }
 }
