@@ -2,8 +2,10 @@
 //!
 //! Bit i (LSB-first within little-endian u64 words) is set iff row i
 //! matches. The truth hash is xxh3-64 over the whole-dataset bitmap's
-//! words serialized little-endian, padding bits zeroed — chunk-invariant
-//! by construction (see contract/SEMANTICS.md).
+//! words serialized little-endian — chunk-invariant by construction (see
+//! contract/SEMANTICS.md). Padding bits past num_rows are covered by the
+//! hash; the contract requires them to stay zero, so a scribble fails the
+//! gate rather than being masked.
 
 use xxhash_rust::xxh3::Xxh3;
 
@@ -54,30 +56,16 @@ impl Bitmap {
         self.words.iter().map(|w| w.count_ones() as u64).sum()
     }
 
-    /// Zero any bits past `num_rows` so hashes are canonical even if a
-    /// buggy plugin scribbled on padding.
-    pub fn clear_padding(&mut self) {
-        let tail = self.num_rows & 63;
-        if tail != 0 {
-            if let Some(last) = self.words.last_mut() {
-                *last &= (1u64 << tail) - 1;
-            }
-        }
-    }
-
     /// Canonical truth hash, `"xxh3:<16 hex>"` under `bitmap-xxh3-v1`.
+    /// Hashes the words as-is: padding bits are covered, so a plugin that
+    /// sets a bit past `num_rows` (contract violation) fails the gate
+    /// instead of being silently repaired.
     pub fn truth_hash(&self) -> String {
-        debug_assert!(self.padding_is_zero());
         let mut h = Xxh3::new();
         for w in &self.words {
             h.update(&w.to_le_bytes());
         }
         format!("xxh3:{:016x}", h.digest())
-    }
-
-    fn padding_is_zero(&self) -> bool {
-        let tail = self.num_rows & 63;
-        tail == 0 || self.words.last().is_none_or(|w| w >> tail == 0)
     }
 
     /// Row index of the first bit where the two bitmaps differ.
@@ -148,10 +136,13 @@ mod tests {
     }
 
     #[test]
-    fn padding_cleared() {
+    fn padding_scribble_changes_hash() {
         let mut a = Bitmap::new(65);
-        a.words_mut()[1] = u64::MAX; // scribble on padding
-        a.clear_padding();
-        assert_eq!(a.words()[1], 1);
+        let mut b = Bitmap::new(65);
+        a.set(64);
+        b.set(64);
+        assert_eq!(a.truth_hash(), b.truth_hash());
+        b.words_mut()[1] |= 1 << 1; // out-of-range write (contract violation)
+        assert_ne!(a.truth_hash(), b.truth_hash());
     }
 }
