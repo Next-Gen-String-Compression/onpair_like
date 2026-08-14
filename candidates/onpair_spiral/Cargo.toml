@@ -13,5 +13,5 @@ license.workspace = true
 lb-abi = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-# branch = "feat/search-prefilter", head 39180b1 at time of integration.
-onpair = { git = "https://github.com/spiraldb/onpair.git", rev = "39180b1f1d1c4fc8ee8833a37b58a7c75c8566b6" }
+# branch = "feat/search-prefilter", head dd41e3e at time of integration.
+onpair = { git = "https://github.com/spiraldb/onpair.git", rev = "dd41e3eebeecbca2bcb32f77fc742f90ca30b347" }
