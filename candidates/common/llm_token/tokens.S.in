@@ -1,9 +1,26 @@
-/* Embeds the vendored openai100kpatched token table into .rodata.
+/* Embeds the vendored openai100kpatched token table into read-only data.
  * Upstream (token-vldb2026) embeds these .bin files with C++26 `#embed`,
  * which needs GCC 15+/Clang 19+; `.incbin` is the toolchain-portable
- * equivalent on GNU as. Configured by each candidate's CMake (absolute
- * paths + a candidate-specific symbol prefix, so the llm_token candidates
- * stay independently linkable into one harness binary). */
+ * equivalent, understood by GNU as and clang's integrated assembler alike.
+ * Configured by each candidate's CMake (absolute paths + a candidate-specific
+ * symbol prefix, so the llm_token candidates stay independently linkable into
+ * one harness binary).
+ *
+ * This is a `.S`, so it runs through the C preprocessor and can branch on the
+ * object format. Mach-O names its read-only section differently, prefixes C
+ * symbols with an underscore, and has no GNU-stack note; ELF syntax here is
+ * what made the two candidates fail to build on macOS. */
+#if defined(__APPLE__)
+    .section __TEXT,__const
+    .balign 64
+    .globl _@LB_TOKEN_PREFIX@_dict
+_@LB_TOKEN_PREFIX@_dict:
+    .incbin "@LB_TOKEN_DIR@/openai100kpatched_dict.bin"
+    .balign 64
+    .globl _@LB_TOKEN_PREFIX@_lengths
+_@LB_TOKEN_PREFIX@_lengths:
+    .incbin "@LB_TOKEN_DIR@/openai100kpatched_lengths.bin"
+#else
     .section .rodata
     .balign 64
     .globl @LB_TOKEN_PREFIX@_dict
@@ -14,3 +31,4 @@
 @LB_TOKEN_PREFIX@_lengths:
     .incbin "@LB_TOKEN_DIR@/openai100kpatched_lengths.bin"
     .section .note.GNU-stack,"",@progbits
+#endif
