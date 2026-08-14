@@ -34,7 +34,7 @@
     bins: 12,
     showPoints: true,
     showBand: true,
-    title: DEFAULTS.title || "Benchmark explorer",
+    title: DEFAULTS.title || "Benchmark Explorer 3000™",
     subtitle: DEFAULTS.subtitle || "",
     xLabel: "selectivity (rows matched)",
     yLabel: "throughput (GB/s, raw payload)",
@@ -280,7 +280,7 @@
     button.dataset.id = meta.id;
     button.dataset.search = meta.label.toLowerCase();
     button.setAttribute("aria-pressed", String(visibleSet.has(meta.id)));
-    button.title = decode ? "Toggle decode-only baseline" : "Toggle query line";
+    button.title = decode ? "Toggle decode-only baseline" : "Toggle candidate series";
 
     const swatch = document.createElement("span");
     swatch.className = "chip-swatch";
@@ -776,7 +776,7 @@
       refs.plot.appendChild(svgElement("text", {
         x: (left + chartRight) / 2, y: (chartTop + chartBottom) / 2,
         "text-anchor": "middle", class: "mono", fill: "#7e8a94", "font-size": 13
-      }, "Select a query line or decompression baseline above"));
+      }, "Select a candidate or decompression baseline above"));
     }
 
     const zeroNote = state.xScale === "log" && xValues.some(value => value <= 0)
@@ -788,8 +788,8 @@
       ? ` · focus ${range.min === null ? "start" : formatX(range.min, true)}–${range.max === null ? "end" : formatX(range.max, true)} · ${Math.max(0, contextCount - domainRows.length)} excluded`
       : "";
     refs["plot-status"].textContent =
-      `${domainRows.length} measurements · ${selectedSeries.length} query lines · ${selectedDecode.length} decode baselines${rangeNote}${zeroNote}`;
-    document.title = `${state.title} — benchmark explorer`;
+      `${domainRows.length} measurements · ${selectedSeries.length} candidate series · ${selectedDecode.length} decode baselines${rangeNote}${zeroNote}`;
+    document.title = `${state.title} — Benchmark Explorer 3000™`;
   }
 
   function setDefaultAxisLabels() {

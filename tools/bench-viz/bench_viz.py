@@ -159,7 +159,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="results.jsonl file or a run directory containing it; repeatable",
     )
     parser.add_argument("--out", "-o", type=Path, default=DEFAULT_OUT)
-    parser.add_argument("--title", default="Benchmark explorer")
+    parser.add_argument("--title", default="Benchmark Explorer 3000™")
     parser.add_argument(
         "--subtitle",
         default="Query throughput across observed selectivity",

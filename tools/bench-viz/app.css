@@ -57,11 +57,88 @@ input[type="checkbox"] {
   padding: 0 4px 24px;
 }
 
+.product-lockup {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+}
+
+.product-mark {
+  width: 66px;
+  height: 66px;
+  flex: 0 0 auto;
+  transform: rotate(-2deg);
+  filter: drop-shadow(0 9px 15px rgba(7, 83, 79, 0.16));
+}
+
+.product-mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.mark-screen {
+  fill: var(--accent);
+  stroke: var(--accent-strong);
+  stroke-width: 2;
+}
+
+.mark-orbit {
+  fill: none;
+  stroke: #36a996;
+  stroke-linecap: round;
+  stroke-width: 2.5;
+}
+
+.mark-orbit-back {
+  stroke: #8bcac0;
+  stroke-dasharray: 3 5;
+}
+
+.mark-graph {
+  fill: none;
+  stroke: #eafffa;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.mark-node {
+  fill: #b9fff1;
+  stroke: var(--accent-strong);
+  stroke-width: 1;
+}
+
+.mark-satellite {
+  fill: #f1a94e;
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+
 .masthead h1 {
   margin: 7px 0 5px;
   font-size: clamp(28px, 3vw, 42px);
   line-height: 1.05;
   letter-spacing: -0.04em;
+}
+
+.masthead h1 .model-number {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.88em;
+  font-weight: 800;
+  letter-spacing: -0.08em;
+}
+
+.masthead h1 sup {
+  position: relative;
+  top: -0.6em;
+  margin-left: 4px;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.28em;
+  letter-spacing: 0;
 }
 
 .masthead p {
@@ -528,6 +605,11 @@ button:focus-visible {
   .plot-footer {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .product-mark {
+    width: 54px;
+    height: 54px;
   }
 
   .export-cluster {

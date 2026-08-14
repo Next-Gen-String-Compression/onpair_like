@@ -73,6 +73,8 @@ class BenchVizTests(unittest.TestCase):
         self.assertNotIn("__BENCH_VIZ_", html)
         self.assertNotIn("</script><script>alert", html)
         self.assertIn("\\u003c/script>", html)
+        self.assertIn("Benchmark Explorer 3000™", html)
+        self.assertIn('<span class="section-kicker">CANDIDATES</span>', html)
 
 
 if __name__ == "__main__":

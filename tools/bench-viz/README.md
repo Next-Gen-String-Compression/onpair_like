@@ -1,6 +1,7 @@
-# bench-viz
+# Benchmark Explorer 3000™
 
-An interactive, single-plot viewer for `LIKE-benchmark` result files. It builds
+An interactive, single-plot viewer for `LIKE-benchmark` result files—making
+today's regressions tomorrow's problem. It builds
 one self-contained HTML file: no Python packages, JavaScript packages, server,
 or network access are required after generation.
 
@@ -12,7 +13,7 @@ The viewer can:
 - switch either axis between linear and logarithmic scaling;
 - focus the x-axis on an inclusive interval (percent for selectivity, bytes for
   needle length), excluding out-of-range queries before aggregation;
-- fit the y-axis to only the currently visible query lines and decode baselines;
+- fit the y-axis to only the currently visible candidate series and decode baselines;
 - change dataset, operation, chunking, axes, aggregation, title, subtitle, and
   axis labels without regenerating the file;
 - show raw observations, median lines, and interquartile bands; and
