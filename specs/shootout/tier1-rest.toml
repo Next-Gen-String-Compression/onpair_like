@@ -2,6 +2,10 @@
 # dbpedia-abstract long text). Identical scanner roster to tier1.toml; split out
 # so the msmarco-query column (already measured) is not re-run. Analyze together
 # with the msmarco shootout result as the full three-column shootout.
+
+# Root-level key, so it MUST come before the first [[table]] header: TOML would
+# otherwise attach it to the last table opened (see harness/src/spec.rs).
+strategies = ["direct"]
 [[datasets]]
 path = "../../datasets/clickbench-url-1m"
 [[datasets]]
@@ -45,8 +49,6 @@ name = "pf-rare-byte"
 name = "pf-first-last"
 [[scanners]]
 name = "pf-rare-pair"
-
-strategies = ["direct"]
 
 [measure]
 chunk_rows = [0]

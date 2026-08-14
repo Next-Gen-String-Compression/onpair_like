@@ -642,6 +642,15 @@ chunk sizes × suites), which is itself hashed into the results manifest — a
 run is reproducible from its spec. Scanners register identically to
 candidates, via their `lb_scanner` vtable behind a feature flag.
 
+**Writing a spec — root keys go above the first `[[table]]` header.**
+`strategies` and `measure` belong to the document root, and TOML assigns a
+bare key-value pair to the most recently opened table, so a `strategies`
+line written *after* the `[[scanners]]` block becomes a field of the last
+scanner. Every spec struct sets `serde(deny_unknown_fields)`, so that
+mistake is now a load error naming the key and the fields it could have
+been (`harness/src/spec.rs`); before the guard it parsed happily and the run
+silently used the unfiltered strategy set.
+
 ---
 
 ## 8. Correctness gating
