@@ -202,18 +202,17 @@ CREATE TABLE IF NOT EXISTS result (
     -- prefilter attribution (DESIGN.md §10), scored against eval_domain.
     -- The *_ns columns below are SINGLE-SHOT instrumented-mode timings while
     -- total_ns is a median over samples, so they must never be divided into
-    -- total_ns. *_origin says who held the clock: 'harness' at a pipeline
-    -- joint, or 'self_reported' by the module.
+    -- total_ns. Who held the clock follows from the column and the strategy --
+    -- scan_ns and a composed decode's decode_ns are harness-timed at a
+    -- pipeline joint, the rest are self-reported by the module -- so the JSONL's
+    -- `origin` label is not carried here.
     prefilter_candidates   BIGINT,
     prune_rate             DOUBLE,
     false_positive_rate    DOUBLE,
     verify_ns_per_survivor DOUBLE,
     setup_ns               BIGINT,
-    setup_ns_origin        VARCHAR,
     decode_ns              BIGINT,
-    decode_ns_origin       VARCHAR,
     scan_ns                BIGINT,
-    scan_ns_origin         VARCHAR,
 
     PRIMARY KEY (run_id, system_id, dataset_id, chunk_rows, query_pk)
 );

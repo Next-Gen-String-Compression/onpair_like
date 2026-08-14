@@ -89,11 +89,11 @@ def resolve(recorded: str, fallback: Path) -> Path:
 
 
 def phase(prefilter, name):
-    """(ns, origin) of one self-timed phase, or (None, None)."""
+    """Nanoseconds of one self-timed phase, or None. The JSONL also carries an
+    `origin` label per phase; who held the clock follows from the column and
+    the strategy, so it is not stored."""
     value = (prefilter or {}).get(name)
-    if value is None:
-        return None, None
-    return value["ns"], value["origin"]
+    return None if value is None else value["ns"]
 
 
 # --------------------------------------------------------------- dimensions
@@ -396,9 +396,9 @@ def load_run(con, run_dir: Path) -> str:
         latency = row.get("latency") or {}
         gate = row.get("gate") or {}
         prefilter = row.get("prefilter") or {}
-        setup_ns, setup_origin = phase(prefilter, "setup_ns")
-        decode_ns, decode_origin = phase(prefilter, "decode_ns")
-        scan_ns, scan_origin = phase(prefilter, "scan_ns")
+        setup_ns = phase(prefilter, "setup_ns")
+        decode_ns = phase(prefilter, "decode_ns")
+        scan_ns = phase(prefilter, "scan_ns")
         dataset_id = datasets[row["dataset_checksum"]]
         suite = suite_of[row["dataset_checksum"]][0]
         footprint = build["footprint_total_bytes"]
@@ -449,30 +449,29 @@ def load_run(con, run_dir: Path) -> str:
                 prefilter.get("false_positive_rate"),
                 prefilter.get("verify_ns_per_survivor"),
                 setup_ns,
-                setup_origin,
                 decode_ns,
-                decode_origin,
                 scan_ns,
-                scan_origin,
             )
         )
-    con.executemany(
-        """INSERT INTO result (
-               run_id, system_id, dataset_id, query_pk, chunk_rows,
-               status, gate_ok, error,
-               total_ns, min_ns, p25_ns, p75_ns, p99_ns, max_ns, mean_ns,
-               stddev_ns, samples, gbps,
-               eval_domain, eval_domain_matches,
-               compressed_bytes, raw_bytes, compression_ratio, build_ns,
-               footprint_components,
-               prefilter_candidates, prune_rate, false_positive_rate,
-               verify_ns_per_survivor,
-               setup_ns, setup_ns_origin, decode_ns, decode_ns_origin,
-               scan_ns, scan_ns_origin)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                   ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        rows,
-    )
+    # Placeholders are generated from the column list: hand-counting them is
+    # how a column added here silently shifts every value one to the left.
+    columns = """run_id, system_id, dataset_id, query_pk, chunk_rows,
+                 status, gate_ok, error,
+                 total_ns, min_ns, p25_ns, p75_ns, p99_ns, max_ns, mean_ns,
+                 stddev_ns, samples, gbps,
+                 eval_domain, eval_domain_matches,
+                 compressed_bytes, raw_bytes, compression_ratio, build_ns,
+                 footprint_components,
+                 prefilter_candidates, prune_rate, false_positive_rate,
+                 verify_ns_per_survivor,
+                 setup_ns, decode_ns, scan_ns"""
+    marks = ", ".join(["?"] * len(columns.split(",")))
+    if rows and len(rows[0]) != len(columns.split(",")):
+        raise SystemExit(
+            f"result row has {len(rows[0])} values for "
+            f"{len(columns.split(','))} columns"
+        )
+    con.executemany(f"INSERT INTO result ({columns}) VALUES ({marks})", rows)
 
     # A rerun into the same directory is a new run row, so re-point is_latest.
     con.execute(

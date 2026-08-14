@@ -134,9 +134,10 @@ FROM v WHERE is_latest GROUP BY ALL ORDER BY run_name;
   want, but say so deliberately.
 - **The phase columns are single-shot *timings*.** `setup_ns` / `decode_ns` /
   `scan_ns` come from one instrumented pass while `total_ns` is a median over
-  `samples` iterations. Never divide one by the other; the `*_ns_origin`
-  columns on `result` say who held the clock (`harness` at a pipeline joint vs
-  `self_reported` by the module). The instrumented *counters* —
+  `samples` iterations. Never divide one by the other. Who held the clock
+  follows from the column and the strategy: `scan_ns` and a composed `decode`'s
+  `decode_ns` are harness-timed at a pipeline joint, the rest are self-reported
+  by the module. The instrumented *counters* —
   `eval_domain`, `eval_domain_matches`, `prefilter_candidates` — are a
   different animal: they are structural, identical in every sample, so
   `ns_per_domain_value` and `verify_ns_per_survivor` divide the median by
