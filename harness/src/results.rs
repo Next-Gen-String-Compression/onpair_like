@@ -61,12 +61,8 @@ pub enum Row {
         gate: Option<GateReport>,
         #[serde(skip_serializing_if = "Option::is_none")]
         latency: Option<LatencyStats>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        ns_per_row: Option<f64>,
-        /// Effective throughput over the *raw* payload bytes, so
-        /// cross-candidate comparison ignores each one's compression.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        gbps_raw: Option<f64>,
+        #[serde(flatten)]
+        speed: Option<Speed>,
         #[serde(skip_serializing_if = "Option::is_none")]
         prefilter: Option<PrefilterReport>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -88,6 +84,39 @@ pub enum Row {
         missing_cpu_features: Vec<String>,
         dataset: String,
     },
+}
+
+/// The per-value speed metrics of one measured cell, flattened into the
+/// result row. All three divide the same timing-mode median; they differ in
+/// the denominator, and the pair of `ns_per_*` is what separates a
+/// dictionary's dedup win from its engine's per-value cost:
+///
+/// ```text
+/// ns_per_value = ns_per_domain_value / (num_rows / eval_domain)
+/// ```
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct Speed {
+    /// `median_ns / num_rows` — the end-to-end cost per column value. A
+    /// dictionary front-end's dedup saving shows up here, because the
+    /// denominator counts every row whether or not it was evaluated.
+    pub ns_per_value: f64,
+    /// `median_ns / eval_domain` — the cost per value actually evaluated.
+    /// Strips the dedup back out, so it compares engines rather than
+    /// pipelines; equal to `ns_per_value` unless the module declared a
+    /// reduced evaluation domain (ABI v5).
+    pub ns_per_domain_value: f64,
+    /// Effective throughput over the *raw* payload bytes, so
+    /// cross-candidate comparison ignores each one's compression.
+    pub gbps_raw: f64,
+    /// The declared evaluation domain, absent when it is one value per row.
+    /// A structural counter from instrumented mode, not a measurement.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub eval_domain: Option<u64>,
+    /// True matches within `eval_domain` — the dictionary-domain selectivity
+    /// of this query, which diverges from the row-domain one by how skewed
+    /// the matching values are.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub eval_domain_matches: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

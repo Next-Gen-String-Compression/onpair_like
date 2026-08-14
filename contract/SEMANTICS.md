@@ -2,10 +2,12 @@
 
 Companion to `lb_candidate.h`. Everything here is binding on candidates,
 scanners, and the harness oracle alike; the oracle's fixture tests encode
-this document. ABI version: 4 (v2 added the `LB_DECODE_PAD` guarantee on
+this document. ABI version: 5 (v2 added the `LB_DECODE_PAD` guarantee on
 `decode()` output buffers; v3 added `lb_run_stats.setup_ns` — self-timed
 per-query setup such as automaton compilation, instrumented mode only; v4
-added the optional `lb_scanner.supports_query` per-query capability probe).
+added the optional `lb_scanner.supports_query` per-query capability probe;
+v5 added `lb_run_stats.eval_domain` / `eval_domain_matches` — the reduced
+evaluation domain of a dictionary front-end, see rule 10).
 
 ## Data model
 
@@ -92,6 +94,18 @@ any candidate sees the query.
    allocate or mutate state, and it must agree with `prepare()`: for any
    query it accepts, `prepare()` may fail only on genuine resource
    exhaustion, not on capability.
+10. **Declare a reduced evaluation domain.** A module that answers a query
+    with fewer than one evaluation per row — a dictionary front-end
+    evaluating the predicate once per unique value, then scattering to rows
+    — must set `eval_domain` to the number of values it evaluated and
+    `eval_domain_matches` to the true matches among them, in instrumented
+    mode, whether or not it prefilters. `prefilter_candidates` is then
+    counted in that same domain. Leaving both UNSET asserts one evaluation
+    per row, which is what the harness assumes; a wrong assertion there
+    silently misattributes the module's per-value cost. Both are structural
+    counters (identical in every sample), so the harness divides its
+    timing-mode median by them; that is why they must be exact and not
+    estimates.
 
 ## Error convention
 

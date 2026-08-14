@@ -176,6 +176,16 @@ unsafe extern "C" fn run(
             set_bit(words, i);
         }
     }
+    // Instrumented mode: declare the reduced evaluation domain (SEMANTICS
+    // rule 10). The inner ran once per UNIQUE value, so anything it counted is
+    // unique-domain and the harness needs the matching denominator.
+    // Unconditional — the domain is a property of the dictionary, not of
+    // whether the inner prefilters (neither onpair nor onpair_spiral does).
+    if !stats_or_null.is_null() {
+        (*stats_or_null).eval_domain = h.num_unique as u64;
+        (*stats_or_null).eval_domain_matches =
+            ubits.iter().map(|w| w.count_ones() as u64).sum();
+    }
     0
 }
 

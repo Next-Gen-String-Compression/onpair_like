@@ -17,7 +17,7 @@
 extern "C" {
 #endif
 
-#define LB_ABI_VERSION 4u
+#define LB_ABI_VERSION 5u
 
 /* Guaranteed writable headroom past the decoded payload in every decode()
  * output buffer (see lb_candidate.decode). Lets fixed-stride over-copying
@@ -82,13 +82,25 @@ typedef struct lb_footprint_component {
  * self-reported in results and never mixed into headline latency. */
 #define LB_STAT_UNSET UINT64_MAX
 typedef struct lb_run_stats {
-  uint64_t prefilter_candidates; /* rows surviving the prefilter        */
+  uint64_t prefilter_candidates; /* values surviving the prefilter, counted
+                                    in the eval_domain below             */
   uint64_t decode_ns;            /* self-timed phase breakdown          */
   uint64_t prefilter_ns;
   uint64_t verify_ns;
   uint64_t setup_ns;             /* per-query setup: pattern/automaton
                                     compilation before any row or token
                                     is examined (ABI v3)               */
+  /* The column values this strategy actually evaluated (ABI v5). One per
+   * row is the norm, and UNSET means exactly that — leave both fields
+   * alone unless the domain is *reduced*, as under a dictionary front-end
+   * that answers a predicate once per unique value and scatters the result
+   * to rows. Every metric the harness scores per value uses eval_domain as
+   * its denominator: the prefilter's prune and false-positive rates, and
+   * ns_per_domain_value. Structural counters, not measurements — identical
+   * in every sample — so unlike the *_ns fields they may be divided into
+   * the timing-mode median. */
+  uint64_t eval_domain;
+  uint64_t eval_domain_matches; /* true matches within eval_domain       */
 } lb_run_stats;
 
 /* ------------------------------------------------------------ strategies */

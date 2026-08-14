@@ -221,11 +221,11 @@ def section_pareto():
         for r in rows:
             if r["ratio"] is None: continue
             base=cand_base(r["label"]); slot=CAND_SLOT.get(base,7)
-            pts.append({"ratio":r["ratio"],"ns_per_row":r["ns_per_row"],
+            pts.append({"ratio":r["ratio"],"ns_per_value":r["ns_per_value"],
                         "label":r["label"],"slot":slot,"color":CAT[slot],
                         "strategy":r.get("strategy"),"connect":base,
                         "dlabel":r["label"] if base in ("zstd","onpair") and False else None})
-        blocks.append(svg_scatter(pts,"ratio","ns_per_row",ds,"compression ratio (×)","contains latency (ns/row)",
+        blocks.append(svg_scatter(pts,"ratio","ns_per_value",ds,"compression ratio (×)","contains latency (ns/row)",
                                   ylog=True,connect_by="connect"))
     leg=legend_candidates()
     return f'<div class="grid2">{"".join(blocks)}</div>{leg}'
@@ -255,7 +255,7 @@ def legend_candidates():
 
 def section_scanner_map():
     """scanner winner map: among uncompressed:direct engines, per dataset x op."""
-    pts=[p for p in S["points"] if p["candidate"]=="uncompressed" and p["strategy"]=="direct" and p["ns_per_row"] is not None]
+    pts=[p for p in S["points"] if p["candidate"]=="uncompressed" and p["strategy"]=="direct" and p["ns_per_value"] is not None]
     # winners per (ds,op,len,sel)
     cells=defaultdict(list)
     for p in pts: cells[(p["dataset"],p["op"],p["len_bucket"],p["sel_band"])].append(p)
@@ -264,7 +264,7 @@ def section_scanner_map():
     grid=defaultdict(dict)  # (ds,op)->{(len,sel):(scanner,tip)}
     for k,ps in cells.items():
         by=defaultdict(list)
-        for p in ps: by[p["scanner"]].append(p["ns_per_row"])
+        for p in ps: by[p["scanner"]].append(p["ns_per_value"])
         rank=sorted(((s,sorted(v)[len(v)//2]) for s,v in by.items()),key=lambda x:x[1])
         win,winns=rank[0]
         second=rank[1] if len(rank)>1 else None
@@ -348,14 +348,14 @@ def section_takeaways():
         items.append(("OnPair is the balanced pick",
             f"OnPair pairs a strong ratio (up to {op['ratio_max']:.1f}×) with {op['decode_mbps_med']/1000:.0f} GB/s decode — ~{op['decode_mbps_med']/zs['decode_mbps_med']:.0f}× faster to decompress than zstd ({zs['decode_mbps_med']/1000:.1f} GB/s) — and it is the one codec here that also matches in the compressed domain."))
     # prefix: onpair-compressed is the standout op — beats even the best scanner
-    ppts=[p for p in S["points"] if p["op"]=="prefix" and p["ns_per_row"] is not None]
+    ppts=[p for p in S["points"] if p["op"]=="prefix" and p["ns_per_value"] is not None]
     if ppts:
         pby=defaultdict(lambda: defaultdict(list))  # ds -> engine-class -> [ns/row]
         for p in ppts:
             if p["candidate"]=="onpair" and p["strategy"]=="compressed":
-                pby[p["dataset"]]["onpair"].append(p["ns_per_row"])
+                pby[p["dataset"]]["onpair"].append(p["ns_per_value"])
             elif p["candidate"]=="uncompressed" and p["strategy"]=="direct":
-                pby[p["dataset"]]["scan_"+p["scanner"]].append(p["ns_per_row"])
+                pby[p["dataset"]]["scan_"+p["scanner"]].append(p["ns_per_value"])
         wins=0; tot=0; speedups=[]
         for ds,d in pby.items():
             if "onpair" not in d: continue
@@ -370,14 +370,14 @@ def section_takeaways():
             items.append(("OnPair owns prefix — even against the best scanner",
                 f"On <code>prefix</code>, OnPair's compressed-domain path runs at ~0.7 ns/row and wins on {wins}/{tot} columns — a median {sp:.1f}× faster than the <b>best-tuned</b> uncompressed kernel (not just memmem). Matching only the row starts against the dictionary, without decompressing, is where compressed-domain LIKE pays off most clearly. (By contrast, OnPair-as-plain-codec — decompress then scan — is the <em>slowest</em> way to do prefix.)"))
     # scanner: no single winner
-    spts=[p for p in S["points"] if p["candidate"]=="uncompressed" and p["strategy"]=="direct" and p["ns_per_row"] is not None]
+    spts=[p for p in S["points"] if p["candidate"]=="uncompressed" and p["strategy"]=="direct" and p["ns_per_value"] is not None]
     if spts:
         cells=defaultdict(list)
         for p in spts: cells[(p["dataset"],p["op"],p["len_bucket"],p["sel_band"])].append(p)
         winners=set()
         for k,ps in cells.items():
             by2=defaultdict(list)
-            for p in ps: by2[p["scanner"]].append(p["ns_per_row"])
+            for p in ps: by2[p["scanner"]].append(p["ns_per_value"])
             winners.add(min(by2,key=lambda s:sorted(by2[s])[len(by2[s])//2]))
         items.append(("No single scan kernel wins",
             f"Across the shootout, {len(winners)} different uncompressed kernels each win at least one (op, length, selectivity) regime. memmem/memmem-hay dominate contains; the classics (bmh, kmp) and stringzilla take specific length/selectivity pockets; Teddy/Aho-Corasick own the multi-pattern ops."))

@@ -118,11 +118,15 @@ set_source_files_properties(${fsst_fork_SOURCE_DIR}/fsst_avx512.cpp
 # point; every FSST / FSST-LIKE symbol becomes local, so this archive cannot
 # clash with the `fsst` candidate's cwida FSST symbols.
 set(COMBINED ${CMAKE_CURRENT_BINARY_DIR}/lb_fsst_like_tum_combined${CMAKE_CXX_OUTPUT_EXTENSION})
+# DEPENDS names the object files as well as the target: a bare target name is
+# only an ordering dependency, so an edited source would recompile the objects
+# and still leave this combined object -- and the archive built from it --
+# stale, silently linking the previous build's code.
 if(APPLE)
     add_custom_command(OUTPUT ${COMBINED}
         COMMAND ld -r -exported_symbol _lb_candidate_fsst_like_tum
                 $<TARGET_OBJECTS:fl_objs> -o ${COMBINED}
-        DEPENDS fl_objs COMMAND_EXPAND_LISTS VERBATIM)
+        DEPENDS fl_objs $<TARGET_OBJECTS:fl_objs> COMMAND_EXPAND_LISTS VERBATIM)
 else()
     # Combine all objects into one relocatable object, then localize the
     # calin2110 FSST-fork symbols so they can't clash with the `fsst` candidate's
@@ -135,7 +139,7 @@ else()
     add_custom_command(OUTPUT ${COMBINED}
         COMMAND ${CMAKE_LINKER} -r $<TARGET_OBJECTS:fl_objs> -o ${COMBINED}
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/localize.sh ${COMBINED}
-        DEPENDS fl_objs ${CMAKE_CURRENT_SOURCE_DIR}/localize.sh COMMAND_EXPAND_LISTS VERBATIM)
+        DEPENDS fl_objs $<TARGET_OBJECTS:fl_objs> ${CMAKE_CURRENT_SOURCE_DIR}/localize.sh COMMAND_EXPAND_LISTS VERBATIM)
 endif()
 set_source_files_properties(${COMBINED} PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
 
