@@ -52,8 +52,8 @@ CREATE TABLE IF NOT EXISTS run (
     cpu_governor       VARCHAR,                   -- null = unknown (macOS, and AWS without cpufreq)
     pinned_core        INTEGER,
     pinning_effective  BOOLEAN,                   -- false on macOS
-    -- measurement budget: the paper runs used 2/3/0 against defaults 3/10/200,
-    -- which is the noise caveat any comparison has to respect
+    -- measurement budget from the spec's [measure] block. Low values against
+    -- the 3/10/200 defaults are the noise caveat any comparison has to respect
     warmup             INTEGER,
     min_iters          INTEGER,
     min_millis         BIGINT,
@@ -90,8 +90,8 @@ CREATE TABLE IF NOT EXISTS dataset (
     -- payload_bytes + 8*(num_rows+1): the canonical view size, which is what
     -- puts the uncompressed baseline at ratio 1.0 by construction (DESIGN.md §9)
     raw_bytes      BIGINT NOT NULL,
-    -- from datasets/<id>/manifest.json; null when only the run manifest was
-    -- available (three suites reference datasets with no manifest on disk)
+    -- from datasets/<id>/manifest.json; null when that file is absent (the
+    -- dataset artifacts are gitignored, so a fresh checkout has none)
     min_len        BIGINT,
     max_len        BIGINT,
     mean_len       DOUBLE
@@ -107,39 +107,12 @@ CREATE TABLE IF NOT EXISTS system (
     system_id          BIGINT PRIMARY KEY DEFAULT nextval('seq_system'),
     system_key         VARCHAR NOT NULL UNIQUE,   -- candidate|version|config|strategy|scanner
     label              VARCHAR NOT NULL,          -- 'onpair/decode+memmem', 'fsst_like_tum/interp'
-    -- label after system_rename is applied, so the oldest run stays comparable
-    canonical_label    VARCHAR NOT NULL,
     candidate          VARCHAR NOT NULL,
     candidate_version  VARCHAR NOT NULL,          -- opaque; embeds a submodule commit ('0.1.0+e638d4c')
     config             VARCHAR NOT NULL,          -- the JSON string handed to build(), '{}' in every run so far
     strategy           VARCHAR NOT NULL,
     scanner            VARCHAR                    -- only for harness-composed direct/decode
 );
-
--- Candidate/strategy names that were retired. Without these two rows the
--- oldest run (results/paper/clickbench-url-1m) forms its own disjoint set of
--- systems and silently drops out of every comparison.
-CREATE TABLE IF NOT EXISTS system_rename (
-    candidate            VARCHAR NOT NULL,
-    strategy             VARCHAR NOT NULL,
-    scanner              VARCHAR,
-    canonical_candidate  VARCHAR NOT NULL,
-    canonical_strategy   VARCHAR NOT NULL,
-    canonical_scanner    VARCHAR,
-    note                 VARCHAR
-);
-
-DELETE FROM system_rename;
-INSERT INTO system_rename VALUES
-    ('uncompressed', 'direct', 'memmem',
-     'uncompressed_memmem', 'memmem', NULL,
-     'the composed direct+memmem baseline became its own candidate'),
-    ('fsst_like', 'interp', NULL,
-     'fsst_like_tum', 'interp', NULL,
-     'renamed in 6901cab; same module version 0.1.0+b1eb3ab'),
-    ('fsst_like', 'decode', 'memmem',
-     'fsst_like_tum', 'decode', 'memmem',
-     'renamed in 6901cab');
 
 -- ------------------------------------------------------------------- query
 
@@ -154,9 +127,8 @@ CREATE TABLE IF NOT EXISTS query (
     query_id         VARCHAR NOT NULL,
     dataset_id       BIGINT NOT NULL REFERENCES dataset (dataset_id),
     op               VARCHAR NOT NULL,          -- prefix|suffix|contains|multi_contains|contains_any
-    -- plain text; multi-needle ops join with ' | '. 552 of 11075 needles in the
-    -- suites are non-UTF-8 bytes drawn by the generator: those render \xa7 and
-    -- set needle_is_binary.
+    -- plain text; multi-needle ops join with ' | '. `bench gen` draws non-UTF-8
+    -- needles, which render \xa7 here and set needle_is_binary.
     needle           VARCHAR NOT NULL,
     needle_is_binary BOOLEAN NOT NULL DEFAULT FALSE,
     needle_len       INTEGER NOT NULL,          -- total bytes across needles
@@ -178,8 +150,9 @@ CREATE TABLE IF NOT EXISTS result (
     dataset_id             BIGINT NOT NULL REFERENCES dataset (dataset_id),
     query_pk               BIGINT NOT NULL REFERENCES query (query_pk),
     -- build-time knob from the spec (chunk_rows = [0, 122880]; 0 = whole column
-    -- as one chunk). It changes footprint AND latency, and 3 of 5 runs measure
-    -- both values -- so it is part of the key. = 122880 is the normal filter.
+    -- as one chunk). It changes footprint AND latency, and a spec may measure
+    -- both values in one run -- so it is part of the key, and filtering it to a
+    -- single value is what keeps a median from spanning two configurations.
     chunk_rows             BIGINT NOT NULL,
 
     status                 VARCHAR NOT NULL,   -- ok|unsupported|gate_failed|error
@@ -201,8 +174,7 @@ CREATE TABLE IF NOT EXISTS result (
     samples                INTEGER,
     -- ns_per_value / ns_per_domain_value / dedup_factor are NOT stored: they
     -- are total_ns over a denominator this schema already holds, so the view
-    -- derives them (and they stay correct for runs recorded before ABI v5,
-    -- which carry no eval_domain).
+    -- derives them rather than duplicating a fact.
     -- over payload bytes, which is the harness's own denominator -- NOT
     -- dataset.raw_bytes, the compression_ratio denominator. The two differ by
     -- ~9% on clickbench; keeping the names distinct keeps them from being mixed.
@@ -263,7 +235,7 @@ SELECT
     r.started_at,
     r.min_iters,                 -- low values = treat the medians with care
     r.pinning_effective,
-    s.canonical_label            AS label,
+    s.label,
     s.candidate,
     s.candidate_version,
     s.strategy,

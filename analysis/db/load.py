@@ -159,7 +159,7 @@ def spec_content_key(manifest) -> str:
 
 def load_dataset(con, entry) -> int:
     """One dataset. Length stats come from datasets/<id>/manifest.json when it
-    exists -- three suites reference datasets with no manifest on disk."""
+    exists -- the artifacts are gitignored, so a fresh checkout has none."""
     raw_bytes = entry["payload_bytes"] + 8 * (entry["num_rows"] + 1)
     stats = {"min_len": None, "max_len": None, "mean_len": None}
     manifest_path = resolve(entry["path"], ROOT / "datasets" / entry["id"]) / "manifest.json"
@@ -231,26 +231,13 @@ def load_queries(con, suite_entry, dataset_id) -> int:
 
 
 def load_systems(con, cells) -> dict:
-    """Insert unseen systems; return {cell key -> system_id}.
-
-    canonical_label resolves through system_rename so the oldest run's retired
-    names (uncompressed/direct, fsst_like) stay comparable with current ones.
-    """
+    """Insert unseen systems; return {cell key -> system_id}."""
     rows = []
     for candidate, version, config, strategy, scanner in sorted(cells):
-        key = system_key(candidate, version, config, strategy, scanner)
-        canonical = con.execute(
-            """SELECT canonical_candidate, canonical_strategy, canonical_scanner
-               FROM system_rename
-               WHERE candidate = ? AND strategy = ?
-                 AND scanner IS NOT DISTINCT FROM ?""",
-            [candidate, strategy, scanner],
-        ).fetchone() or (candidate, strategy, scanner)
         rows.append(
             (
-                key,
+                system_key(candidate, version, config, strategy, scanner),
                 system_label(candidate, strategy, scanner, config),
-                system_label(*canonical, config),
                 candidate,
                 version,
                 config,
@@ -260,15 +247,15 @@ def load_systems(con, cells) -> dict:
         )
     con.execute("CREATE OR REPLACE TEMP TABLE _s AS SELECT * FROM system LIMIT 0")
     con.executemany(
-        """INSERT INTO _s (system_key, label, canonical_label, candidate,
+        """INSERT INTO _s (system_key, label, candidate,
                            candidate_version, config, strategy, scanner)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
         rows,
     )
     con.execute(
-        """INSERT INTO system (system_key, label, canonical_label, candidate,
+        """INSERT INTO system (system_key, label, candidate,
                                candidate_version, config, strategy, scanner)
-           SELECT _s.system_key, label, canonical_label, candidate,
+           SELECT _s.system_key, label, candidate,
                   candidate_version, config, strategy, scanner
            FROM _s
            WHERE NOT EXISTS (SELECT 1 FROM system s WHERE s.system_key = _s.system_key)"""
@@ -448,8 +435,8 @@ def load_run(con, run_dir: Path) -> str:
                 latency.get("samples"),
                 row.get("gbps_raw"),
                 # ns_per_value / ns_per_domain_value are in the JSONL too, but
-                # the view derives them from total_ns instead: same numbers,
-                # and runs recorded before ABI v5 keep a populated column.
+                # the view derives them from total_ns rather than storing a
+                # second copy of the same fact.
                 row.get("eval_domain"),
                 row.get("eval_domain_matches"),
                 footprint,

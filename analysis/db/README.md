@@ -43,9 +43,6 @@ FROM v
 WHERE run_name = 'clickbench-url-1m-contains' AND is_latest
   AND status = 'ok' AND chunk_rows = 122880
 GROUP BY label ORDER BY ns_value;
---  dict_uncompressed_prefilter/dict+prefilter  4.60  2.28
---  dict_onpair/dict+compressed                 6.74  5.89
---  uncompressed_memmem/memmem                  8.07  1.00
 ```
 
 Latency against selectivity, one candidate against the baseline:
@@ -80,8 +77,6 @@ FROM v
 WHERE label = 'uncompressed_memmem/memmem' AND dataset = 'clickbench-url-1m'
   AND op = 'contains' AND status = 'ok' AND chunk_rows = 122880
 GROUP BY hostname, arch ORDER BY ns_value;
---  ITFs-MacBook-Pro-2.local  aarch64   8.07  142
---  ip-172-31-95-133          x86_64   10.50  142
 ```
 
 Prefilter attribution (DESIGN.md §10):
@@ -124,7 +119,7 @@ SELECT run_name, hostname, min_iters, pinning_effective, count(*) AS n,
 FROM v WHERE is_latest GROUP BY ALL ORDER BY run_name;
 ```
 
-## Six things that will bite you
+## Five things that will bite you
 
 - **`chunk_rows`** is a build-time knob from the spec (`chunk_rows = [0, 122880]`;
   0 = the whole column as one chunk). It changes footprint *and* latency, and
@@ -133,7 +128,7 @@ FROM v WHERE is_latest GROUP BY ALL ORDER BY run_name;
 - **`is_latest`**: rerunning a spec into the same directory adds a new `run` row
   (the DB keeps history the overwritten `results.jsonl` lost). `WHERE is_latest`
   is the everyday filter.
-- **`status <> 'ok'`** is not an error: 3320 of the current measurements are
+- **`status <> 'ok'`** is not an error: a large share of measurements are
   `unsupported`, an op a kernel doesn't implement. `gate_ok` is `false` for
   those, so `WHERE gate_ok` silently excludes them — which is usually what you
   want, but say so deliberately.
@@ -150,14 +145,8 @@ FROM v WHERE is_latest GROUP BY ALL ORDER BY run_name;
   `dict_*` systems evaluate the predicate once per *unique* value and scatter
   to rows, so they declare a reduced domain; everything else leaves it unset,
   meaning one value per row. `v` substitutes `num_rows` for you, which is why
-  `dedup_factor` is exactly `1.0` rather than NULL for the row-wise systems.
-- **Runs recorded before ABI v5 read as row-wise, including their `dict_*`
-  rows.** `ns_per_value` is fine there (the view derives it from `total_ns`),
-  but `prune_rate` and `false_positive_rate` are *stored* — the harness
-  computed them at run time against the row count — so the 603 negative
-  `false_positive_rate` values in those runs stay negative until the runs are
-  repeated. `dedup_factor > 1` selects the rows that declared a reduced
-  domain; run-level provenance is `run.git_commit` / `run.harness_version`.
+  `dedup_factor` is exactly `1.0` rather than NULL for the row-wise systems, and
+  `dedup_factor > 1` selects the rows that declared a reduced domain.
 
 ## Two names that mean different things
 
