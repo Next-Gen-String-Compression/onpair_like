@@ -249,12 +249,12 @@ mod simd {
     use core::arch::x86_64::*;
 
     struct Probes {
-        points: [__m512i; 8],
+        points: [__m512i; 64],
         np: usize,
-        lo: [__m512i; 8],
-        span: [__m512i; 8],
-        ge: [__m512i; 8],
-        le: [__m512i; 8],
+        lo: [__m512i; 32],
+        span: [__m512i; 32],
+        ge: [__m512i; 32],
+        le: [__m512i; 32],
         nr: usize,
     }
 
@@ -262,12 +262,12 @@ mod simd {
     unsafe fn broadcast(cover: &Cover) -> Probes {
         let zero = _mm512_setzero_si512();
         let mut p = Probes {
-            points: [zero; 8],
+            points: [zero; 64],
             np: cover.points.len(),
-            lo: [zero; 8],
-            span: [zero; 8],
-            ge: [zero; 8],
-            le: [zero; 8],
+            lo: [zero; 32],
+            span: [zero; 32],
+            ge: [zero; 32],
+            le: [zero; 32],
             nr: cover.ranges.len(),
         };
         for (k, &pt) in cover.points.iter().enumerate() {
