@@ -66,7 +66,7 @@ pub mod render;
 
 use onpair::search::{
     BytesVerifier, PrefilterError, TokenFrequencyIndex, TokenFrequencyIndexError,
-    prefilter_candidates,
+    analyze_prefilter, prefilter_candidates,
 };
 use onpair::{ColumnView, DictionaryView, Offset};
 use serde::Serialize;
@@ -340,15 +340,8 @@ fn measure<O: Offset>(
     }
 
     let mut theirs = Vec::new();
-    let refusal = prefilter_candidates(
-        view.codes,
-        view.row_offsets,
-        pattern,
-        view.dict,
-        frequencies,
-        &mut theirs,
-    )
-    .err();
+    let analysis = analyze_prefilter(pattern, view.dict, frequencies);
+    let refusal = prefilter_candidates(view.codes, view.row_offsets, &analysis, &mut theirs).err();
 
     Measurement {
         candidates: candidates.len(),
