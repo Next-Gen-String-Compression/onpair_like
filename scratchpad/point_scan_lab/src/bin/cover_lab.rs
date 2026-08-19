@@ -241,6 +241,144 @@ fn c4t_sb512(cover: &Cover, inp: &Input, s: &mut Scratch, out: &mut Vec<usize>) 
     tail_table(cover, inp, full * G, &mut sink);
 }
 
+// ────────────────────────────────────────────── autovec (no intrinsics) ─────
+// Portable Rust only; vector width comes from the compiler's -C target-cpu.
+
+/// Rescan a live block plus the tail through the membership table.
+#[inline]
+fn rescan_live_blocks<const G: usize>(
+    cover: &Cover,
+    inp: &Input,
+    s: &Scratch,
+    full: usize,
+    out: &mut Vec<usize>,
+) {
+    let mut sink = Sink::new(&inp.off, out, inp.sparse);
+    for sb in 0..full {
+        if s.blockany[sb] != 0 {
+            let base = sb * G;
+            for j in 0..G {
+                if cover.table[inp.codes[base + j] as usize] != 0 {
+                    sink.hit(base + j);
+                }
+            }
+        }
+    }
+    tail_table(cover, inp, full * G, &mut sink);
+}
+
+/// av_c4t: superblock G=256, pass 1 = table-fold (shape-independent).
+#[inline(never)]
+fn av_c4t256(cover: &Cover, inp: &Input, s: &mut Scratch, out: &mut Vec<usize>) {
+    const G: usize = 256;
+    let full = inp.codes.len() / G;
+    for sb in 0..full {
+        let base = sb * G;
+        let any = inp.codes[base..base + G]
+            .iter()
+            .fold(0u8, |acc, &c| acc | cover.table[c as usize]);
+        s.blockany[sb] = any;
+    }
+    rescan_live_blocks::<G>(cover, inp, s, full, out);
+}
+
+/// av_shape: superblock of G codes, pass 1 = code-outer probe fold,
+/// monomorphized per cover shape so the probe loops fully unroll and the code
+/// loop auto-vectorizes as an OR-reduction.
+#[inline(never)]
+fn av_shape_impl<const P: usize, const R: usize, const G: usize>(
+    cover: &Cover,
+    inp: &Input,
+    s: &mut Scratch,
+    out: &mut Vec<usize>,
+) {
+    let mut pts = [0u16; P];
+    pts.copy_from_slice(&cover.points);
+    let mut los = [0u16; R];
+    let mut spans = [0u16; R];
+    for k in 0..R {
+        los[k] = cover.ranges[k].0;
+        spans[k] = cover.ranges[k].1.wrapping_sub(cover.ranges[k].0);
+    }
+    let full = inp.codes.len() / G;
+    for sb in 0..full {
+        let blk = &inp.codes[sb * G..sb * G + G];
+        let mut any = false;
+        for &c in blk {
+            let mut h = false;
+            for k in 0..P {
+                h |= c == pts[k];
+            }
+            for k in 0..R {
+                h |= c.wrapping_sub(los[k]) <= spans[k];
+            }
+            any |= h;
+        }
+        s.blockany[sb] = any as u8;
+    }
+    if G >= 256 {
+        rescan_live_blocks::<G>(cover, inp, s, full, out);
+    } else {
+        // Fine summaries: stride the summary bytes eight at a time so eight
+        // dead blocks cost one u64 compare, and rescan only live G-blocks.
+        let mut sink = Sink::new(&inp.off, out, inp.sparse);
+        let mut sb = 0usize;
+        while sb + 8 <= full {
+            let word = u64::from_le_bytes(s.blockany[sb..sb + 8].try_into().unwrap());
+            if word != 0 {
+                for k in 0..8 {
+                    if s.blockany[sb + k] != 0 {
+                        let base = (sb + k) * G;
+                        for j in 0..G {
+                            if cover.table[inp.codes[base + j] as usize] != 0 {
+                                sink.hit(base + j);
+                            }
+                        }
+                    }
+                }
+            }
+            sb += 8;
+        }
+        for b in sb..full {
+            if s.blockany[b] != 0 {
+                let base = b * G;
+                for j in 0..G {
+                    if cover.table[inp.codes[base + j] as usize] != 0 {
+                        sink.hit(base + j);
+                    }
+                }
+            }
+        }
+        tail_table(cover, inp, full * G, &mut sink);
+    }
+}
+
+/// Dispatch to a monomorphized shape when we have one; table-fold otherwise.
+fn av_shape_g<const G: usize>(cover: &Cover, inp: &Input, s: &mut Scratch, out: &mut Vec<usize>) {
+    macro_rules! arms {
+        ($(($p:literal, $r:literal)),+ $(,)?) => {
+            match (cover.points.len(), cover.ranges.len()) {
+                $(($p, $r) => return av_shape_impl::<$p, $r, G>(cover, inp, s, out),)+
+                _ => av_c4t256(cover, inp, s, out),
+            }
+        };
+    }
+    arms!(
+        (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0), (8, 0),
+        (0, 1), (1, 1), (2, 1), (3, 1), (4, 1),
+        (0, 2), (1, 2), (2, 2), (3, 2), (4, 2),
+        (0, 3), (1, 3), (2, 3), (0, 4), (2, 4), (4, 4),
+    )
+}
+
+fn av_shape(cover: &Cover, inp: &Input, s: &mut Scratch, out: &mut Vec<usize>) {
+    av_shape_g::<256>(cover, inp, s, out)
+}
+
+fn av_shape64(cover: &Cover, inp: &Input, s: &mut Scratch, out: &mut Vec<usize>) {
+    av_shape_g::<64>(cover, inp, s, out)
+}
+
 // ─────────────────────────────────────────────────────────────────── avx512
 
 #[cfg(target_arch = "x86_64")]
@@ -391,7 +529,12 @@ struct Algo {
 fn registry() -> Vec<Algo> {
     // KERNELS_ONLY: the shipped-original compare loop plus the five strongest
     // new scan kernels, no scalar exploratory variants.
-    let mut v: Vec<Algo> = vec![Algo { name: "rows_tbl", f: a1t_rows_table }];
+    let mut v: Vec<Algo> = vec![
+        Algo { name: "rows_tbl", f: a1t_rows_table },
+        Algo { name: "av_c4t", f: av_c4t256 },
+        Algo { name: "av_shape", f: av_shape },
+        Algo { name: "av_shp64", f: av_shape64 },
+    ];
     if std::env::var_os("LAB_ALL_SCALARS").is_some() {
         v.push(Algo { name: "b1t_codes", f: b1t_codes_table });
         v.push(Algo { name: "c4p_512", f: c4p_sb512 });
@@ -522,7 +665,7 @@ fn run_synth() {
             let mut expect = Vec::new();
             let mut s0 = Scratch { blockany: vec![] };
             a1t_rows_table(&cover, &inp, &mut s0, &mut expect);
-            let mut scratch = Scratch { blockany: vec![0u8; n / 512 + 2] };
+            let mut scratch = Scratch { blockany: vec![0u8; n / 64 + 16] };
             print!("{:10}", format!("({np},{nr})"));
             for algo in &algos {
                 match measure(algo, &cover, &inp, &mut scratch, &expect) {
@@ -598,7 +741,7 @@ fn run_real(codes_path: &str, off_path: &str, covers_path: &str) {
         let mut expect = Vec::new();
         let mut s0 = Scratch { blockany: vec![] };
         a1t_rows_table(&cover, &inp, &mut s0, &mut expect);
-        let mut scratch = Scratch { blockany: vec![0u8; inp.codes.len() / 512 + 2] };
+        let mut scratch = Scratch { blockany: vec![0u8; inp.codes.len() / 64 + 16] };
         print!("{:>6}{coverage:>10.6}{:>8}", format!("{np},{nr}"), expect.len());
         for algo in &algos {
             match measure(algo, &cover, &inp, &mut scratch, &expect) {
