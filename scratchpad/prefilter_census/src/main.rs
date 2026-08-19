@@ -40,6 +40,7 @@ fn main() {
     // the inputs the point_scan_lab `real` mode consumes.
     let dump_dir = args.get(4).cloned();
     let mut points_tsv = String::new();
+    let mut covers_tsv = String::new();
     if let Some(dir) = &dump_dir {
         std::fs::create_dir_all(dir).unwrap();
         let mut codes_bytes = Vec::with_capacity(col.codes.len() * 2);
@@ -91,8 +92,23 @@ fn main() {
                 id
             ));
         }
+        // Full cover per query: id, coverage, "p,p,..", "lo-hi;lo-hi;..".
+        let pts: Vec<String> = cover.points().iter().map(|p| p.to_string()).collect();
+        let rgs: Vec<String> = cover
+            .ranges()
+            .iter()
+            .map(|r| format!("{}-{}", r.begin, r.last))
+            .collect();
+        covers_tsv.push_str(&format!(
+            "{}\t{:.8}\t{}\t{}\n",
+            id,
+            analysis.covered_fraction(),
+            pts.join(","),
+            rgs.join(";")
+        ));
     }
     if let Some(dir) = &dump_dir {
         std::fs::write(format!("{dir}/points.tsv"), points_tsv).unwrap();
+        std::fs::write(format!("{dir}/covers.tsv"), covers_tsv).unwrap();
     }
 }
