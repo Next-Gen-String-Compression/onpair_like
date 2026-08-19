@@ -70,9 +70,14 @@ fn main() {
         let analysis = analyze_prefilter(&needle, col.view().dict, &freqs);
         let cover = analysis.probe_cover();
         let mut out = Vec::new();
-        let t = Instant::now();
-        let scan = prefilter_candidates(&col.codes, &col.row_offsets, &analysis, &mut out);
-        let dt = t.elapsed();
+        let mut scan = prefilter_candidates(&col.codes, &col.row_offsets, &analysis, &mut out);
+        let mut dt = std::time::Duration::MAX;
+        for _ in 0..3 {
+            out.clear();
+            let t = Instant::now();
+            scan = prefilter_candidates(&col.codes, &col.row_offsets, &analysis, &mut out);
+            dt = dt.min(t.elapsed());
+        }
         println!(
             "{}\t{}\t{}\t{}\t{:.6}\t{}\t{:.1}{}",
             id,
