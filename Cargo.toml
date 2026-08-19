@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "abi",
     "harness",
+    "experiments/optimize_prefilter",
     "candidates/uncompressed",
     "candidates/uncompressed_memmem",
     "candidates/uncompressed_prefilter",

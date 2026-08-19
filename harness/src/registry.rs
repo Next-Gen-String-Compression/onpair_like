@@ -50,7 +50,10 @@ pub fn candidates() -> Vec<Candidate> {
         v.push(lb_cand_onpair::vtable_decode());
     }
     #[cfg(feature = "cand-onpair-spiral")]
-    v.push(lb_cand_onpair_spiral::vtable());
+    {
+        v.push(lb_cand_onpair_spiral::vtable());
+        v.push(lb_cand_onpair_spiral::vtable_decode());
+    }
     #[cfg(feature = "cand-lz4")]
     v.push(lb_cand_lz4::vtable());
     #[cfg(feature = "cand-zstd")]

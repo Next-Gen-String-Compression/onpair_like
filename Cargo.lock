@@ -1212,6 +1212,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "optimize-prefilter"
+version = "0.1.0"
+dependencies = [
+ "aho-corasick",
+ "base64",
+ "clap",
+ "lb-harness",
+ "pathdiff",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+ "xxhash-rust",
+]
+
+[[package]]
 name = "parquet"
 version = "59.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1248,6 +1264,12 @@ name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+
+[[package]]
+name = "pathdiff"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
 
 [[package]]
 name = "pin-project-lite"

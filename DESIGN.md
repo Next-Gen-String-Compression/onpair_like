@@ -1509,15 +1509,19 @@ onpair), for reproducibility.
 
 ### 17.2 Footprint components
 
-Both candidates report the same three components, mirroring lz4/zstd/onpair so
-the compression-axis report's `payload×` formula (raw payload ÷ (footprint −
-index)) works unchanged:
+Both candidates report the same three stored components, mirroring
+lz4/zstd/onpair so the compression-axis report's `payload×` formula (raw
+payload ÷ (footprint − index)) works unchanged. The decode-only `fsst`
+candidate additionally retains and reports its imported decoder table: this
+moves `fsst_import` out of repeated decode latency without hiding the resident
+memory cost.
 
 | component | meaning |
 |---|---|
 | `payload_fsst` | Σ compressed row byte-lengths (the payload-analog) |
 | `symbol_table` | serialized symbol table (`fsst_export`, ≤ ~2 KB) |
-| `offsets` | compressed-row index, (rows+1)×8 B, **uncompressed** — the honest index cost, excluded from `payload×` |
+| `offsets` | one row index, (rows+1)×8 B, **uncompressed** — canonical decoded offsets for bulk `fsst`, compressed offsets for match-in-place candidates; excluded from `payload×` |
+| `decode_table` | `fsst` only: resident `fsst_decoder_t`, imported once during build and reused by bulk decode |
 
 ### 17.3 `fsst_like_tum` backends, ops, and gating
 

@@ -1,0 +1,92 @@
+format_version = 1
+default_profile = "prefilter-prototype"
+
+[experiment]
+output_root = "generated"
+cache_root = "cache"
+min_needle_len = 1
+max_needle_len = 64
+# Four boundaries per decade make the sub-2% region deliberately dense: each
+# successive boundary is about 1.78x the previous one. Raise this to 8 to study
+# a narrow transition, but expect roughly twice as many low-selectivity cells.
+log_bands_per_decade = 4
+low_selectivity_cutoff = 0.02
+
+# Profiles change only selection depth and scope. They all reuse the expensive
+# catalogue below. max_selectivity_percent is a strict ceiling: 2.0 means
+# selectivity < 2%, while omitting it retains the full selectivity space.
+[profiles.prototype]
+description = "One query per observed full-space band and length cell"
+zero_replicates = 1
+low_selectivity_replicates = 1
+other_replicates = 1
+
+[profiles.substantial]
+description = "Higher-confidence full-space evaluation"
+zero_replicates = 2
+low_selectivity_replicates = 4
+other_replicates = 2
+
+[profiles.exhaustive]
+description = "Maximum-replication full-space validation"
+zero_replicates = 16
+low_selectivity_replicates = 32
+other_replicates = 16
+
+[profiles.prefilter-prototype]
+description = "One query per observed band and length cell below 2%"
+zero_replicates = 1
+low_selectivity_replicates = 1
+other_replicates = 1
+max_selectivity_percent = 2.0
+
+[profiles.prefilter-substantial]
+description = "Higher-confidence evaluation below 2%"
+zero_replicates = 2
+low_selectivity_replicates = 4
+other_replicates = 2
+max_selectivity_percent = 2.0
+
+[profiles.prefilter-exhaustive]
+description = "Maximum-replication validation below 2%"
+zero_replicates = 16
+low_selectivity_replicates = 32
+other_replicates = 16
+max_selectivity_percent = 2.0
+
+[sampling]
+# Per length: half row-uniform and half occurrence-uniform real substrings.
+candidate_draws = 50000
+anchor_rows = 4096
+# Mutations use only bytes observed in the dataset, then pass an exact absence
+# check. This avoids zero-result probes made trivial by a globally absent byte.
+zero_probe_candidates = 4096
+# The cache keeps more than one suite's quota so changing --seed really
+# selects a different set without rebuilding the expensive catalogue.
+catalog_entries_per_cell = 256
+truth_batch_size = 256
+
+[benchmark]
+result_root = "../../results/optimize_prefilter"
+onpair_configs = ['{"bits":12}', '{"bits":16}']
+# Eight logical paths (the four OnPair paths run once per config):
+# uncompressed per-row memmem, uncompressed full-haystack memmem, OnPair
+# decode followed by either scanner, OnPair prefilter+memmem, OnPair's
+# unprefiltered KMP DFA, and FSST bulk decode followed by either scanner.
+strategies = ["memmem", "memmem-hay", "decode", "pf_memmem", "kmp"]
+warmup = 1
+min_iters = 3
+min_millis = 50
+chunk_rows = [0]
+
+[[datasets]]
+id = "clickbench-url-1m"
+path = "../../datasets/clickbench-url-1m"
+
+[[datasets]]
+id = "amazon-title"
+path = "../../datasets/amazon-title"
+
+[[datasets]]
+id = "dbpedia-abstract"
+path = "../../datasets/dbpedia-abstract"
