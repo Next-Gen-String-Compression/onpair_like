@@ -17,9 +17,9 @@
 // whole point, so it deliberately exposes NO decode(): it is a matcher, not a
 // codec, and the decode-then-scan baseline is the `fsst` candidate's job.
 //
-// build() and footprint() are the SHARED fsst_common front-end
-// (candidates/fsst_common/fsst_build.hpp) — identical to the `fsst` candidate.
-// This file's cand_build() just calls fsst_common::Build() and then does the one
+// build() starts with the SHARED fsst_common front-end
+// (candidates/fsst_common/fsst_build.hpp), identical to the `fsst` candidate.
+// This file's cand_build() then does the one
 // extra, fork-specific step the matcher needs: write the escaped-byte bitmap
 // into symbols[255] (which the matcher's isEscapable() reads) and build the
 // FSST-LIKE Encoder over the trained table. The FSST fork here (calin2110) is
@@ -154,6 +154,9 @@ void* cand_build(const lb_chunk_view* view, const char* /*config_json*/,
 
     fsst_destroy(h->b.enc);
     h->b.enc = nullptr;
+    // Match-in-place needs compressed-row boundaries only. The canonical
+    // decoded index was a shared-builder intermediate.
+    fsst_common::ReleaseDecodedOffsets(h->b);
     return h.release();
   } catch (const std::exception& e) {
     if (h->b.enc) fsst_destroy(h->b.enc);
@@ -166,7 +169,17 @@ void* cand_build(const lb_chunk_view* view, const char* /*config_json*/,
 
 uint32_t cand_footprint(void* self, lb_footprint_component* out,
                         uint32_t capacity) {
-  return fsst_common::Footprint(static_cast<Handle*>(self)->b, out, capacity);
+  auto* h = static_cast<Handle*>(self);
+  const uint32_t base = fsst_common::Footprint(h->b, out, capacity);
+  // FSST-LIKE retains an expanded compression-side table for per-query
+  // automaton construction. The serialized symbol table remains the stored
+  // dictionary, so both resident forms are counted, just as fsst counts its
+  // imported decode table.
+  if (base < capacity) {
+    out[base] = {"encoder_table",
+                 sizeof(libfsst::Encoder) + sizeof(libfsst::SymbolTable)};
+  }
+  return base + 1;
 }
 
 void set_all_bits(uint64_t num_rows, uint64_t* out_bitmap_words) {
@@ -423,7 +436,7 @@ lb_candidate_fsst_like_tum(void) {
     g_vtable = {
         /*abi_version=*/LB_ABI_VERSION,
         /*name=*/"fsst_like_tum",
-        /*version=*/"0.2.0+b1eb3ab",
+        /*version=*/"0.3.0+b1eb3ab.resident-state",
         /*cpu_features=*/nullptr,
         /*strategies=*/g_strategies.data(),
         /*strategy_count=*/uint32_t(g_strategies.size()),

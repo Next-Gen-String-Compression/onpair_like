@@ -831,6 +831,15 @@ asserts one evaluation per row. These are structural counters, identical in
 every sample, which is why they are the one instrumented-mode quantity the
 harness *does* divide into the timing-mode median.
 
+The current dictionary wrappers retain one `u32` code per row and report those
+four bytes per row as `dict_codes` in `footprint` (distinct from any child's
+own token `codes`). They do not claim hypothetical bit-packing
+while executing from an unpacked vector; a future bit-packed implementation
+must pay its extraction cost in the measured path before reporting the smaller
+representation. Build-only unique-value buffers are released when the child
+materializes an owned compressed representation, and retained (and counted by
+the child) only for non-owning plaintext matchers.
+
 That gives two per-value costs, and their ratio is the dictionary's whole
 contribution:
 
@@ -1495,8 +1504,8 @@ against *match-in-place* within the FSST family, next to the OnPair results.
 
 The two deliberately link **different FSST forks**, so their compressed
 bytes / ratios are **not byte-identical** (different symbol-table trainers),
-though each is internally consistent and both report identical footprint
-components. `fsst` (cwida) is the canonical-reference **decode** line;
+though each reports the same common stored components plus any execution table
+it actually retains. `fsst` (cwida) is the canonical-reference **decode** line;
 `fsst_like_tum` (calin) is the **match-in-place** line — the two axes of the FSST
 comparison, one candidate each. (An earlier revision also exposed a `decode`
 strategy on `fsst_like_tum` for a same-bytes decode-vs-match contrast; it was
@@ -1509,19 +1518,22 @@ onpair), for reproducibility.
 
 ### 17.2 Footprint components
 
-Both candidates report the same three stored components, mirroring
-lz4/zstd/onpair so the compression-axis report's `payload×` formula (raw
-payload ÷ (footprint − index)) works unchanged. The decode-only `fsst`
-candidate additionally retains and reports its imported decoder table: this
-moves `fsst_import` out of repeated decode latency without hiding the resident
-memory cost.
+Every FSST-family candidate reports the same three common stored components,
+mirroring lz4/zstd/onpair so the compression-axis report's `payload×` formula
+(raw payload ÷ (footprint − index)) works unchanged. Each handle retains
+exactly one row index: canonical decoded boundaries for bulk decoding, or
+compressed boundaries for match-in-place. The shared builder transiently
+creates both and each consumer releases the unused one. Candidates also report
+any imported decoder or expanded encoder table retained for execution; moving
+table preparation out of query latency must not hide its resident memory cost.
 
 | component | meaning |
 |---|---|
 | `payload_fsst` | Σ compressed row byte-lengths (the payload-analog) |
 | `symbol_table` | serialized symbol table (`fsst_export`, ≤ ~2 KB) |
-| `offsets` | one row index, (rows+1)×8 B, **uncompressed** — canonical decoded offsets for bulk `fsst`, compressed offsets for match-in-place candidates; excluded from `payload×` |
-| `decode_table` | `fsst` only: resident `fsst_decoder_t`, imported once during build and reused by bulk decode |
+| `offsets` | one row index, (rows+1)×8 B, **uncompressed** — canonical decoded offsets for bulk decode, compressed offsets for match-in-place; excluded from `payload×` |
+| `decode_table` | resident imported `fsst_decoder_t`, when a candidate keeps one for bulk or survivor decoding |
+| `encoder_table` | FSST-LIKE TUM's retained expanded encoder/symbol table used to construct query automata |
 
 ### 17.3 `fsst_like_tum` backends, ops, and gating
 

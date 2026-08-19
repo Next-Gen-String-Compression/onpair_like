@@ -203,6 +203,124 @@ fn onpair_gates_on_compressed_and_decode_strategies() {
     }
 }
 
+/// Every candidate touched by the resident-state audit passes the correctness
+/// gate. FSST candidates expose retained execution tables, and dictionary
+/// wrappers report the actual unpacked row-code vector.
+#[test]
+fn resident_state_candidates_gate_and_report_complete_footprints() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (ds_dir, suite_dir) = prepare_fixture(tmp.path());
+    let num_rows = PreparedDataset::load(&ds_dir, true).unwrap().num_rows();
+    let candidates = [
+        "fsst",
+        "fsst_like_tum",
+        "fsst_like_utn",
+        "dict_fsst_like_tum",
+        "fsst_decode_prefilter",
+        "dict_fsst_decode_prefilter",
+        "fsst_prefilter",
+        "dict_fsst_prefilter",
+        "dict_uncompressed_prefilter",
+        "dict_onpair",
+        "dict_onpair_spiral",
+    ];
+    let candidate_blocks: String = candidates
+        .iter()
+        .map(|name| format!("[[candidates]]\nname = \"{name}\"\n\n"))
+        .collect();
+    let strategies = [
+        "decode",
+        "interp",
+        "comet",
+        "dict+interp",
+        "decode+prefilter",
+        "dict+decode+prefilter",
+        "fsst-prefilter",
+        "dict+fsst-prefilter",
+        "dict+prefilter",
+        "dict+compressed",
+        "dict+pf_kmp",
+    ];
+    let spec = format!(
+        "strategies = {}\n\n[[datasets]]\npath = \"{}\"\n\n[[suites]]\npath = \"{}\"\n\n{candidate_blocks}[[scanners]]\nname = \"memmem\"\n\n[measure]\nwarmup = 0\nmin_iters = 1\nmin_millis = 0\nchunk_rows = [0]\n",
+        serde_json::to_string(&strategies).unwrap(),
+        ds_dir.display(),
+        suite_dir.display(),
+    );
+    let spec_path = tmp.path().join("resident-state.toml");
+    std::fs::write(&spec_path, spec).unwrap();
+    let loaded = LoadedSpec::load(&spec_path).unwrap();
+
+    for (index, candidate) in candidates.iter().enumerate() {
+        let out_path = tmp.path().join(format!("resident-{index}.jsonl"));
+        let mut writer = Writer::create(&out_path).unwrap();
+        let summary = runner::run_worker(&loaded, candidate, 0, 0, &mut writer, false).unwrap();
+        writer.finish().unwrap();
+        assert_eq!(summary.gate_failures, 0, "{candidate}: gate failures");
+        assert_eq!(summary.errors, 0, "{candidate}: errors");
+
+        let rows = read_rows(&out_path);
+        assert!(
+            rows.iter()
+                .filter(|row| row["kind"] == "query")
+                .all(|row| row["status"] == "ok" || row["status"] == "unsupported"),
+            "{candidate}: every query must be ok or unsupported"
+        );
+        let build = rows.iter().find(|row| row["kind"] == "build").unwrap();
+        let components = build["footprint_components"].as_object().unwrap();
+        let required: &[&str] = match *candidate {
+            "fsst" | "fsst_like_utn" | "fsst_decode_prefilter" | "fsst_prefilter" => {
+                &["payload_fsst", "symbol_table", "offsets", "decode_table"]
+            }
+            "dict_fsst_decode_prefilter" | "dict_fsst_prefilter" => &[
+                "payload_fsst",
+                "symbol_table",
+                "offsets",
+                "decode_table",
+                "dict_codes",
+            ],
+            "fsst_like_tum" => &["payload_fsst", "symbol_table", "offsets", "encoder_table"],
+            "dict_fsst_like_tum" => &[
+                "payload_fsst",
+                "symbol_table",
+                "offsets",
+                "encoder_table",
+                "dict_codes",
+            ],
+            "dict_onpair" => &[
+                "token_stream",
+                "boundaries",
+                "dict_bytes",
+                "dict_offsets",
+                "dict_codes",
+            ],
+            "dict_onpair_spiral" => &[
+                "codes",
+                "row_offsets",
+                "dict_bytes",
+                "dict_offsets",
+                "prefilter",
+                "dict_codes",
+            ],
+            "dict_uncompressed_prefilter" => &["payload", "offsets", "dict_codes"],
+            _ => unreachable!(),
+        };
+        for component in required {
+            assert!(
+                components.contains_key(*component),
+                "{candidate}: missing footprint component {component}"
+            );
+        }
+        if candidate.starts_with("dict_") {
+            assert_eq!(
+                components["dict_codes"].as_u64().unwrap(),
+                num_rows * core::mem::size_of::<u32>() as u64,
+                "{candidate}: footprint must report the resident unpacked code vector"
+            );
+        }
+    }
+}
+
 /// The gate canary: its "ok" strategy passes everywhere, its "wrong"
 /// strategy (bit flip on row 0) fails every cell loudly. A gate that has
 /// never fired is not known to work.

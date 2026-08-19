@@ -32,7 +32,6 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
-#include <vector>
 
 namespace {
 
@@ -53,7 +52,7 @@ void* cand_build(const lb_chunk_view* view, const char* /*config_json*/,
   // The shared builder needs compressed-row offsets while concatenating its
   // per-row outputs. Bulk decode consumes the resulting stream as one unit and
   // needs only canonical decoded offsets, so release the unused second index.
-  std::vector<uint64_t>().swap(h->storage.coffsets);
+  fsst_common::ReleaseCompressedOffsets(h->storage);
   // Decode-only: the trained encoder is not needed past build.
   fsst_destroy(h->storage.enc);
   h->storage.enc = nullptr;

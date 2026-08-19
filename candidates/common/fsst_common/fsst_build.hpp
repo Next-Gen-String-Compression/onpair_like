@@ -6,9 +6,9 @@
 // (`fsst` decodes over the canonical offsets; `fsst_like_tum` matches in place over
 // the compressed-row offsets plus a LIKE automaton built from the trained
 // table). This header factors out the identical train+compress+concatenate+
-// export core (`Build`) and the identical footprint (`Footprint`), so the two
-// candidates stay tight: `fsst`'s build IS `Build`, and `fsst_like_tum`'s build just
-// calls `Build` first and then constructs its automaton.
+// export core (`Build`) and the common stored-footprint components. Build
+// transiently creates both row indexes; every consumer must release the index
+// it does not execute against before returning its handle.
 //
 // IMPORTANT: include your fork's FSST header (cwida `fsst.h`, or calin
 // `<fsst/fsst.h>`) BEFORE this one — this header uses the `fsst_*` C API and
@@ -26,12 +26,14 @@
 
 namespace fsst_common {
 
-// The result of training + batch-compressing one chunk. It carries BOTH offset
-// arrays so either candidate can be served from the same build:
+// The result of training + batch-compressing one chunk. Build produces BOTH
+// offset arrays so every candidate can share this front-end:
 //   - coffsets : compressed-row boundaries into `compressed` (fsst_like_tum/interp)
 //   - offsets  : canonical decoded-row boundaries              (fsst/decode)
-// `enc` is left ALIVE so a caller that needs the trained table (fsst_like_tum, for
-// its automaton) can use it; every caller destroys it once done.
+// They are build intermediates, not a license to retain two indexes: each
+// caller releases one (or narrows one and releases both). `enc` is left ALIVE
+// so a caller that needs the trained table can use it; every caller destroys it
+// once done.
 struct FsstBuilt {
   std::vector<uint8_t>  compressed;    // concatenated compressed rows
   std::vector<uint64_t> coffsets;      // num_rows + 1 offsets into `compressed`
@@ -104,10 +106,22 @@ static bool Build(const lb_chunk_view* view, FsstBuilt& out, char* err_buf,
   return true;
 }
 
-// The three footprint components every FSST-family candidate reports. `offsets`
-// is ALWAYS the uncompressed/canonical row index, (num_rows+1)*8 B — the honest,
-// codec-independent index cost, identical for decode and match-in-place, and
-// excluded from the report's `payload×` (DESIGN.md §17.2).
+// Force capacity release rather than relying on shrink_to_fit's non-binding
+// request. These helpers make the one-index resident policy explicit at every
+// shared-builder call site.
+static void ReleaseCompressedOffsets(FsstBuilt& b) {
+  std::vector<uint64_t>().swap(b.coffsets);
+}
+
+static void ReleaseDecodedOffsets(FsstBuilt& b) {
+  std::vector<uint64_t>().swap(b.offsets);
+}
+
+// The three common footprint components every FSST-family candidate reports.
+// `offsets` charges exactly one (num_rows+1)*u64 row index: decoded offsets for
+// bulk decode, compressed offsets for match-in-place. A kernel may physically
+// narrow its sole index to u32, but the benchmark's current cross-candidate
+// policy continues to charge u64 uniformly (DESIGN.md §17.2).
 static uint32_t Footprint(const FsstBuilt& b, lb_footprint_component* out,
                           uint32_t capacity) {
   const lb_footprint_component components[] = {
