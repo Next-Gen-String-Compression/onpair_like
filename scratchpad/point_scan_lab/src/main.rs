@@ -52,7 +52,7 @@ impl Scratch {
             bitset: vec![0u64; n / 64 + 2],
             idx: vec![0u32; n + 64],
             rowbits: vec![0u8; inp.rows() + 1],
-            blockany: vec![0u8; n / 512 + 2],
+            blockany: vec![0u8; n / 128 + 2],
         }
     }
 }
@@ -269,14 +269,14 @@ fn c3_block64_fused(inp: &Input, p: u16, _s: &mut Scratch, out: &mut Vec<usize>)
     tail(inp, p, full * 64, &mut sink);
 }
 
-/// c4: hierarchical — pass 1 stores one "any" byte per 512-code superblock,
+/// c4: hierarchical — pass 1 stores one "any" byte per G-code superblock,
 /// pass 2 rescans only the non-empty superblocks.
-fn c4_superblock512(inp: &Input, p: u16, s: &mut Scratch, out: &mut Vec<usize>) {
+fn c4_superblock<const G: usize>(inp: &Input, p: u16, s: &mut Scratch, out: &mut Vec<usize>) {
     let n = inp.codes.len();
-    let full = n / 512;
+    let full = n / G;
     for sb in 0..full {
-        let base = sb * 512;
-        let any = inp.codes[base..base + 512]
+        let base = sb * G;
+        let any = inp.codes[base..base + G]
             .iter()
             .fold(false, |acc, &c| acc | (c == p));
         s.blockany[sb] = any as u8;
@@ -284,15 +284,46 @@ fn c4_superblock512(inp: &Input, p: u16, s: &mut Scratch, out: &mut Vec<usize>) 
     let mut sink = Sink::new(&inp.off, out, inp.sparse);
     for sb in 0..full {
         if s.blockany[sb] != 0 {
-            let base = sb * 512;
-            for j in 0..512 {
+            let base = sb * G;
+            for j in 0..G {
                 if inp.codes[base + j] == p {
                     sink.hit(base + j);
                 }
             }
         }
     }
-    tail(inp, p, full * 512, &mut sink);
+    tail(inp, p, full * G, &mut sink);
+}
+
+/// c5: full 1-bit-per-code bitset in pass 1 (as c1), but pass 2 skips the
+/// bitset 512 codes (8 words) at a time and decodes positions from the bits
+/// alone — `codes` is never touched again.
+fn c5_bitset_sb512(inp: &Input, p: u16, s: &mut Scratch, out: &mut Vec<usize>) {
+    let n = inp.codes.len();
+    let full = n / 64;
+    for blk in 0..full {
+        s.bitset[blk] = build_word64(&inp.codes, blk * 64, p);
+    }
+    let mut sink = Sink::new(&inp.off, out, inp.sparse);
+    let mut blk = 0usize;
+    while blk + 8 <= full {
+        let w = &s.bitset[blk..blk + 8];
+        let any = w[0] | w[1] | w[2] | w[3] | w[4] | w[5] | w[6] | w[7];
+        if any != 0 {
+            for (o, &word) in w.iter().enumerate() {
+                if word != 0 {
+                    sink.mark_mask((blk + o) * 64, word);
+                }
+            }
+        }
+        blk += 8;
+    }
+    for b in blk..full {
+        if s.bitset[b] != 0 {
+            sink.mark_mask(b * 64, s.bitset[b]);
+        }
+    }
+    tail(inp, p, full * 64, &mut sink);
 }
 
 // ──────────────────────────────────────────────────────────── SWAR detection
@@ -476,6 +507,51 @@ mod simd {
         }
     }
 
+    /// r6: AVX-512 superblock — compare V consecutive vectors, collapse the
+    /// k-masks into u64 lane bitsets, OR them all for ONE gate per V*32 codes,
+    /// and extract from the retained bitsets on a live superblock. C4's coarse
+    /// gate + C5's retained positions; positions are a free by-product of the
+    /// compare on AVX-512, so nothing is ever rescanned.
+    #[target_feature(enable = "avx512f,avx512bw")]
+    pub unsafe fn r6_avx512_superblock<const V: usize>(
+        inp: &Input,
+        p: u16,
+        _s: &mut Scratch,
+        out: &mut Vec<usize>,
+    ) {
+        debug_assert!(V % 2 == 0);
+        let n = inp.codes.len();
+        let base = inp.codes.as_ptr();
+        let point = _mm512_set1_epi16(p as i16);
+        let mut sink = Sink::new(&inp.off, out, inp.sparse);
+        let sb = V * 32;
+        let mut i = 0usize;
+        let mut lanes = [0u64; 16];
+        while i + sb <= n {
+            let mut any = 0u64;
+            for k in 0..V / 2 {
+                let m0 =
+                    _mm512_cmpeq_epu16_mask(_mm512_loadu_si512(base.add(i + k * 64).cast()), point);
+                let m1 = _mm512_cmpeq_epu16_mask(
+                    _mm512_loadu_si512(base.add(i + k * 64 + 32).cast()),
+                    point,
+                );
+                let pair = (m0 as u64) | ((m1 as u64) << 32);
+                lanes[k] = pair;
+                any |= pair;
+            }
+            if any != 0 {
+                for k in 0..V / 2 {
+                    if lanes[k] != 0 {
+                        sink.mark_mask(i + k * 64, lanes[k]);
+                    }
+                }
+            }
+            i += sb;
+        }
+        tail(inp, p, i, &mut sink);
+    }
+
     /// r5: AVX-512 row-centric — one masked load + compare + ktest per row,
     /// push-over-top. Only valid when every row is at most 32 codes.
     #[target_feature(enable = "avx512f,avx512bw")]
@@ -521,7 +597,11 @@ fn registry() -> Vec<Algo> {
         Algo { name: "c1_bitset_full", f: c1_bitset_full, short_rows_only: false },
         Algo { name: "c2_codeidx_list", f: c2_codeidx_list, short_rows_only: false },
         Algo { name: "c3_block64_fused", f: c3_block64_fused, short_rows_only: false },
-        Algo { name: "c4_superblk512", f: c4_superblock512, short_rows_only: false },
+        Algo { name: "c4_sb128", f: c4_superblock::<128>, short_rows_only: false },
+        Algo { name: "c4_sb512", f: c4_superblock::<512>, short_rows_only: false },
+        Algo { name: "c4_sb2048", f: c4_superblock::<2048>, short_rows_only: false },
+        Algo { name: "c4_sb8192", f: c4_superblock::<8192>, short_rows_only: false },
+        Algo { name: "c5_bs512", f: c5_bitset_sb512, short_rows_only: false },
         Algo { name: "sw3_word_fused", f: sw3_word_fused, short_rows_only: false },
         Algo { name: "sw4_superblk512", f: sw4_superblock512, short_rows_only: false },
     ];
@@ -557,6 +637,16 @@ fn registry() -> Vec<Algo> {
                 name: "r5_avx512_rowwise",
                 f: |i, p, s, o| unsafe { simd::r5_avx512_rowwise(i, p, s, o) },
                 short_rows_only: true,
+            });
+            v.push(Algo {
+                name: "r6_sb256",
+                f: |i, p, s, o| unsafe { simd::r6_avx512_superblock::<8>(i, p, s, o) },
+                short_rows_only: false,
+            });
+            v.push(Algo {
+                name: "r6_sb512",
+                f: |i, p, s, o| unsafe { simd::r6_avx512_superblock::<16>(i, p, s, o) },
+                short_rows_only: false,
             });
         }
     }
