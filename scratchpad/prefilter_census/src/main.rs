@@ -55,7 +55,7 @@ fn main() {
         std::fs::write(format!("{dir}/row_offsets.u32"), off_bytes).unwrap();
     }
 
-    println!("query_id\tneedle_len\tpoints\tranges\tcovered_fraction\tcandidates\tscan_us");
+    println!("query_id\tneedle_len\tpoints\tranges\tcovered_fraction\tcandidates\tscan_us\tanalysis_us");
     for line in queries.lines() {
         let q: serde_json::Value = serde_json::from_str(line).unwrap();
         let id = q["id"].as_str().unwrap();
@@ -67,7 +67,9 @@ fn main() {
                 .decode(n0["b64"].as_str().unwrap())
                 .unwrap(),
         };
+        let ta = Instant::now();
         let analysis = analyze_prefilter(&needle, col.view().dict, &freqs);
+        let analysis_us = ta.elapsed().as_secs_f64() * 1e6;
         let cover = analysis.probe_cover();
         let mut out = Vec::new();
         let mut scan = prefilter_candidates(&col.codes, &col.row_offsets, &analysis, &mut out);
@@ -79,7 +81,7 @@ fn main() {
             dt = dt.min(t.elapsed());
         }
         println!(
-            "{}\t{}\t{}\t{}\t{:.6}\t{}\t{:.1}{}",
+            "{}\t{}\t{}\t{}\t{:.6}\t{}\t{:.1}\t{:.1}{}",
             id,
             needle.len(),
             cover.points().len(),
@@ -87,6 +89,7 @@ fn main() {
             analysis.covered_fraction(),
             out.len(),
             dt.as_secs_f64() * 1e6,
+            analysis_us,
             if scan.is_err() { "\tSCAN_ERR" } else { "" },
         );
         if cover.points().len() == 1 && cover.ranges().is_empty() {
