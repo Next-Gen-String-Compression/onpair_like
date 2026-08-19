@@ -1,12 +1,12 @@
-//! `uncompressed_memmem` — the plaintext memchr baseline as a self-contained
-//! candidate. This is the fast `memchr::memmem` engine (the same one the
-//! `memmem` scanner uses) promoted to a candidate with its own `run` strategy,
-//! so it stands alone in the matrix as `uncompressed_memmem` rather than as an
-//! (uncompressed × memmem × direct) composition.
+//! `uncompressed_memmem` — the plaintext memchr baselines as a self-contained
+//! candidate. These are the fast `memchr::memmem` engines (the same ones the
+//! `memmem` and `memmem-hay` scanners use) promoted to candidate strategies,
+//! so they stand alone in a mixed native/composed benchmark matrix.
 //!
 //! Storage is zero-copy (build retains the view; compression ratio 1.0). The
-//! per-op match logic mirrors the `memmem` scanner exactly: per-needle
-//! `Finder`s for contains-family, bounds-checked compares for prefix/suffix.
+//! `memmem` searches each row separately and supports every operation;
+//! `memmem-hay` makes one pass over the concatenated payload for `contains`
+//! and rejects occurrences that cross a row boundary.
 
 use core::ffi::{c_char, c_void};
 
@@ -51,7 +51,7 @@ unsafe extern "C" fn run(
     out_bitmap_words: *mut u64,
     _stats_or_null: *mut LbRunStats,
 ) -> i32 {
-    if strategy_index != 0 {
+    if strategy_index > 1 {
         return 10;
     }
     let h = &*(this as *mut Handle);
@@ -61,6 +61,35 @@ unsafe extern "C" fn run(
     let words = core::slice::from_raw_parts_mut(out_bitmap_words, lb_abi::bitmap_words(v.num_rows));
     let offsets = v.offsets_slice();
     let payload = v.payload();
+
+    if strategy_index == 1 {
+        if q.op != LB_CONTAINS {
+            return 11;
+        }
+        let needle = needles[0];
+        if needle.is_empty() {
+            for i in 0..v.num_rows as usize {
+                set_bit(words, i);
+            }
+            return 0;
+        }
+
+        let finder = Finder::new(needle);
+        let mut start = 0usize;
+        while let Some(relative) = finder.find(&payload[start..]) {
+            let position = start + relative;
+            // Find the row containing `position`. The suite never supplies an
+            // empty needle here, so a hit always names a payload byte.
+            let row = offsets.partition_point(|&offset| offset as usize <= position) - 1;
+            if position + needle.len() <= offsets[row + 1] as usize {
+                set_bit(words, row);
+            }
+            // Preserve overlapping hits. A rejected boundary-spanning match
+            // may overlap a valid occurrence at the next byte.
+            start = position + 1;
+        }
+        return 0;
+    }
 
     // Compile needle Finders once (per-query setup), then loop the rows.
     match q.op {
@@ -130,18 +159,24 @@ unsafe extern "C" fn destroy(this: *mut c_void) {
     drop(Box::from_raw(this as *mut Handle));
 }
 
-static STRATEGIES: [LbStrategy; 1] = [LbStrategy {
-    name: c"memmem".as_ptr(),
-    supported_ops: LB_ALL_OPS,
-}];
+static STRATEGIES: [LbStrategy; 2] = [
+    LbStrategy {
+        name: c"memmem".as_ptr(),
+        supported_ops: LB_ALL_OPS,
+    },
+    LbStrategy {
+        name: c"memmem-hay".as_ptr(),
+        supported_ops: op_bit(LB_CONTAINS),
+    },
+];
 
 static VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
     name: c"uncompressed_memmem".as_ptr(),
-    version: c"0.1.0".as_ptr(),
+    version: c"0.2.0".as_ptr(),
     cpu_features: core::ptr::null(),
     strategies: STRATEGIES.as_ptr(),
-    strategy_count: 1,
+    strategy_count: STRATEGIES.len() as u32,
     build: Some(build),
     footprint: Some(footprint),
     run: Some(run),
@@ -152,4 +187,47 @@ static VTABLE: LbCandidate = LbCandidate {
 
 pub fn vtable() -> &'static LbCandidate {
     &VTABLE
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn haystack_strategy_rejects_cross_row_matches() {
+        let payload = b"xaab";
+        let offsets = [0u64, 2, 4];
+        let view = LbChunkView {
+            bytes: payload.as_ptr(),
+            offsets: offsets.as_ptr(),
+            num_rows: 2,
+        };
+        let handle = unsafe { build(&view, c"{}".as_ptr(), core::ptr::null_mut(), 0) };
+
+        let needle = b"aa";
+        let needle_ffi = LbBytes {
+            ptr: needle.as_ptr(),
+            len: needle.len() as u64,
+        };
+        let query = LbQuery {
+            op: LB_CONTAINS,
+            needles: &needle_ffi,
+            needle_count: 1,
+        };
+        let mut bitmap = [0u64; 1];
+        assert_eq!(
+            unsafe {
+                run(
+                    handle,
+                    1,
+                    &query,
+                    bitmap.as_mut_ptr(),
+                    core::ptr::null_mut(),
+                )
+            },
+            0
+        );
+        assert_eq!(bitmap, [0]);
+        unsafe { destroy(handle) };
+    }
 }
