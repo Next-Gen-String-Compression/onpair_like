@@ -389,18 +389,21 @@ struct Algo {
 }
 
 fn registry() -> Vec<Algo> {
-    let mut v: Vec<Algo> = vec![
-        Algo { name: "a1t_rows", f: a1t_rows_table },
-        Algo { name: "b1t_codes", f: b1t_codes_table },
-        Algo { name: "c4p_512", f: c4p_sb512 },
-        Algo { name: "c4po_512", f: c4po_sb512 },
-        Algo { name: "c4t_512", f: c4t_sb512 },
-    ];
+    // KERNELS_ONLY: the shipped-original compare loop plus the five strongest
+    // new scan kernels, no scalar exploratory variants.
+    let mut v: Vec<Algo> = vec![Algo { name: "rows_tbl", f: a1t_rows_table }];
+    if std::env::var_os("LAB_ALL_SCALARS").is_some() {
+        v.push(Algo { name: "b1t_codes", f: b1t_codes_table });
+        v.push(Algo { name: "c4p_512", f: c4p_sb512 });
+        v.push(Algo { name: "c4po_512", f: c4po_sb512 });
+        v.push(Algo { name: "c4t_512", f: c4t_sb512 });
+    }
     #[cfg(target_arch = "x86_64")]
     {
         if std::is_x86_feature_detected!("avx512f") && std::is_x86_feature_detected!("avx512bw") {
-            v.push(Algo { name: "r2g_2cmp", f: |c, i, s, o| unsafe { simd::r2g::<false>(c, i, s, o) } });
+            v.push(Algo { name: "ORIGINAL", f: |c, i, s, o| unsafe { simd::r2g::<false>(c, i, s, o) } });
             v.push(Algo { name: "r2g_sub", f: |c, i, s, o| unsafe { simd::r2g::<true>(c, i, s, o) } });
+            v.push(Algo { name: "r6g_64", f: |c, i, s, o| unsafe { simd::r6g::<2>(c, i, s, o) } });
             v.push(Algo { name: "r6g_256", f: |c, i, s, o| unsafe { simd::r6g::<8>(c, i, s, o) } });
             v.push(Algo { name: "r6g_512", f: |c, i, s, o| unsafe { simd::r6g::<16>(c, i, s, o) } });
         }
@@ -570,12 +573,25 @@ fn run_real(codes_path: &str, off_path: &str, covers_path: &str) {
                 .collect()
         };
         let (np, nr) = (points.len(), ranges.len());
-        if np + nr == 0 || np + nr > 8 || np > 8 || nr > 8 {
+        // Kernel shootout scope: any shape up to 64 comparisons.
+        if np + nr == 0 || np + 2 * nr > 64 {
             continue;
         }
         rows_meta.push((np, nr, coverage, points, ranges, f[0].to_string()));
     }
-    rows_meta.sort_by(|a, b| (a.0 + a.1, &a.2).partial_cmp(&(b.0 + b.1, &b.2)).unwrap());
+    rows_meta.sort_by(|a, b| {
+        (a.0 + 2 * a.1, &a.2)
+            .partial_cmp(&(b.0 + 2 * b.1, &b.2))
+            .unwrap()
+    });
+    // Cap the run: evenly spaced sample across the (cost, coverage) order.
+    const CAP: usize = 48;
+    if rows_meta.len() > CAP {
+        let step = rows_meta.len() as f64 / CAP as f64;
+        rows_meta = (0..CAP)
+            .map(|k| rows_meta[(k as f64 * step) as usize].clone())
+            .collect();
+    }
     for (np, nr, coverage, points, ranges, id) in rows_meta {
         let cover = Cover::build(points, ranges);
         let inp = Input { codes: codes.clone(), off: off.clone(), sparse: coverage < 1e-4 };
