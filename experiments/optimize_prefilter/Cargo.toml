@@ -1,0 +1,20 @@
+[package]
+name = "optimize-prefilter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Deterministic, selectivity-stratified CONTAINS suites for prefilter experiments"
+
+[dependencies]
+aho-corasick = { workspace = true }
+base64 = "0.22.1"
+clap = { version = "4.6.1", features = ["derive"] }
+lb-harness = { path = "../../harness", default-features = false }
+pathdiff = "0.2.3"
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = "1.1.2"
+xxhash-rust = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
