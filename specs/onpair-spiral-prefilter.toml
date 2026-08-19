@@ -1,0 +1,28 @@
+# SpiralDB OnPair prefilter iteration spec: ONLY the onpair_spiral candidate,
+# over the 142 contains queries of clickbench-url-1m-contains-s42. Meant for
+# fast before/after runs while editing the prefilter in a sibling ../onpair
+# checkout (see the [patch] section in the workspace Cargo.toml).
+#
+#   cargo build --release -p lb-harness --no-default-features --features cand-onpair-spiral
+#   ./target/release/bench run specs/onpair-spiral-prefilter.toml -o results/onpair-spiral-prefilter-<label>
+#
+# Strategies: the two prefilter+verify recipes (pf_kmp, pf_memmem) plus the
+# un-prefiltered token-KMP baseline (kmp) as the fixed reference the prefilter
+# is supposed to beat.
+strategies = ["pf_kmp", "pf_memmem", "kmp"]
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-contains-s42"
+
+[[candidates]]
+name = "onpair_spiral"
+
+[measure]
+chunk_rows = [0]  # whole column: the prefilter scan dominates, chunking just adds noise
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

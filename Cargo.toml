@@ -55,3 +55,10 @@ cmake = "0.1"
 debug = true          # symbols for perf work; no runtime cost
 lto = "thin"
 codegen-units = 1
+
+# Local-development override: resolve the pinned spiraldb/onpair git dependency
+# (candidates/onpair_spiral) to a sibling checkout, so prefilter changes can be
+# edited there and benchmarked here without pushing. The checkout must sit next
+# to this repo and carry the same crate version as the pinned rev.
+[patch."https://github.com/spiraldb/onpair.git"]
+onpair = { path = "../onpair" }
