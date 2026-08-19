@@ -1,0 +1,16 @@
+[package]
+name = "prefilter-census"
+version = "0.0.0"
+edition = "2021"
+
+# Standalone: not part of the benchmark workspace. Uses the sibling onpair
+# checkout directly (same one the workspace [patch] points at).
+[workspace]
+
+[dependencies]
+onpair = { path = "../../../onpair" }
+serde_json = "1"
+base64 = "0.22"
+
+[profile.release]
+debug = true
