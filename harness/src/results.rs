@@ -45,6 +45,13 @@ pub enum Row {
         footprint_total_bytes: u64,
         footprint_components: serde_json::Map<String, serde_json::Value>,
         raw_bytes: u64,
+        /// Rows and payload bytes in the column, so analysis can recover the
+        /// two shape facts a cost model needs — codes per row, and payload
+        /// bytes per code — from the code count in `footprint_components`.
+        /// `raw_bytes` is the compression-ratio denominator and includes the
+        /// offset array, so it is not the throughput denominator.
+        num_rows: u64,
+        payload_bytes: u64,
     },
     /// Latency axis: one per gated (cell, query).
     Query {
@@ -168,6 +175,35 @@ pub struct PrefilterReport {
     /// Per-query setup (pattern/automaton compilation) — ABI v3.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub setup_ns: Option<PhaseNs>,
+    /// Static cover facts declared by the candidate (ABI v6), collected
+    /// outside the measurement loop. These are what let analysis explain a
+    /// result set's own spread: on a compressed-domain prefilter, cost is
+    /// governed by how the needle tokenizes, not by how many rows match.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cover_points: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cover_ranges: Option<u64>,
+    /// `points + 2 * ranges` — SIMD comparisons per vector of the code stream.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comparison_cost: Option<u64>,
+    /// Share of code positions the cover marks.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub covered_fraction: Option<f64>,
+    /// The counts `covered_fraction` is a ratio of, kept because they compose
+    /// by addition across chunks and a ratio does not.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub covered_codes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub indexed_codes: Option<u64>,
+    /// Expected share of *rows* the cover sends to exact verification —
+    /// `covered_codes / num_rows`, capped at 1. Verification is charged per
+    /// row, not per code position, so this is the quantity that sets the
+    /// verify cost, and the one the library's profitability policy thresholds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate_row_fraction: Option<f64>,
+    /// Whether the library's own profitability hint sanctions the prefilter.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profitable_hint: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]

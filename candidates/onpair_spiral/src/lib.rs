@@ -48,11 +48,9 @@ use std::ffi::CStr;
 use std::mem::MaybeUninit;
 
 use lb_abi::*;
-use onpair::search::build_token_frequency_index;
-use onpair::{
-    search::TokenFrequencyIndex, Column, CompactDictionary, Config, Dictionary, MaxDictBits,
-    Threshold, Token,
-};
+use onpair::search::index::{build_token_frequency_index, TokenFrequencyIndex};
+use onpair::search::{analyze_prefilter, prefilter_is_likely_profitable};
+use onpair::{Column, CompactDictionary, Config, Dictionary, MaxDictBits, Threshold, Token};
 
 // ------------------------------------------------------------------ config
 
@@ -311,6 +309,54 @@ unsafe extern "C" fn run(
     0
 }
 
+/// Static cover facts for one needle (ABI v6): what the min-cut compiles the
+/// pattern into, how much of the code stream that covers, and whether the
+/// library's own hint sanctions running the prefilter at all.
+///
+/// Called by the harness outside any measurement, which is what makes this
+/// safe to provide: `run` cannot report a prefilter/verify split without
+/// re-implementing the shipped convenience method it exists to measure
+/// (SEMANTICS.md rule 5), but analysis still needs to know what the cover was.
+/// Throughput here is governed by how a needle tokenizes rather than by how
+/// many rows match, so a result set without these cannot explain its own
+/// spread.
+unsafe extern "C" fn query_facts(
+    this: *mut c_void,
+    strategy_index: u32,
+    query: *const LbQuery,
+    out: *mut LbQueryFacts,
+) -> i32 {
+    let h = &*(this as *const Handle);
+    let q = &*query;
+    // Only the prefiltered strategies compile a cover; `kmp` (2) has none.
+    if q.op != LB_CONTAINS || q.needle_count < 1 || strategy_index > 1 {
+        return 1;
+    }
+    let nd = &*q.needles;
+    let needle = core::slice::from_raw_parts(nd.ptr, nd.len as usize);
+    if needle.is_empty() {
+        return 1; // analyze_prefilter rejects the empty pattern by contract
+    }
+    let Ok(facts) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let view = h.col.view();
+        let analysis = analyze_prefilter(needle, view.dict, &h.frequencies);
+        let cover = analysis.probe_cover();
+        LbQueryFacts {
+            cover_points: cover.points().len() as u64,
+            cover_ranges: cover.ranges().len() as u64,
+            covered_codes: u64::from(analysis.covered_frequency()),
+            // The population `covered_frequency` is counted over: the index
+            // was built from exactly this code stream.
+            indexed_codes: h.col.codes.len() as u64,
+            profitable_hint: u64::from(prefilter_is_likely_profitable(&analysis, view.num_rows())),
+        }
+    })) else {
+        return 1;
+    };
+    *out = facts;
+    0
+}
+
 /// Bulk-decode into the harness's canonical `(bytes, u64 offsets)` layout.
 /// Each invocation expands the retained compact dictionary exactly once, then
 /// bulk-decodes the entire code stream. This deliberately includes wide-table
@@ -370,7 +416,7 @@ static STRATEGIES: [LbStrategy; 3] = [
 static VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
     name: c"onpair_spiral".as_ptr(),
-    version: c"0.1.0+5927cce".as_ptr(),
+    version: c"0.1.0+5936ffc".as_ptr(),
     // The prefilter uses baseline NEON on aarch64 and dispatches between
     // SSE2/AVX2/AVX-512 on x86_64; it has no scalar fallback.
     cpu_features: core::ptr::null(),
@@ -382,12 +428,13 @@ static VTABLE: LbCandidate = LbCandidate {
     view: None,
     decode: None,
     destroy: Some(destroy),
+    query_facts: Some(query_facts),
 };
 
 static DECODE_VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
     name: c"onpair_spiral_decode".as_ptr(),
-    version: c"0.3.0+5927cce.compact-bulk-expand".as_ptr(),
+    version: c"0.3.0+5936ffc.compact-bulk-expand".as_ptr(),
     cpu_features: core::ptr::null(),
     strategies: core::ptr::null(),
     strategy_count: 0,
@@ -397,6 +444,7 @@ static DECODE_VTABLE: LbCandidate = LbCandidate {
     view: None,
     decode: Some(decode),
     destroy: Some(destroy_decode),
+    query_facts: None,
 };
 
 pub fn vtable() -> &'static LbCandidate {

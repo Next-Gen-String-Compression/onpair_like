@@ -8,7 +8,7 @@
 
 use core::ffi::c_char;
 
-pub const LB_ABI_VERSION: u32 = 5;
+pub const LB_ABI_VERSION: u32 = 6;
 
 /// Guaranteed writable headroom past the decoded payload in `decode()`
 /// output buffers (mirrors `LB_DECODE_PAD`; SEMANTICS.md rule 8).
@@ -209,8 +209,7 @@ pub type RunFn = unsafe extern "C" fn(
     out_bitmap_words: *mut u64,
     stats_or_null: *mut LbRunStats,
 ) -> i32;
-pub type ViewFn =
-    unsafe extern "C" fn(this: *mut core::ffi::c_void, out: *mut LbChunkView) -> i32;
+pub type ViewFn = unsafe extern "C" fn(this: *mut core::ffi::c_void, out: *mut LbChunkView) -> i32;
 pub type DecodeFn = unsafe extern "C" fn(
     this: *mut core::ffi::c_void,
     bytes_out: *mut u8,
@@ -218,6 +217,60 @@ pub type DecodeFn = unsafe extern "C" fn(
     offsets_out: *mut u64,
 ) -> i32;
 pub type DestroyFn = unsafe extern "C" fn(this: *mut core::ffi::c_void);
+
+/// Sentinel for an unpopulated [`LbQueryFacts`] field, matching
+/// [`LB_STAT_UNSET`].
+pub const LB_FACT_UNSET: u64 = u64::MAX;
+
+/// Static, untimed description of what a strategy *would* do for one query
+/// (ABI v6).
+///
+/// These are properties of the (column, needle) pair, not measurements, and
+/// the harness collects them outside the measurement loop precisely so that
+/// filling them cannot change what is timed — the reason `run` reports no
+/// prefilter counters for candidates that call a shipped convenience method
+/// (SEMANTICS.md rule 5).
+///
+/// Their purpose is analysis: throughput on a compressed-domain prefilter is
+/// governed by how the needle tokenizes, not by how many rows match, and
+/// without these fields a result set cannot explain its own spread.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct LbQueryFacts {
+    /// Equality probes in the compiled cover.
+    pub cover_points: u64,
+    /// Range probes in the compiled cover.
+    pub cover_ranges: u64,
+    /// Code positions the cover marks, and the population that count is over.
+    /// Reported as a pair rather than a ratio so chunks compose by addition.
+    pub covered_codes: u64,
+    pub indexed_codes: u64,
+    /// Whether the library's own profitability hint sanctions running the
+    /// prefilter for this query: 1 yes, 0 no, `LB_FACT_UNSET` if the strategy
+    /// has no such notion.
+    pub profitable_hint: u64,
+}
+
+impl LbQueryFacts {
+    pub const fn unset() -> Self {
+        Self {
+            cover_points: LB_FACT_UNSET,
+            cover_ranges: LB_FACT_UNSET,
+            covered_codes: LB_FACT_UNSET,
+            indexed_codes: LB_FACT_UNSET,
+            profitable_hint: LB_FACT_UNSET,
+        }
+    }
+}
+
+/// Optional per-query fact probe (ABI v6). Called once per cell, outside any
+/// measurement, so it may do work `run` must not. Returns 0 on success.
+pub type QueryFactsFn = unsafe extern "C" fn(
+    this: *mut core::ffi::c_void,
+    strategy_index: u32,
+    query: *const LbQuery,
+    out: *mut LbQueryFacts,
+) -> i32;
 
 #[repr(C)]
 pub struct LbCandidate {
@@ -233,12 +286,13 @@ pub struct LbCandidate {
     pub view: Option<ViewFn>,
     pub decode: Option<DecodeFn>,
     pub destroy: Option<DestroyFn>,
+    /// ABI v6; `None` from any candidate with nothing static to declare.
+    pub query_facts: Option<QueryFactsFn>,
 }
 
 // -------------------------------------------------------------- scanner
 
-pub type PrepareFn =
-    unsafe extern "C" fn(query: *const LbQuery) -> *mut core::ffi::c_void;
+pub type PrepareFn = unsafe extern "C" fn(query: *const LbQuery) -> *mut core::ffi::c_void;
 pub type ScanFn = unsafe extern "C" fn(
     prepared: *mut core::ffi::c_void,
     view: *const LbChunkView,

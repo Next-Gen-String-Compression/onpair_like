@@ -208,6 +208,7 @@ static ONPAIR_VTABLE: LbCandidate = LbCandidate {
     view: None,
     decode: None,
     destroy: Some(destroy),
+    query_facts: None,
 };
 
 pub fn vtable() -> &'static LbCandidate {
@@ -250,6 +251,7 @@ static SPIRAL_VTABLE: LbCandidate = LbCandidate {
     view: None,
     decode: None,
     destroy: Some(destroy),
+    query_facts: None,
 };
 
 pub fn vtable_spiral() -> &'static LbCandidate {

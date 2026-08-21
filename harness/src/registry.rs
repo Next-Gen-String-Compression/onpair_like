@@ -279,6 +279,22 @@ impl BuiltChunk {
         }
     }
 
+    /// Static facts about what `strategy_index` would do for `query`, or
+    /// `None` if this candidate declares none.
+    ///
+    /// Called outside the measurement loop. That is the point: a candidate
+    /// calling a shipped convenience method cannot split its own pipeline to
+    /// report counters without changing what is timed (SEMANTICS.md rule 5),
+    /// but it can describe the query statically at no cost to the measurement.
+    pub fn query_facts(&self, strategy_index: u32, query: &LbQuery) -> Option<LbQueryFacts> {
+        let probe = self.vt.query_facts?;
+        let mut out = LbQueryFacts::unset();
+        // SAFETY: `handle` came from this vtable's `build`, and `out` is a
+        // live local for the duration of the call.
+        let rc = unsafe { probe(self.handle, strategy_index, query, &mut out) };
+        (rc == 0).then_some(out)
+    }
+
     pub fn view(&self) -> Result<LbChunkView> {
         let mut out = LbChunkView {
             bytes: std::ptr::null(),

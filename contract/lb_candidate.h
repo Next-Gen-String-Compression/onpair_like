@@ -17,7 +17,7 @@
 extern "C" {
 #endif
 
-#define LB_ABI_VERSION 5u
+#define LB_ABI_VERSION 6u
 
 /* Guaranteed writable headroom past the decoded payload in every decode()
  * output buffer (see lb_candidate.decode). Lets fixed-stride over-copying
@@ -103,6 +103,24 @@ typedef struct lb_run_stats {
   uint64_t eval_domain_matches; /* true matches within eval_domain       */
 } lb_run_stats;
 
+#define LB_FACT_UNSET UINT64_MAX
+
+/* Static, untimed description of what a strategy WOULD do for one query
+ * (ABI v6). Properties of the (column, needle) pair, not measurements: the
+ * harness collects them outside the measurement loop so that reporting them
+ * cannot change what is timed.
+ *
+ * Throughput on a compressed-domain prefilter is governed by how the needle
+ * tokenizes rather than by how many rows match, so without these a result set
+ * cannot explain its own spread. */
+typedef struct lb_query_facts {
+  uint64_t cover_points;    /* equality probes in the compiled cover        */
+  uint64_t cover_ranges;    /* range probes in the compiled cover           */
+  uint64_t covered_codes;   /* code positions the cover marks...            */
+  uint64_t indexed_codes;   /* ...and the population that count is over     */
+  uint64_t profitable_hint; /* 1 yes, 0 no, LB_FACT_UNSET if no such notion */
+} lb_query_facts;
+
 /* ------------------------------------------------------------ strategies */
 
 /* A candidate-implemented way of answering queries (e.g. "compressed",
@@ -170,6 +188,15 @@ typedef struct lb_candidate {
                 uint64_t* offsets_out);
 
   void (*destroy)(void* self);
+
+  /* Optional per-query fact probe (ABI v6). Called once per cell, OUTSIDE any
+   * measurement, so it may do work run() must not: a candidate that calls a
+   * shipped convenience method cannot split the prefilter/verify pipeline just
+   * to report counters (SEMANTICS.md rule 5), but it can describe statically
+   * what the query would do. Return 0 on success; leave NULL if the scheme has
+   * nothing static to declare. */
+  int  (*query_facts)(void* self, uint32_t strategy_index,
+                      const lb_query* q, lb_query_facts* out);
 } lb_candidate;
 /* A candidate must offer at least one of: run (with strategies), view,
  * decode. */

@@ -13,5 +13,8 @@ license.workspace = true
 lb-abi = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-# branch = "feat/search-prefilter", head 5927cce at time of integration.
-onpair = { git = "https://github.com/spiraldb/onpair.git", rev = "5927cce985a6e86bc6f49f4ae24106e1fc085e80" }
+# branch = "feat/search-prefilter", head 5936ffc. That branch moved the token
+# frequency index under `search::index`, and priced profitability per row --
+# `PrefilterAnalysis::comparison_cost`, `::expected_candidate_row_fraction` and
+# `::total_frequency` are the cover facts this wrapper declares to the harness.
+onpair = { git = "https://github.com/spiraldb/onpair.git", rev = "5936ffc8f2938cc180b47be48c929b8581f1f29e" }
