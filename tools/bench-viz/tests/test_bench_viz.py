@@ -1,11 +1,18 @@
 import importlib.util
 import json
+import re
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# bench_viz is a script, not a package, so its sibling modules are only
+# importable once its directory is on the path. Running pytest from the
+# repository root does not put it there.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 SPEC = importlib.util.spec_from_file_location("bench_viz", ROOT / "bench_viz.py")
 bench_viz = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(bench_viz)
@@ -56,14 +63,44 @@ class BenchVizTests(unittest.TestCase):
                 {"kind": "build", "candidate": "onpair"},
                 query_row(),
                 query_row(status="unsupported"),
+                query_row(op="prefix", query_id="mini.prefix"),
+                query_row(op="suffix", query_id="mini.suffix"),
             ]
             (run / "results.jsonl").write_text(
                 "\n".join(json.dumps(row) for row in rows) + "\n",
                 encoding="utf-8",
             )
-            points = bench_viz.load_results([run])
+            points, builds, ignored = bench_viz.load_results([run])
         self.assertEqual(len(points), 1)
         self.assertEqual(points[0]["source"], "demo")
+        # Anchored matches are not this tool's subject, and are reported rather
+        # than dropped in silence.
+        self.assertEqual(ignored, {"prefix": 1, "suffix": 1})
+        self.assertEqual(bench_viz.summarize_ignored(ignored),
+                         "2 rows: prefix 1, suffix 1")
+
+    def test_the_scope_is_substring_search(self):
+        """Every operation is either in scope or reported as out of it.
+
+        A prefilter serves LIKE '%n%' and its multi-needle forms; nothing it
+        measures says anything about an anchored match. Pooling those in would
+        dilute every summary the panels report, so they never enter the payload.
+        """
+        for op in ("contains", "multi_contains", "contains_any"):
+            self.assertTrue(bench_viz.is_substring_search({"op": op}), op)
+        for op in ("prefix", "suffix", None, "equals"):
+            self.assertFalse(bench_viz.is_substring_search({"op": op}), op)
+
+    def test_a_run_of_only_anchored_matches_says_so(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory) / "anchored"
+            run.mkdir()
+            (run / "results.jsonl").write_text(
+                json.dumps(query_row(op="prefix")) + "\n", encoding="utf-8")
+            with self.assertRaises(ValueError) as caught:
+                bench_viz.load_results([run])
+        self.assertIn("no substring-search query rows", str(caught.exception))
+        self.assertIn("prefix 1", str(caught.exception))
 
     def test_html_is_self_contained_and_script_safe(self):
         point = bench_viz.normalize_query(
@@ -77,5 +114,204 @@ class BenchVizTests(unittest.TestCase):
         self.assertIn('<span class="section-kicker">CANDIDATES</span>', html)
 
 
+
+class LabelTests(unittest.TestCase):
+    def points(self, *specs):
+        rows = [
+            bench_viz.normalize_query(query_row(candidate="onpair_spiral_neontable",
+                                                strategy="pf_memmem", scanner=None,
+                                                config='{"bits":16}'), "run"),
+            bench_viz.normalize_query(query_row(candidate="onpair_spiral_neontable",
+                                                strategy="pf_memmem", scanner=None,
+                                                config='{"bits":16,"threshold":0.15}'), "run"),
+            bench_viz.normalize_query(query_row(candidate="fsst", strategy="decode",
+                                                scanner="memmem-hay"), "run"),
+        ]
+        bench_viz.apply_labels(rows, list(specs))
+        return rows
+
+    def test_display_name_replaces_the_harness_name(self):
+        rows = self.points("fsst/decode/memmem-hay=FSST decompress + memmem")
+        self.assertEqual(rows[2]["display"], "FSST decompress + memmem")
+
+    def test_one_name_over_several_configs_keeps_them_apart(self):
+        # Both neontable configs match; collapsing them to one label would show
+        # two identical legend entries for measurably different series.
+        rows = self.points("onpair_spiral_neontable=onpair")
+        self.assertEqual(rows[0]["display"], "onpair [bits=16]")
+        self.assertEqual(rows[1]["display"], "onpair [bits=16, threshold=0.15]")
+
+    def test_a_single_config_needs_no_disambiguation(self):
+        rows = self.points("fsst=FSST")
+        self.assertEqual(rows[2]["display"], "FSST")
+
+    def test_most_specific_selector_wins(self):
+        rows = self.points("fsst=broad", "fsst/decode/memmem-hay=narrow")
+        self.assertEqual(rows[2]["display"], "narrow")
+
+    def test_unmatched_rows_keep_the_harness_name(self):
+        rows = self.points("fsst=FSST")
+        self.assertIsNone(rows[0]["display"])
+
+    def test_malformed_selector_is_rejected(self):
+        with self.assertRaises(ValueError):
+            bench_viz.parse_label_specs(["fsst"])
+        with self.assertRaises(ValueError):
+            bench_viz.parse_label_specs(["a/b/c/d=x"])
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class RunDiscoveryTests(unittest.TestCase):
+    """Finding runs on disk and naming them apart."""
+
+    def test_a_tree_of_runs_is_found_to_any_depth(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            for relative in ("a", "group/b", "group/deep/c"):
+                target = root / relative
+                target.mkdir(parents=True)
+                (target / "results.jsonl").write_text("{}\n", encoding="utf-8")
+            (root / "not-a-run").mkdir()
+            found = bench_viz.resolve_results_paths(root)
+            self.assertEqual(
+                sorted(path.parent.name for path in found), ["a", "b", "c"])
+
+    def test_a_run_directory_resolves_to_itself_and_is_not_searched(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "results.jsonl").write_text("{}\n", encoding="utf-8")
+            nested = root / "sub"
+            nested.mkdir()
+            (nested / "results.jsonl").write_text("{}\n", encoding="utf-8")
+            self.assertEqual(bench_viz.resolve_results_paths(root),
+                             [root / "results.jsonl"])
+
+    def test_colliding_run_names_grow_until_they_differ(self):
+        paths = [Path("results/figures/like-google/results.jsonl"),
+                 Path("results/campaign/like-google/results.jsonl"),
+                 Path("results/campaign/needle-sweep/results.jsonl")]
+        labels = bench_viz.source_labels(paths)
+        self.assertEqual(len(set(labels)), 3, labels)
+        self.assertIn("figures/like-google", labels)
+        self.assertIn("campaign/like-google", labels)
+        # A name that was already unique is left short.
+        self.assertIn("needle-sweep", labels)
+
+
+class MarkupTests(unittest.TestCase):
+    """Static checks on the template and stylesheet.
+
+    These exist because of a bug the render tests structurally cannot see: the
+    Prefilter section is toggled with the `hidden` attribute, but it also
+    carries `display: flex` from its class. An author `display` rule outranks
+    the user-agent `[hidden] { display: none }`, so the section stayed on screen
+    while its renderer -- correctly seeing `hidden` -- drew nothing into it. The
+    result was a visible, empty panel, and neither a syntax check nor a DOM stub
+    can notice it.
+    """
+
+    TEMPLATE = (ROOT / "template.html").read_text(encoding="utf-8")
+    CSS = (ROOT / "app.css").read_text(encoding="utf-8")
+
+    def toggled_selectors(self):
+        """CSS selectors for the elements the tab switch shows and hides.
+
+        A panel is addressed by class or by id, and both are equally able to
+        carry a `display` rule that defeats `hidden`, so both are collected.
+        """
+        found = set()
+        for element in re.findall(r"<\w+[^>]*data-panel=[^>]*>", self.TEMPLATE):
+            for group in re.findall(r'class="([^"]*)"', element):
+                found.update(f".{name}" for name in group.split())
+            for name in re.findall(r'id="([^"]*)"', element):
+                found.add(f"#{name}")
+        return found
+
+    def declares_display(self, selector):
+        pattern = rf"{re.escape(selector)}\s*(?:,[^{{]*)?{{[^}}]*\bdisplay\s*:"
+        return re.search(pattern, self.CSS) is not None
+
+    def hides_when_hidden(self, selector):
+        if re.search(r"(?<![.\w#-])\[hidden\]\s*{[^}]*display\s*:\s*none", self.CSS):
+            return True  # a global rule covers every element
+        return re.search(rf"{re.escape(selector)}\[hidden\]", self.CSS) is not None
+
+    def test_there_is_something_to_toggle(self):
+        self.assertTrue(self.toggled_selectors(),
+                        "no [data-panel] elements found; the tab switch has nothing to show")
+
+    def test_a_toggled_panel_that_sets_display_also_overrides_hidden(self):
+        for selector in sorted(self.toggled_selectors()):
+            if not self.declares_display(selector):
+                continue
+            self.assertTrue(
+                self.hides_when_hidden(selector),
+                f"{selector} sets `display`, which outranks the user-agent "
+                f"`[hidden]` rule, so it needs `{selector}[hidden] {{ display: none }}` "
+                f"or the tab switch leaves it on screen and empty")
+
+    def test_every_element_the_main_panel_reaches_for_exists(self):
+        # app.js resolves its whole control set by id up front, and a missing one
+        # is an undefined that only fails when that control is first touched.
+        source = (ROOT / "app.js").read_text(encoding="utf-8")
+        block = re.search(r"const refs = Object\.fromEntries\(\[(.*?)\]\.map",
+                          source, re.S)
+        self.assertIsNotNone(block, "could not find the refs list in app.js")
+        wanted = set(re.findall(r'"([a-z0-9-]+)"', block.group(1)))
+        present = set(re.findall(r'id="([a-z0-9-]+)"', self.TEMPLATE))
+        self.assertTrue(wanted, "no ids found in the refs list")
+        self.assertEqual(wanted - present, set(),
+                         "app.js reads element ids the template does not define")
+
+    # Void and self-closing elements never carry a closing tag.
+    VOID = frozenset({
+        "meta", "br", "hr", "img", "input", "link", "source", "path", "rect",
+        "circle", "use", "area", "base", "col", "embed", "param", "track", "wbr",
+    })
+
+    def test_the_template_nests_correctly(self):
+        """Every tag closes the element it actually opened.
+
+        Counting opens against closes is not enough: moving a panel by slicing
+        from its heading rather than its `<article>` leaves the opening behind
+        and takes the closing along, and the totals still match. Only walking
+        the tags in order catches it.
+        """
+        stack = []
+        problems = []
+        pattern = re.compile(r"<(/?)([a-zA-Z][\w-]*)([^>]*?)(/?)>")
+        for match in pattern.finditer(self.TEMPLATE):
+            closing, name, self_closing = match.group(1), match.group(2).lower(), match.group(4)
+            if name in self.VOID or self_closing:
+                continue
+            line = self.TEMPLATE.count("\n", 0, match.start()) + 1
+            if not closing:
+                stack.append((name, line))
+            elif not stack:
+                problems.append(f"line {line}: </{name}> with nothing open")
+            elif stack[-1][0] != name:
+                problems.append(
+                    f"line {line}: </{name}> closes <{stack[-1][0]}> from line {stack[-1][1]}")
+                stack.pop()
+            else:
+                stack.pop()
+        problems += [f"<{name}> on line {line} never closed" for name, line in stack]
+        self.assertEqual(problems, [], "\n".join(problems))
+
+    def test_every_element_the_prefilter_panel_reaches_for_exists(self):
+        # prefilter.js resolves these by id. A typo on either side is silent:
+        # the panel renders nothing and reports no error.
+        wanted = set(re.findall(r'el\("([a-z0-9-]+)"\)',
+                                (ROOT / "prefilter.js").read_text(encoding="utf-8")))
+        present = set(re.findall(r'id="([a-z0-9-]+)"', self.TEMPLATE))
+        self.assertTrue(wanted, "no element lookups found in prefilter.js")
+        self.assertEqual(wanted - present, set(),
+                         "prefilter.js reads element ids the template does not define")
+
+    def test_the_template_has_a_slot_for_every_injected_asset(self):
+        for marker in ("__BENCH_VIZ_CSS__", "__BENCH_VIZ_DATA__", "__BENCH_VIZ_DEFAULTS__",
+                       "__BENCH_VIZ_ANALYSIS__", "__BENCH_VIZ_JS__",
+                       "__BENCH_VIZ_PREFILTER_JS__"):
+            self.assertIn(marker, self.TEMPLATE)

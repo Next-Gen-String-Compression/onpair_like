@@ -3,23 +3,44 @@
 
   const DATA = JSON.parse(document.getElementById("bench-viz-data").textContent);
   const DEFAULTS = JSON.parse(document.getElementById("bench-viz-defaults").textContent);
+  // Column shape, the fitted cost model, and the run's own noise floor, all
+  // computed by the builder so the statistics are unit tested in Python rather
+  // than only here. Absent on viewers built before the prefilter section.
+  const ANALYSIS = (() => {
+    const node = document.getElementById("bench-viz-analysis");
+    if (!node) return {};
+    try {
+      return JSON.parse(node.textContent) || {};
+    } catch (error) {
+      return {};
+    }
+  })();
   const NS = "http://www.w3.org/2000/svg";
+  // Ordered for separation, not variety: consecutive entries differ in hue and
+  // in lightness, so the first few selected series stay distinguishable in
+  // print, on a projector, and to a red-green colour-blind reader. The old
+  // palette held six near-identical blues (#1f70a8, #4267ac, #4d6398,
+  // #168aad, #5c7c8a, #3b817a) and assigned them by hashing the series id, so
+  // any two selected series could collide with no way for the reader to tell
+  // them apart.
   const PALETTE = [
-    "#a94b00", "#007b75", "#7b61b8", "#1f70a8", "#a63d64", "#558b2f",
-    "#b07d00", "#4267ac", "#8c564b", "#168aad", "#8f4a9d", "#2d7d46",
-    "#c45a32", "#4d6398", "#9a6b16", "#5c7c8a", "#b24b72", "#3b817a"
+    "#0064a4", "#e08214", "#009e73", "#a05195", "#b23a48", "#0f8b8d",
+    "#8c6d1f", "#d45087", "#4b6cc1", "#5c8a1f", "#a94b00", "#7b61b8",
+    "#167a8c", "#c45a32", "#2d7d46", "#8f4a9d", "#b24b72", "#52616d"
   ];
+  const UNPLOTTED = "#aab3bb";
   const DASHES = ["", "8 4", "2 3", "11 4 2 4", "5 3 1.5 3"];
   const OP_ORDER = ["contains", "prefix", "suffix", "multi_contains", "contains_any"];
 
   const refs = Object.fromEntries([
-    "source-select", "dataset-select", "op-select", "chunk-select", "x-metric",
+    "source-select", "dataset-select", "op-select", "op-field", "chunk-select", "x-metric",
     "y-metric", "bin-count", "focus-label", "focus-min", "focus-max", "focus-reset",
-    "focus-error", "show-points", "show-band", "edit-labels",
+    "focus-error", "ylimit-label", "ylimit-min", "ylimit-max", "ylimit-reset",
+    "source-field", "chunk-field", "show-points", "show-band", "edit-labels",
     "label-editor", "title-input", "subtitle-input", "x-label-input",
     "y-label-input", "series-count", "series-search", "series-all", "series-none",
     "series-chips", "decode-section", "decode-all", "decode-none", "decode-chips",
-    "plot", "plot-status", "tooltip", "export-scale", "export-png"
+    "plot", "plot-status", "tooltip", "export-scale"
   ].map(id => [id, document.getElementById(id)]));
 
   const state = {
@@ -36,6 +57,10 @@
     showBand: true,
     title: DEFAULTS.title || "Benchmark Explorer 3000™",
     subtitle: DEFAULTS.subtitle || "",
+    // The viewer shows one dataset, one op and one chunking at a time, so a
+    // fixed subtitle is wrong in most views. An empty subtitle means "describe
+    // the current selection"; typing one pins it until the field is cleared.
+    subtitlePinned: Boolean(DEFAULTS.subtitle),
     xLabel: "selectivity (rows matched)",
     yLabel: "throughput (GB/s, raw payload)",
     xLabelCustom: false,
@@ -43,6 +68,11 @@
     ranges: {
       selectivity: {min: null, max: null},
       needle_len: {min: null, max: null},
+    },
+    // Kept per Y measure: a GB/s window means nothing once the axis is ns/row.
+    yLimits: {
+      gbps: {min: null, max: null},
+      ns_per_row: {min: null, max: null},
     },
     visibleSeries: new Set(),
     visibleDecode: new Set(),
@@ -78,21 +108,48 @@
     return ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower);
   }
 
-  function hash(text) {
-    let value = 2166136261;
-    for (let index = 0; index < text.length; index += 1) {
-      value ^= text.charCodeAt(index);
-      value = Math.imul(value, 16777619);
-    }
-    return value >>> 0;
+
+  let colorMap = new Map();
+  let colorSignature = null;
+
+  // Colours follow position among the *selected* series rather than a hash of
+  // the id. A hash is stable across selections but says nothing about what is
+  // on screen together, which is the only thing that decides whether two lines
+  // can be told apart. Series not being plotted get a neutral swatch.
+  const SERIES_ORDER = Array.isArray(DEFAULTS.series_order) ? DEFAULTS.series_order : [];
+
+  // Where a series sits in the author's --label declaration order. Unnamed
+  // series sort after every named one, keeping their catalog order.
+  function paletteRank(item) {
+    const index = SERIES_ORDER.findIndex(name =>
+      item.label === name || item.label.startsWith(`${name} · `));
+    return index < 0 ? SERIES_ORDER.length : index;
+  }
+
+  function syncColors(catalog) {
+    const rank = (a, b) => paletteRank(a) - paletteRank(b);
+    const ids = [
+      ...catalog.series.filter(item => state.visibleSeries.has(item.id)).sort(rank)
+        .map(item => item.id),
+      ...catalog.decode.filter(item => state.visibleDecode.has(item.id)).sort(rank)
+        .map(item => item.id),
+    ];
+    const signature = ids.join("\u001f");
+    if (signature === colorSignature) return;
+    colorSignature = signature;
+    colorMap = new Map(ids.map((id, index) => [id, PALETTE[index % PALETTE.length]]));
   }
 
   function colorFor(key) {
-    return PALETTE[hash(key) % PALETTE.length];
+    return colorMap.get(key) || UNPLOTTED;
   }
 
   function dashFor(key) {
-    return DASHES[hash(`${key}:dash`) % DASHES.length];
+    const index = [...colorMap.keys()].indexOf(key);
+    if (index < 0) return "";
+    // Colour carries the first six; beyond that the palette wraps, so a dash
+    // pattern is what keeps the seventh distinct from the first.
+    return DASHES[Math.floor(index / PALETTE.length) % DASHES.length];
   }
 
   function compactConfig(config) {
@@ -106,11 +163,32 @@
     }
   }
 
+  // Everything the axis needs to know about an x measure in one place: how to
+  // label it, whether it reads as a percentage, and what unit the focus box is
+  // in. Adding a measure means adding a row here.
+  const X_METRICS = {
+    selectivity: {
+      label: "selectivity (rows matched)", focusLabel: "Focus X (%)",
+      factor: 100, percent: true,
+    },
+    needle_len: {
+      label: "needle length (bytes)", focusLabel: "Focus X (bytes)",
+      factor: 1, percent: false,
+    },
+  };
+
+  function xMetricInfo() {
+    return X_METRICS[state.xMetric] || X_METRICS.selectivity;
+  }
+
   function candidateKey(row) {
     return `${row.candidate}\u001f${row.config}`;
   }
 
   function candidateLabel(row) {
+    // A --label display name is already disambiguated by the builder, config
+    // included where it was needed, so it is used verbatim.
+    if (row.display) return row.display;
     const config = compactConfig(row.config);
     return config ? `${row.candidate} [${config}]` : row.candidate;
   }
@@ -121,11 +199,15 @@
 
   function seriesMeta(row) {
     const scanner = row.scanner ? ` / ${row.scanner}` : "";
+    // A renamed series drops the strategy/scanner suffix: the point of renaming
+    // is that the new name already says what the approach is.
     return {
       id: seriesKey(row),
       candidateId: candidateKey(row),
       candidate: row.candidate,
-      label: `${candidateLabel(row)} · ${row.strategy}${scanner}`,
+      label: row.display
+        ? row.display
+        : `${candidateLabel(row)} · ${row.strategy}${scanner}`,
     };
   }
 
@@ -182,6 +264,12 @@
       refs["chunk-select"], chunks, state.chunk,
       value => Number(value) === 0 ? "whole column" : Number(value).toLocaleString()
     ));
+
+    // A control offering one option is not a control. Most runs measure one
+    // operation over the whole column, and most builds load a single run.
+    refs["op-field"].hidden = ops.length < 2;
+    refs["chunk-field"].hidden = chunks.length < 2;
+    refs["source-field"].hidden = sources.length < 2;
   }
 
   function contextRows() {
@@ -195,6 +283,10 @@
 
   function activeRange() {
     return state.ranges[state.xMetric];
+  }
+
+  function activeYLimits() {
+    return state.yLimits[state.yMetric] || {min: null, max: null};
   }
 
   function filteredRows() {
@@ -303,6 +395,7 @@
   }
 
   function renderChips(catalog) {
+    syncColors(catalog);
     refs["series-chips"].replaceChildren(
       ...catalog.series.map(item => makeChip(item, state.visibleSeries, false))
     );
@@ -464,12 +557,56 @@
     return Number(value.toPrecision(digits)).toLocaleString("en-GB", {maximumFractionDigits: 6});
   }
 
+  function percentText(fraction) {
+    const percent = fraction * 100;
+    if (percent === 0) return "0%";
+    if (percent < 0.001) return `${percent.toExponential(0).replace("e+", "e")}%`;
+    if (percent >= 10) return `${Math.round(percent)}%`;
+    return `${formatSignificant(percent, 2)}%`;
+  }
+
+  function generatedSubtitle() {
+    const rows = filteredRows();
+    if (!rows.length) return "";
+    const queries = new Set(rows.map(row => row.query_id)).size;
+    const dataset = rows[0].dataset_display || state.dataset || "unknown dataset";
+    const noun = queries === 1 ? "needle" : "needles";
+    let text = `${queries.toLocaleString()} ${noun} on ${dataset}`;
+
+    const selectivities = rows.map(row => row.selectivity).filter(finite);
+    if (selectivities.length) {
+      const low = selectivities.reduce((a, b) => Math.min(a, b), Infinity);
+      const high = selectivities.reduce((a, b) => Math.max(a, b), -Infinity);
+      if (low === high) {
+        // One query, or a focus range narrow enough to leave one value: "from
+        // X to X" reads as a mistake.
+        text += `, selectivity ${percentText(high)} of rows`;
+      } else {
+        const from = low <= 0 ? "zero matches" : percentText(low);
+        text += `, spanning selectivity from ${from} to ${percentText(high)} of rows`;
+      }
+    }
+
+    const extras = [];
+    if (state.op && state.op !== "contains") extras.push(state.op);
+    if (state.chunk) extras.push(`chunks of ${state.chunk.toLocaleString()} rows`);
+    const range = activeRange();
+    if (range && (range.min !== null || range.max !== null)) {
+      extras.push(`${xMetricInfo().label} restricted`);
+    }
+    return extras.length ? `${text} · ${extras.join(" · ")}` : text;
+  }
+
+  function effectiveSubtitle() {
+    return state.subtitlePinned ? state.subtitle : generatedSubtitle();
+  }
+
   function formatX(value, precise = false) {
-    if (state.xMetric === "selectivity") {
+    if (xMetricInfo().percent) {
       if (value === 0) return "0";
       const percent = value * 100;
       if (precise) return `${formatSignificant(percent, 4)}%`;
-      if (percent < 0.01) return `${percent.toExponential(0).replace("e+", "e")}%`;
+      if (percent < 0.001) return `${percent.toExponential(0).replace("e+", "e")}%`;
       return `${formatSignificant(percent, 3)}%`;
     }
     return precise ? formatSignificant(value, 4) : formatSignificant(value, 3);
@@ -481,15 +618,13 @@
   }
 
   function rangeDisplayFactor() {
-    return state.xMetric === "selectivity" ? 100 : 1;
+    return xMetricInfo().factor;
   }
 
   function updateFocusControls() {
     const range = activeRange();
     const factor = rangeDisplayFactor();
-    refs["focus-label"].textContent = state.xMetric === "selectivity"
-      ? "Focus X (%)"
-      : "Focus X (bytes)";
+    refs["focus-label"].textContent = xMetricInfo().focusLabel;
     refs["focus-min"].value = range.min === null ? "" : String(range.min * factor);
     refs["focus-max"].value = range.max === null ? "" : String(range.max * factor);
     refs["focus-min"].min = "0";
@@ -497,6 +632,31 @@
     refs["focus-error"].textContent = "";
     refs["focus-min"].removeAttribute("aria-invalid");
     refs["focus-max"].removeAttribute("aria-invalid");
+  }
+
+  function updateYLimitControls() {
+    const limits = activeYLimits();
+    refs["ylimit-label"].textContent =
+      state.yMetric === "gbps" ? "Clip Y (GB/s)" : "Clip Y (ns/row)";
+    refs["ylimit-min"].value = limits.min === null ? "" : String(limits.min);
+    refs["ylimit-max"].value = limits.max === null ? "" : String(limits.max);
+  }
+
+  function applyYLimitInputs() {
+    const read = key => {
+      const raw = refs[key].value.trim();
+      if (raw === "") return null;
+      const value = Number(raw);
+      return finite(value) && value >= 0 ? value : null;
+    };
+    const minimum = read("ylimit-min");
+    const maximum = read("ylimit-max");
+    // Silently ignoring a reversed pair is better than drawing an inverted
+    // axis; the X focus box reports it because it also filters the data, while
+    // this only frames what is already plotted.
+    if (minimum !== null && maximum !== null && minimum >= maximum) return;
+    state.yLimits[state.yMetric] = {min: minimum, max: maximum};
+    renderPlot();
   }
 
   function applyFocusInputs() {
@@ -580,6 +740,7 @@
   function renderPlot() {
     const rows = filteredRows();
     const catalog = catalogs(rows);
+    syncColors(catalog);
     const selectedSeries = catalog.series.filter(item => state.visibleSeries.has(item.id));
     const selectedDecode = catalog.decode.filter(item => state.visibleDecode.has(item.id));
     const width = 1200;
@@ -591,7 +752,8 @@
       ...selectedDecode.map(item => ({...item, kind: "decode", color: colorFor(item.id)})),
     ];
     const legendRows = legendLayout(legendItems, width - left - right);
-    const legendTop = state.subtitle ? 88 : 66;
+    const subtitle = effectiveSubtitle();
+    const legendTop = subtitle ? 88 : 66;
     const chartTop = legendItems.length ? legendTop + legendRows.length * 23 + 19 : legendTop + 15;
     const height = Math.max(660, chartTop + 430 + bottomMargin);
     const chartBottom = height - bottomMargin;
@@ -615,10 +777,15 @@
       id: "plot-accessible-title", x: left, y: 35, "font-size": 22, "font-weight": 720,
       "letter-spacing": "-0.3"
     }, state.title));
-    if (state.subtitle) {
+    if (subtitle) {
       refs.plot.appendChild(svgElement("text", {
         x: left, y: 58, "font-size": 12, fill: "#71808c"
-      }, state.subtitle));
+      }, subtitle));
+    }
+    // Keep the editor showing what the plot shows, so a generated subtitle can
+    // be edited from where it stands rather than from an empty box.
+    if (!state.subtitlePinned && refs["subtitle-input"].value !== subtitle) {
+      refs["subtitle-input"].value = subtitle;
     }
 
     legendRows.forEach((legendRow, rowIndex) => {
@@ -643,16 +810,33 @@
     const selectedRows = domainRows.filter(row => selectedIds.has(seriesKey(row)));
     const xDomainRows = selectedRows.length ? selectedRows : domainRows;
     const xValues = xDomainRows.map(row => xValue(row));
-    const yValues = selectedRows.map(row => yValue(row));
+
+    // The Y domain comes from the drawn summaries -- median line and IQR band --
+    // not from raw scatter. A single query three orders of magnitude off (an
+    // empty cover, a needle that matches nothing) would otherwise flatten every
+    // line in the plot into the bottom pixel row. Such points still draw; they
+    // are clipped instead of setting the scale for everyone else. `Clip Y`
+    // overrides this when the outliers are the subject.
+    const aggregates = new Map();
+    selectedSeries.forEach(meta => {
+      aggregates.set(meta.id, binPoints(pointsForSeries(rows, meta.id)));
+    });
+    const yValues = [];
+    aggregates.forEach(points => points.forEach(point => {
+      yValues.push(point.y);
+      if (state.showBand) {
+        yValues.push(point.q1);
+        yValues.push(point.q3);
+      }
+    }));
     selectedDecode.forEach(meta => {
-      rows.filter(row => candidateKey(row) === meta.id).forEach(row => {
-        const value = decodeValue(row);
-        if (finite(value)) yValues.push(value);
-      });
+      const value = median(rows.filter(row => candidateKey(row) === meta.id)
+        .map(decodeValue).filter(finite));
+      if (finite(value)) yValues.push(value);
     });
     if (!yValues.length) domainRows.forEach(row => yValues.push(yValue(row)));
     const xScale = makeScale(xValues, state.xScale, left, chartRight, activeRange());
-    const yScale = makeScale(yValues, state.yScale, chartBottom, chartTop);
+    const yScale = makeScale(yValues, state.yScale, chartBottom, chartTop, activeYLimits());
 
     const defs = svgElement("defs");
     const clip = svgElement("clipPath", {id: "bench-viz-clip"});
@@ -701,7 +885,7 @@
 
     selectedSeries.forEach(meta => {
       const raw = pointsForSeries(rows, meta.id);
-      const aggregate = binPoints(raw);
+      const aggregate = aggregates.get(meta.id) || binPoints(raw);
       const color = colorFor(meta.id);
       if (!aggregate.length) return;
 
@@ -794,9 +978,7 @@
 
   function setDefaultAxisLabels() {
     if (!state.xLabelCustom) {
-      state.xLabel = state.xMetric === "selectivity"
-        ? "selectivity (rows matched)"
-        : "needle length (bytes)";
+      state.xLabel = xMetricInfo().label;
       refs["x-label-input"].value = state.xLabel;
     }
     if (!state.yLabelCustom) {
@@ -821,29 +1003,75 @@
     renderChips(catalog);
     updateScaleButtons();
     renderPlot();
+    renderPanels();
   }
 
-  function exportPng() {
-    const button = refs["export-png"];
-    const original = button.firstElementChild.textContent;
-    button.disabled = true;
-    button.firstElementChild.textContent = "Rendering…";
+  // Panels registered by other sections. They share this file's selection --
+  // run, dataset, op, chunking, focus range and visible series -- so switching
+  // tabs never changes what is being described, only how.
+  function renderPanels() {
+    const slot = document.getElementById("pf-error");
+    if (slot) slot.hidden = true;
+    (host.onRender || []).forEach(hook => {
+      try {
+        hook();
+      } catch (error) {
+        // A broken panel must not take the main plot down with it -- but the
+        // message has to land somewhere the reader is actually looking, which
+        // is the panel that failed, not the plot footer inside the tab they
+        // just navigated away from.
+        const slot = document.getElementById("pf-error");
+        if (slot) {
+          slot.textContent = `This panel failed to render: ${error && error.message}. `
+            + `The rest of the page is unaffected.`;
+          slot.hidden = false;
+        } else if (refs["plot-status"]) {
+          refs["plot-status"].textContent = `panel error: ${error && error.message}`;
+        }
+      }
+    });
+  }
 
-    const scale = Number(refs["export-scale"].value);
-    const source = refs.plot.cloneNode(true);
-    const viewBox = refs.plot.viewBox.baseVal;
+  function selectTab(name) {
+    document.querySelectorAll("[data-tab]").forEach(button => {
+      const active = button.dataset.tab === name;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-selected", String(active));
+    });
+    document.querySelectorAll("[data-panel]").forEach(panel => {
+      panel.hidden = panel.dataset.panel !== name;
+    });
+    if (name === "throughput") renderPlot();
+    else renderPanels();
+  }
+
+  // Any SVG on the page can be exported; the caller says which and under what
+  // name. `label` becomes part of the filename so a folder of exports from one
+  // session is still tellable apart.
+  function exportSvg(svg, label, button) {
+    if (!svg || !svg.viewBox || !svg.viewBox.baseVal.width) return;
+    const original = button ? button.textContent : null;
+    if (button) {
+      button.disabled = true;
+      button.textContent = "…";
+    }
+    const scale = Number(refs["export-scale"].value) || 1;
+    const viewBox = svg.viewBox.baseVal;
+    const source = svg.cloneNode(true);
     source.setAttribute("width", viewBox.width);
     source.setAttribute("height", viewBox.height);
     source.setAttribute("xmlns", NS);
-    const xml = new XMLSerializer().serializeToString(source);
-    const blob = new Blob([xml], {type: "image/svg+xml;charset=utf-8"});
-    const url = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(
+      new Blob([new XMLSerializer().serializeToString(source)],
+               {type: "image/svg+xml;charset=utf-8"}));
     const image = new Image();
 
     const finish = () => {
       URL.revokeObjectURL(url);
-      button.disabled = false;
-      button.firstElementChild.textContent = original;
+      if (button) {
+        button.disabled = false;
+        button.textContent = original;
+      }
     };
 
     image.onload = () => {
@@ -851,13 +1079,20 @@
       canvas.width = Math.round(viewBox.width * scale);
       canvas.height = Math.round(viewBox.height * scale);
       const context = canvas.getContext("2d");
+      // The SVG has no background of its own in the panels, and a transparent
+      // PNG dropped into a document reads as a rendering fault.
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
       context.setTransform(scale, 0, 0, scale, 0, 0);
       context.drawImage(image, 0, 0, viewBox.width, viewBox.height);
       canvas.toBlob(png => {
         if (png) {
           const link = document.createElement("a");
-          const slug = state.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "benchmark-plot";
-          link.download = `${slug}-${viewBox.width * scale}px.png`;
+          const slug = value => String(value).toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+          link.download =
+            `${slug(state.title) || "benchmark"}-${slug(label) || "plot"}`
+            + `-${Math.round(viewBox.width * scale)}px.png`;
           link.href = URL.createObjectURL(png);
           link.click();
           setTimeout(() => URL.revokeObjectURL(link.href), 1000);
@@ -867,6 +1102,18 @@
     };
     image.onerror = finish;
     image.src = url;
+  }
+
+  // Turns a `data-export="<svg id>"` button into a working export control, so a
+  // new plot needs no wiring beyond putting a button next to it.
+  function bindExportButtons(root = document) {
+    root.querySelectorAll("[data-export]").forEach(button => {
+      if (button.dataset.exportBound) return;
+      button.dataset.exportBound = "yes";
+      button.addEventListener("click", () => exportSvg(
+        document.getElementById(button.dataset.export),
+        button.dataset.exportName || button.dataset.export, button));
+    });
   }
 
   function wireEvents() {
@@ -895,7 +1142,10 @@
       rebuild();
     });
     refs["y-metric"].addEventListener("change", () => {
-      state.yMetric = refs["y-metric"].value; setDefaultAxisLabels(); rebuild();
+      state.yMetric = refs["y-metric"].value;
+      setDefaultAxisLabels();
+      updateYLimitControls();
+      rebuild();
     });
     refs["bin-count"].addEventListener("change", () => {
       state.bins = refs["bin-count"].value === "exact" ? "exact" : Number(refs["bin-count"].value);
@@ -909,6 +1159,13 @@
     });
     refs["focus-min"].addEventListener("change", applyFocusInputs);
     refs["focus-max"].addEventListener("change", applyFocusInputs);
+    refs["ylimit-min"].addEventListener("change", applyYLimitInputs);
+    refs["ylimit-max"].addEventListener("change", applyYLimitInputs);
+    refs["ylimit-reset"].addEventListener("click", () => {
+      state.yLimits[state.yMetric] = {min: null, max: null};
+      updateYLimitControls();
+      renderPlot();
+    });
     refs["focus-reset"].addEventListener("click", () => {
       state.ranges[state.xMetric] = {min: null, max: null};
       updateFocusControls();
@@ -932,7 +1189,9 @@
       state.title = refs["title-input"].value; renderPlot();
     });
     refs["subtitle-input"].addEventListener("input", () => {
-      state.subtitle = refs["subtitle-input"].value; renderPlot();
+      state.subtitle = refs["subtitle-input"].value;
+      state.subtitlePinned = state.subtitle.trim().length > 0;
+      renderPlot();
     });
     refs["x-label-input"].addEventListener("input", () => {
       state.xLabelCustom = true; state.xLabel = refs["x-label-input"].value; renderPlot();
@@ -945,17 +1204,50 @@
     refs["series-none"].addEventListener("click", () => chooseAll("series", false));
     refs["decode-all"].addEventListener("click", () => chooseAll("decode", true));
     refs["decode-none"].addEventListener("click", () => chooseAll("decode", false));
-    refs["export-png"].addEventListener("click", exportPng);
+    bindExportButtons();
+    document.querySelectorAll("[data-tab]").forEach(button => {
+      button.addEventListener("click", () => selectTab(button.dataset.tab));
+    });
   }
+
+  // Shared with sibling sections (prefilter.js). Exposed rather than inlined so
+  // the two panels stay separable: this file owns the selection and the drawing
+  // primitives, and knows nothing about what else is rendered from them.
+  const host = {
+    DATA, DEFAULTS, ANALYSIS, state,
+    helpers: {
+      finite, unique, median, quantile, svgElement, makeScale, pathLine,
+      formatSignificant, percentText, seriesMeta, seriesKey, candidateLabel,
+      colorFor, filteredRows, contextRows, attachTooltip, refs,
+      exportSvg, bindExportButtons,
+      // The prefilter panel carries its own Run/Dataset selectors, so it needs
+      // a way to move the shared selection and have every panel follow.
+      setSelection(patch) {
+        Object.assign(state, patch);
+        populateFilters(false);
+        rebuild();
+      },
+      sourceValues: () => unique(DATA.map(row => row.source)).sort(),
+      datasetValues: () => unique(
+        DATA.filter(row => row.source === state.source).map(row => row.dataset)).sort(),
+      datasetLabel: value => {
+        const row = DATA.find(item => item.dataset === value && item.dataset_display);
+        return (row && row.dataset_display) || value;
+      },
+    },
+    onRender: [],
+  };
+  globalThis.benchViz = host;
 
   function init() {
     refs["title-input"].value = state.title;
-    refs["subtitle-input"].value = state.subtitle;
+    if (state.subtitlePinned) refs["subtitle-input"].value = state.subtitle;
     refs["x-metric"].value = state.xMetric;
     refs["y-metric"].value = state.yMetric;
     refs["bin-count"].value = String(state.bins);
     setDefaultAxisLabels();
     updateFocusControls();
+    updateYLimitControls();
     populateFilters(true);
     wireEvents();
     rebuild();

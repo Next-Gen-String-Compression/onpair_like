@@ -37,3 +37,72 @@ files are accepted and appear in the **Run** selector.
 Open the generated HTML directly in a browser. The PNG button serializes the
 current SVG and rasterizes it locally, so the exported image includes the
 current scales, selected series, labels, and decode baselines.
+
+## The Prefilter section
+
+A second tab, sharing the same selection as the throughput panel — run,
+dataset, operation, chunking, focus range and visible candidates — because
+switching tabs should change how the data is described, never which data.
+
+The throughput panel answers "how fast was this series". Every question a
+compressed-domain prefilter actually raises is a comparison against the
+fallback the engine would otherwise run, *on the same needle*, so this section
+is built on paired per-query ratios against a baseline series you choose.
+It defaults to the slowest visible series, which on these runs is the
+decode-then-scan fallback.
+
+| Panel | Answers |
+|---|---|
+| **The column** | Codes per row, payload bytes per code, κ, and the run's own noise floor |
+| **Against the baseline** | Win rate, p10/median/p90 speedup, worst regression, and total time both ways |
+| **Profitability gate** | What a policy decides here, scored by the time it costs; plus a threshold sweep |
+| **The frontier** | Cover width against verification load, coloured by outcome, with the gate drawn |
+| **The cost model** | Predicted against measured, fitted constants per series, and an R² leaderboard |
+| **The numbers** | The table behind the current cut, with n per bin, copyable as TSV |
+
+Two things are worth knowing about how this is computed.
+
+**Statistics live in Python.** `prefilter_model.py` derives the column shape,
+fits the cost model, and finds the noise floor at build time; the results are
+embedded in the page and the viewer only reduces what is on screen. The
+statistics are therefore unit tested without a browser.
+
+**The noise floor is found, not declared.** A spec that lists one candidate
+twice at configs that parse identically has two worker processes doing the same
+work, and their spread is the run's resolution. Those configs cannot be
+recognised by their key — the harness hashes the config *string* — so they are
+matched by having produced a byte-identical column, and the matched pair is
+reported alongside the figure so the inference is auditable.
+
+**Column shape is recovered from older runs.** `num_rows` and `payload_bytes`
+on the build record are recent, but both are exactly recoverable from any query
+row: `gbps_raw` is payload bytes per nanosecond by construction, and
+`ns_per_value` is the median over the row count. Results already on disk work.
+
+## Tests
+
+```sh
+# statistics and normalization
+python3 -m pytest tools/bench-viz/tests
+
+# viewer reductions and the render path, under the JavaScriptCore shell macOS ships
+JSC=/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc
+$JSC tools/bench-viz/tests/prefilter.test.js
+$JSC tools/bench-viz/tests/render.test.js
+
+# and, against a real run, that the viewer reproduces the published figures
+python3 tools/bench-viz/tests/extract_payload.py <explorer.html> /tmp/payload.json
+$JSC tools/bench-viz/tests/render.test.js  -- /tmp/payload.json
+$JSC tools/bench-viz/tests/figures.test.js -- /tmp/payload.json
+```
+
+`figures.test.js` checks the viewer's reductions against numbers computed
+independently in Python by
+`experiments/optimize_prefilter/analysis/predict_profitability.py`. Two
+implementations of the same statistics, in different languages, agreeing to
+four digits is stronger evidence than either passing its own unit tests.
+
+It is opt-in rather than part of the suite above: it needs a `needle-sweep` run
+with ABI v6 cover facts and a decode baseline, and re-running the Python side
+needs numpy. Given neither, the figures it pins still guard the JavaScript
+reductions against drift.

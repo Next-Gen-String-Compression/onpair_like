@@ -663,3 +663,426 @@ button:focus-visible {
     transition: none !important;
   }
 }
+
+/* ------------------------------------------------------- analysis sections */
+
+.tab-strip {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  box-shadow: var(--shadow);
+}
+
+.tab-strip button {
+  flex: 0 0 auto;
+  padding: 8px 18px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+
+.tab-strip button:hover {
+  color: var(--ink);
+}
+
+.tab-strip button.is-active {
+  border-color: var(--border-strong);
+  color: var(--accent-strong);
+  background: var(--surface);
+}
+
+.prefilter-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* The tab panels. `#panel-throughput` is the wrapper the tab strip toggles;
+   its controls, candidates card and plot belong to that tab, not to the page. */
+#panel-throughput[hidden],
+label[hidden] {
+  display: none;
+}
+
+.pf-gate-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 18px;
+  margin: 0 0 16px;
+}
+
+.pf-inline-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: #52616d;
+}
+
+.pf-inline-field select,
+.pf-inline-field input[type="number"] {
+  font: inherit;
+  font-weight: 500;
+  padding: 6px 9px;
+  border: 1px solid #cad5dc;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #17212b;
+  min-width: 116px;
+}
+
+.pf-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.png-button {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  padding: 6px 12px;
+  border: 1px solid #cad5dc;
+  border-radius: 7px;
+  background: #f6f9fb;
+  color: #3c4a55;
+  cursor: pointer;
+}
+
+.png-button:hover:not(:disabled) {
+  background: #eaf1f6;
+  border-color: #a9bcc9;
+}
+
+.png-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.plot-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* The draggable gate lines. The grip is transparent and wide; the cursor is
+   the only thing that says it can be moved, so it has to be right. */
+.pf-grip {
+  touch-action: none;
+}
+
+.pf-subhead {
+  margin: 22px 0 8px;
+  font-size: 12px;
+  font-weight: 720;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #52616d;
+}
+
+.pf-panel .pf-subhead:first-child {
+  margin-top: 0;
+}
+
+.pf-note-tight {
+  margin-bottom: 4px;
+  font-weight: 650;
+  color: #52616d;
+}
+
+.pf-policy-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  padding: 12px 16px;
+  margin: 0 0 18px;
+  border: 1px solid #d6e0e7;
+  border-radius: 10px;
+  background: #f6f9fb;
+}
+
+.pf-policy-kicker {
+  align-self: center;
+  font-size: 10.5px;
+  font-weight: 720;
+  letter-spacing: 0.09em;
+  color: #78868f;
+}
+
+.pf-policy-note {
+  align-self: center;
+  font-size: 11.5px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  color: #5c6b76;
+}
+
+.pf-policy-note.is-edited {
+  color: #a2542f;
+  font-weight: 650;
+}
+
+/* Scored for comparison only: the rule reads something the scan produces, so
+   no planner could consult it before deciding to run one. */
+.pf-row-late td {
+  color: #7d8993;
+  font-style: italic;
+}
+
+/* The policy actually in force, so a table of what-ifs has an anchor. */
+/* A cell whose value is a judgement call carries its reasoning on hover. */
+.pf-has-note {
+  border-bottom: 1px dotted #9fb1bf;
+  cursor: help;
+}
+
+.pf-row-current td {
+  background: #eef5fa;
+  font-weight: 650;
+}
+
+.pf-table-tight td,
+.pf-table-tight th {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+
+/* An author `display` rule outranks the user-agent `[hidden] { display: none }`,
+   so a flex container needs to say this itself or the tab switch does nothing. */
+.prefilter-card[hidden],
+.plot-card[hidden] {
+  display: none;
+}
+
+.pf-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.pf-toolbar > label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pf-toolbar > label.check-control {
+  flex-direction: row;
+  align-items: center;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.pf-toolbar select,
+.pf-toolbar input[type="number"] {
+  min-width: 130px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  color: var(--ink);
+  background: var(--surface);
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.pf-toolbar input[type="number"] {
+  min-width: 90px;
+}
+
+.pf-toolbar input:disabled {
+  color: var(--faint);
+  background: var(--surface-soft);
+}
+
+.pf-panel {
+  padding: 18px 20px 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.pf-panel > header {
+  margin-bottom: 14px;
+}
+
+.pf-panel h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.pf-panel header p {
+  max-width: 82ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.pf-subhead {
+  margin: 22px 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.pf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-table th,
+.pf-table td {
+  padding: 6px 10px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.pf-table th:first-child,
+.pf-table td:first-child {
+  text-align: left;
+}
+
+.pf-table thead th {
+  border-bottom: 1px solid var(--border-strong);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.pf-table tbody tr:nth-child(even) {
+  background: var(--surface-soft);
+}
+
+.pf-table tbody td {
+  border-bottom: 1px solid var(--border);
+}
+
+.pf-best-cell {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.pf-series-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pf-swatch {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 3px;
+}
+
+.pf-note {
+  max-width: 92ch;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.pf-plot-wrap {
+  overflow-x: auto;
+}
+
+.pf-plot-wrap svg {
+  display: block;
+  width: 100%;
+  min-width: 720px;
+  height: auto;
+}
+
+.pf-grid-lines line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.pf-axis-text {
+  fill: var(--muted);
+  font-family: var(--sans);
+  font-size: 11px;
+}
+
+.pf-axis-title {
+  fill: var(--ink);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pf-boundary line {
+  stroke: var(--accent-strong);
+  stroke-width: 1.6;
+  stroke-dasharray: 7 4;
+}
+
+.pf-boundary-text {
+  fill: var(--accent-strong);
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.pf-identity {
+  stroke: var(--ink);
+  stroke-width: 1.4;
+  opacity: 0.55;
+}
+
+.pf-envelope {
+  stroke: var(--faint);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.pf-error {
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid #e7b7a8;
+  border-radius: 12px;
+  color: #7d2f18;
+  background: #fdf1ec;
+  font-size: 13px;
+}
+
+.pf-error[hidden] {
+  display: none;
+}
