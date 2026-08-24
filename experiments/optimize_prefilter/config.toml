@@ -1,5 +1,5 @@
 format_version = 1
-default_profile = "prefilter-prototype"
+default_profile = "prototype"
 
 [experiment]
 output_root = "generated"
@@ -12,9 +12,12 @@ max_needle_len = 64
 log_bands_per_decade = 4
 low_selectivity_cutoff = 0.02
 
-# Profiles change only selection depth and scope. They all reuse the expensive
-# catalogue below. max_selectivity_percent is a strict ceiling: 2.0 means
-# selectivity < 2%, while omitting it retains the full selectivity space.
+# Profiles change only selection depth. They all reuse the expensive catalogue
+# below and they all cover the whole selectivity space, 0% through 100%: that is
+# the point of the experiment, since a suite that cannot express a common needle
+# cannot show where prefiltering stops paying. A profile may set
+# `max_selectivity_percent` as a strict ceiling for a narrow study, but none
+# shipped here does, and reaching for it gives up the upper half of the space.
 [profiles.prototype]
 description = "One query per observed full-space band and length cell"
 zero_replicates = 1
@@ -33,27 +36,6 @@ zero_replicates = 16
 low_selectivity_replicates = 32
 other_replicates = 16
 
-[profiles.prefilter-prototype]
-description = "One query per observed band and length cell below 2%"
-zero_replicates = 1
-low_selectivity_replicates = 1
-other_replicates = 1
-max_selectivity_percent = 2.0
-
-[profiles.prefilter-substantial]
-description = "Higher-confidence evaluation below 2%"
-zero_replicates = 2
-low_selectivity_replicates = 4
-other_replicates = 2
-max_selectivity_percent = 2.0
-
-[profiles.prefilter-exhaustive]
-description = "Maximum-replication validation below 2%"
-zero_replicates = 16
-low_selectivity_replicates = 32
-other_replicates = 16
-max_selectivity_percent = 2.0
-
 [sampling]
 # Per length: half row-uniform and half occurrence-uniform real substrings.
 candidate_draws = 50000
@@ -68,12 +50,17 @@ truth_batch_size = 256
 
 [benchmark]
 result_root = "../../results/optimize_prefilter"
-onpair_configs = ['{"bits":12}', '{"bits":16}']
-# Eight logical paths (the four OnPair paths run once per config):
-# uncompressed per-row memmem, uncompressed full-haystack memmem, OnPair
-# decode followed by either scanner, OnPair prefilter+memmem, OnPair's
-# unprefiltered KMP DFA, and FSST bulk decode followed by either scanner.
-strategies = ["memmem", "memmem-hay", "decode", "pf_memmem", "kmp"]
+# One dictionary width. Comparing 12 against 16 bits is a separate question
+# from where prefiltering pays, and running both doubles every cell.
+onpair_configs = ['{"bits":16}']
+# Four logical paths, the minimum that prices the prefilter against what it
+# replaces: OnPair prefilter+memmem (the subject), OnPair decode then memmem
+# over the flattened payload (the baseline the shipped profitability policy was
+# calibrated against), FSST decode then the same scan, and memmem over the
+# uncompressed payload. `memmem` per-row and the unprefiltered `kmp` DFA are
+# dropped -- neither changes the verdict, and together they were four of the
+# nine series.
+strategies = ["memmem-hay", "decode", "pf_memmem"]
 warmup = 1
 min_iters = 3
 min_millis = 50

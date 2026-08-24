@@ -1353,8 +1353,6 @@ fn write_benchmark_spec(
     writeln!(text, "name = \"uncompressed_memmem\"")?;
     writeln!(text, "configs = [\"{{}}\"]\n")?;
     writeln!(text, "[[candidates]]")?;
-    writeln!(text, "name = \"fsst\"\n")?;
-    writeln!(text, "[[candidates]]")?;
     writeln!(text, "name = \"onpair_spiral\"")?;
     writeln!(
         text,
@@ -1368,8 +1366,6 @@ fn write_benchmark_spec(
         "configs = {}",
         serde_json::to_string(&cfg.benchmark.onpair_configs)?
     )?;
-    writeln!(text, "\n[[scanners]]")?;
-    writeln!(text, "name = \"memmem\"")?;
     writeln!(text, "\n[[scanners]]")?;
     writeln!(text, "name = \"memmem-hay\"")?;
     let spec_path = seed_dir.join("benchmark.toml");
@@ -1694,9 +1690,8 @@ mod tests {
                 .collect::<Vec<_>>(),
             [
                 "uncompressed_memmem",
-                "fsst",
                 "onpair_spiral",
-                "onpair_spiral_decode",
+                "onpair_spiral_decode"
             ]
         );
         assert_eq!(
@@ -1706,7 +1701,7 @@ mod tests {
                 .iter()
                 .map(|scanner| scanner.name.as_str())
                 .collect::<Vec<_>>(),
-            ["memmem", "memmem-hay"]
+            ["memmem-hay"]
         );
         assert_eq!(outcome.profile, "test");
     }

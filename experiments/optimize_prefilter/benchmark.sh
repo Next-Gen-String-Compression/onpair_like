@@ -5,7 +5,7 @@ repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_dir"
 
 seed=42
-profile="prefilter-prototype"
+profile="prototype"
 bench_args=()
 while (($#)); do
   case "$1" in

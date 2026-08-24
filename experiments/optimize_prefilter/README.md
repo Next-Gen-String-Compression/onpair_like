@@ -53,26 +53,38 @@ The checked-in profiles are:
 
 | Profile | Scope | Replicates zero / low / other | Approximate seed-42 queries |
 |---|---|---:|---:|
-| `prototype` | Full space | 1 / 1 / 1 | 3,807 |
+| `prototype` (default) | Full space | 1 / 1 / 1 | 3,804 |
 | `substantial` | Full space | 2 / 4 / 2 | 13,570 |
 | `exhaustive` | Full space | 16 / 32 / 16 | 101,576 |
-| `prefilter-prototype` (default) | `< 2%` | 1 / 1 / 1 | 3,331 |
-| `prefilter-substantial` | `< 2%` | 2 / 4 / 2 | 12,656 |
-| `prefilter-exhaustive` | `< 2%` | 16 / 32 / 16 | 96,199 |
 
 The estimates are totals across the current three catalogues; exact counts are
-reported after generation. The default seed-42 profile emits 1,014 Amazon,
-1,198 ClickBench, and 1,119 DBpedia queries. List the authoritative configured
-profiles with:
+reported after generation. The default seed-42 profile emits 1,058 Amazon,
+1,527 ClickBench, and 1,219 DBpedia queries, one per observed cell, all 64
+needle lengths present in each.
+
+Every profile covers 0% through 100%. Three `prefilter-*` profiles that capped
+selectivity at 2% used to ship here and were removed: 2% is the region where
+prefiltering wins, so a suite built from them showed how *well* it does and
+never where it stops paying — on these catalogues they admitted no query at or
+above 2% at all. Depth and scope are no longer independent knobs; pick a profile
+for how many replicates you want, not for which half of the space you see.
+
+List the authoritative configured profiles with:
 
 ```sh
 cargo run -p optimize-prefilter -- profiles
 ```
 
-To focus on another threshold, copy one profile under a new name and set, for
-example, `max_selectivity_percent = 0.5`. Profiles share the same catalogue
-cache, so changing replication or the selectivity ceiling does not repeat
+A profile may still set `max_selectivity_percent` to study one narrow slice, but
+it costs the upper half of the space and no shipped profile does it. Profiles
+share the same catalogue cache, so changing replication does not repeat
 candidate discovery.
+
+Generation is cheap and cached; the benchmark is what costs wall clock. A full
+catalogue build from scratch is roughly a minute per million rows per dataset,
+paid once, and every later profile and seed reuses it. Changing
+`log_bands_per_decade` or `low_selectivity_cutoff` does redefine the bands and
+so does force rediscovery.
 
 ### Grid cells versus benchmark queries
 
@@ -114,8 +126,8 @@ BENCH_BIN=target/release/bench .venv/bin/python datasets/prepare.py \
 ## Generate and inspect queries
 
 ```sh
-./experiments/optimize_prefilter/generate.sh --profile prefilter-prototype --seed 42
-./experiments/optimize_prefilter/generate.sh --profile prefilter-substantial --seed 42
+./experiments/optimize_prefilter/generate.sh --profile prototype --seed 42
+./experiments/optimize_prefilter/generate.sh --profile substantial --seed 42
 ./experiments/optimize_prefilter/generate.sh --profile exhaustive --seed 43
 ```
 
@@ -148,28 +160,31 @@ Generation writes a normal harness `benchmark.toml` pairing every dataset with
 its suite. Run it and build the self-contained Benchmark Explorer with:
 
 ```sh
-./experiments/optimize_prefilter/benchmark.sh --profile prefilter-prototype --seed 42
-./experiments/optimize_prefilter/benchmark.sh --profile prefilter-substantial --seed 42
+./experiments/optimize_prefilter/benchmark.sh --profile prototype --seed 42
+./experiments/optimize_prefilter/benchmark.sh --profile substantial --seed 42
 ```
 
 The resulting `results/optimize_prefilter/<profile>/seed-42/explorer.html`
 plots exact selectivity or needle length and can switch datasets, strategies,
 scales, and aggregations without regenerating the benchmark. The run spec
-compares these eight logical paths:
+compares these three logical paths:
 
 - uncompressed `memmem-hay`: one search over the concatenated payload;
-- uncompressed `memmem`: one search per row;
-- OnPair `decode / memmem`: bulk decode, then one search per row;
 - OnPair `decode / memmem-hay`: bulk decode, then one search over the decoded
-  concatenated payload with row-boundary rejection;
+  concatenated payload with row-boundary rejection — the baseline the shipped
+  profitability policy was calibrated against;
 - OnPair `pf_memmem`: compressed-domain prefilter, then decode and `memmem`
-  verification of surviving rows;
-- OnPair `kmp`: the token-level KMP DFA over every row, without prefiltering.
-- FSST `decode / memmem`: one bulk FSST decode, then one search per row;
-- FSST `decode / memmem-hay`: one bulk FSST decode, then one search over the
-  decoded concatenated payload, providing both decode-and-scan references.
+  verification of surviving rows.
 
-The three OnPair paths run with both 12- and 16-bit dictionaries. Edit the
+Three is deliberate. Per-row `memmem`, the unprefiltered `kmp` DFA and the FSST
+decode paths all answer adjacent questions, and each one multiplies every cell
+in the matrix: nine series over 6,402 queries was 57,618 measured cells and, at
+`min_millis = 50`, close to an hour of floor before warmup. Three series over
+3,804 queries is 11,412. Add candidates back in `benchmark_spec` when the
+question needs them.
+
+The OnPair paths run with one 16-bit dictionary; comparing dictionary widths is
+a separate question and doubles every cell. Edit the
 benchmark section in `config.toml` to change those configurations or timing
 settings. SpiralDB retains its compact dictionary and expands it to one
 `WideDictionary` inside every full-column decode, so that expansion is included
