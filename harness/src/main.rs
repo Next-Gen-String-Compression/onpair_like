@@ -327,12 +327,18 @@ fn ingest_into_db(out_dir: &std::path::Path) -> Result<(), Error> {
     let python = root.join(".venv/bin/python");
     let loader = root.join("analysis/db/load.py");
     if !python.exists() {
-        return Err(format!(
-            "ingest: {} not found — create it with `python3 -m venv .venv && \
-             .venv/bin/pip install -r datasets/requirements.txt`",
-            python.display()
-        )
-        .into());
+        // Not an error. The run measured everything and wrote it out; the
+        // database is a convenience for the dashboard. Failing here would tell a
+        // fresh clone its benchmark broke, and would stop any `set -e` script
+        // before whatever it does with the results.
+        eprintln!(
+            "note: skipping ingest, {} not found — create it with `python3 -m venv \
+             .venv && .venv/bin/pip install -r datasets/requirements.txt`, then \
+             re-ingest with `.venv/bin/python analysis/db/load.py {}`",
+            python.display(),
+            out_dir.display()
+        );
+        return Ok(());
     }
     let status = std::process::Command::new(&python)
         .arg(&loader)

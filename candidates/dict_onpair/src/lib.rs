@@ -12,7 +12,7 @@
 //!
 //! Encoded domain: a `LIKE '%x%'` predicate is evaluated n_unique times, not
 //! n_rows times. Footprint = the inner's footprint over the unique dictionary +
-//! per-row codes bit-packed to ceil(log2(n_unique)) bits/row.
+//! the actual resident `u32` code stored for every row.
 
 use core::ffi::{c_char, c_void, CStr};
 use std::collections::HashMap;
@@ -23,11 +23,6 @@ struct Handle {
     inner_vt: &'static LbCandidate,
     inner_strat: u32,
     inner_handle: *mut c_void,
-    // Unique dictionary + per-row codes. `blob`/`offsets` back the LbChunkView
-    // handed to the inner build; they must outlive `inner_handle`, so the Handle
-    // owns them and frees them only after the inner is destroyed.
-    _blob: Vec<u8>,
-    _offsets: Vec<u64>,
     codes: Vec<u32>,
     num_rows: u64,
     num_unique: u32,
@@ -53,15 +48,6 @@ unsafe fn resolve_strategy(vt: &LbCandidate, preferred: &[&str]) -> u32 {
         }
     }
     0
-}
-
-/// ceil(log2(n_unique)) bits, minimum 1 — the per-row code width.
-fn code_bits(num_unique: u32) -> u64 {
-    let mut bits = 1u64;
-    while (1u64 << bits) < num_unique as u64 {
-        bits += 1;
-    }
-    bits
 }
 
 unsafe fn dict_build(
@@ -98,9 +84,9 @@ unsafe fn dict_build(
     let num_unique = (uoffsets.len() - 1) as u32;
     let inner_strat = resolve_strategy(inner_vt, preferred);
 
-    // Build the inner over the unique values. Moving blob/uoffsets into the
-    // Handle afterwards does not relocate their heap buffers, so pointers the
-    // inner may have retained stay valid.
+    // Both registered inners materialize owned compressed representations
+    // during build, so the temporary unique-value blob and offsets can be
+    // released as soon as this call returns.
     let uview = LbChunkView {
         bytes: blob.as_ptr(),
         offsets: uoffsets.as_ptr(),
@@ -114,8 +100,6 @@ unsafe fn dict_build(
         inner_vt,
         inner_strat,
         inner_handle,
-        _blob: blob,
-        _offsets: uoffsets,
         codes,
         num_rows: n as u64,
         num_unique,
@@ -137,8 +121,8 @@ unsafe extern "C" fn footprint(
         n = f(h.inner_handle, buf.as_mut_ptr(), buf.len() as u32);
     }
     let mut comps: Vec<LbFootprintComponent> = buf[..n as usize].to_vec();
-    let code_bytes = (h.num_rows * code_bits(h.num_unique) + 7) / 8;
-    comps.push(LbFootprintComponent::new("codes", code_bytes));
+    let code_bytes = (h.codes.len() * core::mem::size_of::<u32>()) as u64;
+    comps.push(LbFootprintComponent::new("dict_codes", code_bytes));
     for (i, c) in comps.iter().take(capacity as usize).enumerate() {
         *out.add(i) = *c;
     }
@@ -214,7 +198,7 @@ static ONPAIR_STRATS: [LbStrategy; 1] = [LbStrategy {
 static ONPAIR_VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
     name: c"dict_onpair".as_ptr(),
-    version: c"0.1.0".as_ptr(),
+    version: c"0.2.0.resident-state".as_ptr(),
     cpu_features: core::ptr::null(),
     strategies: ONPAIR_STRATS.as_ptr(),
     strategy_count: 1,
@@ -224,6 +208,7 @@ static ONPAIR_VTABLE: LbCandidate = LbCandidate {
     view: None,
     decode: None,
     destroy: Some(destroy),
+    query_facts: None,
 };
 
 pub fn vtable() -> &'static LbCandidate {
@@ -256,7 +241,7 @@ static SPIRAL_STRATS: [LbStrategy; 1] = [LbStrategy {
 static SPIRAL_VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
     name: c"dict_onpair_spiral".as_ptr(),
-    version: c"0.1.0".as_ptr(),
+    version: c"0.2.0.resident-state".as_ptr(),
     cpu_features: core::ptr::null(),
     strategies: SPIRAL_STRATS.as_ptr(),
     strategy_count: 1,
@@ -266,6 +251,7 @@ static SPIRAL_VTABLE: LbCandidate = LbCandidate {
     view: None,
     decode: None,
     destroy: Some(destroy),
+    query_facts: None,
 };
 
 pub fn vtable_spiral() -> &'static LbCandidate {

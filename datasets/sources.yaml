@@ -72,7 +72,7 @@ datasets:
       url: https://mcauleylab.ucsd.edu/public_datasets/data/amazon_2023/raw/meta_categories/meta_Books.jsonl.gz
       sha256: d41f2348d3e0f3099d2a7ee45b304970282199f92a7ccdfe8ba4b1f753009a10
       license: Amazon Reviews 2023 (McAuley lab, research use)
-      download_bytes: 3200000000
+      download_bytes: 4942125770
     kind: jsonl-field        # json per line, .title.strip(), skip empty
     params: { field: title }
     expected_checksum: "xxh3:3a0b57c7356a57a6"

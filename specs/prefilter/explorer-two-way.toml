@@ -1,0 +1,73 @@
+# Two-candidate run to populate the explorer's Prefilter section: the SIMD
+# prefilter against uncompressed memmem, over three columns of very different
+# row length. Uses the checked-in query suites, so the `contains` counts are
+# 142 / 90 / 91 rather than the ~1000 per column of the sampled suites the
+# figures were produced from; the panels populate either way, and a larger
+# suite only tightens the statistics.
+#
+#   onpair_spiral        pf_memmem   — the SIMD comparison kernels, which is
+#                                      the path a production planner would take
+#                                      (upstream `select_aarch64` has no
+#                                      row-table arm). Listed twice at configs
+#                                      that differ only in whitespace, so they
+#                                      parse identically and build a
+#                                      byte-identical column: two worker
+#                                      processes doing the same work, which is
+#                                      this run's noise floor.
+#   uncompressed_memmem  memmem-hay  — Rust memmem over the whole flattened
+#                                      payload, matches resolved afterwards.
+#
+# NOTE ON THE BASELINE. With no decode candidate here, the explorer's paired
+# panels will score the prefilter against *uncompressed* memmem, which runs at
+# 45-51 GB/s on these columns -- four to six times faster than
+# decode-then-memmem. The shipped profitability policy was calibrated against
+# decode-then-memmem, so against this harder baseline the gate will show real
+# false positives and a lower win rate. That is a different question, not a
+# broken gate. To score against the baseline the policy was built for, add:
+#
+#     [[candidates]]
+#     name = "onpair_spiral_decode"
+#     configs = ["{\"bits\":16}"]
+#
+# and add "decode" to `strategies` plus a `[[scanners]] name = "memmem-hay"`
+# block. It costs roughly a third more wall clock.
+
+strategies = ["memmem-hay", "pf_memmem"]
+
+# min_iters = 1 only binds where a single iteration already exceeds min_millis;
+# cheap cells still collect ~38 samples.
+[measure]
+warmup = 1
+min_iters = 1
+min_millis = 50
+chunk_rows = [0]
+
+[[datasets]]
+path = "../../datasets/clickbench-url-1m"
+
+[[datasets]]
+path = "../../datasets/amazon-title"
+
+[[datasets]]
+path = "../../datasets/dbpedia-abstract"
+
+[[suites]]
+path = "../../suites/clickbench-url-1m-contains-s42"
+
+[[suites]]
+path = "../../suites/amazon-title-gen1-s42"
+
+[[suites]]
+path = "../../suites/dbpedia-abstract-gen1-s42"
+
+[[candidates]]
+name = "onpair_spiral"
+# Whitespace is the only difference. The harness hashes the config *string*, so
+# these are two cells; the candidate parses them to one Config, so they are the
+# same work. Identical build footprints are what the explorer uses to recognise
+# the pair.
+configs = ["{\"bits\":16}", "{ \"bits\": 16 }"]
+
+[[candidates]]
+name = "uncompressed_memmem"
+configs = ["{}"]

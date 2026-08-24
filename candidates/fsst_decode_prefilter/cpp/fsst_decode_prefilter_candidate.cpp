@@ -57,6 +57,9 @@ class FsstDecodePrefilter final : public lb::Matcher {
     // The prefilter evaluates over the decoded plaintext; its pointers into the
     // scratch/offsets are stable across runs (only the scratch bytes change).
     pf_.build(scratch_.data(), b_.offsets.data(), b_.num_rows, nullptr, 0);
+    // Bulk decode needs canonical decoded boundaries, not compressed-row
+    // boundaries into the concatenated code stream.
+    fsst_common::ReleaseCompressedOffsets(b_);
     return true;
   }
 
@@ -83,6 +86,7 @@ class FsstDecodePrefilter final : public lb::Matcher {
     lb_footprint_component comps[3];
     const uint32_t n = fsst_common::Footprint(b_, comps, 3);
     for (uint32_t i = 0; i < n; i++) out.push_back(comps[i]);
+    out.push_back({"decode_table", sizeof(fsst_decoder_t)});
   }
 
   uint64_t num_rows() const override { return b_.num_rows; }
@@ -100,20 +104,22 @@ void* build_plain(const lb_chunk_view* view, const char*, char* eb, uint64_t ec)
 
 void* build_dict(const lb_chunk_view* view, const char*, char* eb, uint64_t ec) {
   auto child = std::make_unique<FsstDecodePrefilter>();
-  return lb::adapter_build(std::make_unique<lb::DictMatcher>(std::move(child)), view, eb, ec);
+  return lb::adapter_build(
+      std::make_unique<lb::DictMatcher>(std::move(child), /*child_copies_input=*/true),
+      view, eb, ec);
 }
 
 const uint32_t kOps = LB_OP_BIT(LB_CONTAINS) | LB_OP_BIT(LB_CONTAINS_ANY);
 
 const lb_strategy kPlainStrats[] = {{"decode+prefilter", kOps}};
 const lb_candidate kPlainVtable = {
-    LB_ABI_VERSION, "fsst_decode_prefilter", "0.1.0+e638d4c", nullptr,
+    LB_ABI_VERSION, "fsst_decode_prefilter", "0.2.0+e638d4c.resident-state", nullptr,
     kPlainStrats, 1, build_plain, lb::adapter_footprint, lb::adapter_run,
     nullptr, nullptr, lb::adapter_destroy};
 
 const lb_strategy kDictStrats[] = {{"dict+decode+prefilter", kOps}};
 const lb_candidate kDictVtable = {
-    LB_ABI_VERSION, "dict_fsst_decode_prefilter", "0.1.0+e638d4c", nullptr,
+    LB_ABI_VERSION, "dict_fsst_decode_prefilter", "0.2.0+e638d4c.resident-state", nullptr,
     kDictStrats, 1, build_dict, lb::adapter_footprint, lb::adapter_run,
     nullptr, nullptr, lb::adapter_destroy};
 

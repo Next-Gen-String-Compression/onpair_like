@@ -1,0 +1,79 @@
+format_version = 1
+default_profile = "prototype"
+
+[experiment]
+output_root = "generated"
+cache_root = "cache"
+min_needle_len = 1
+max_needle_len = 64
+# Four boundaries per decade make the sub-2% region deliberately dense: each
+# successive boundary is about 1.78x the previous one. Raise this to 8 to study
+# a narrow transition, but expect roughly twice as many low-selectivity cells.
+log_bands_per_decade = 4
+low_selectivity_cutoff = 0.02
+
+# Profiles change only selection depth. They all reuse the expensive catalogue
+# below and they all cover the whole selectivity space, 0% through 100%: that is
+# the point of the experiment, since a suite that cannot express a common needle
+# cannot show where prefiltering stops paying. A profile may set
+# `max_selectivity_percent` as a strict ceiling for a narrow study, but none
+# shipped here does, and reaching for it gives up the upper half of the space.
+[profiles.prototype]
+description = "One query per observed full-space band and length cell"
+zero_replicates = 1
+low_selectivity_replicates = 1
+other_replicates = 1
+
+[profiles.substantial]
+description = "Higher-confidence full-space evaluation"
+zero_replicates = 2
+low_selectivity_replicates = 4
+other_replicates = 2
+
+[profiles.exhaustive]
+description = "Maximum-replication full-space validation"
+zero_replicates = 16
+low_selectivity_replicates = 32
+other_replicates = 16
+
+[sampling]
+# Per length: half row-uniform and half occurrence-uniform real substrings.
+candidate_draws = 50000
+anchor_rows = 4096
+# Mutations use only bytes observed in the dataset, then pass an exact absence
+# check. This avoids zero-result probes made trivial by a globally absent byte.
+zero_probe_candidates = 4096
+# The cache keeps more than one suite's quota so changing --seed really
+# selects a different set without rebuilding the expensive catalogue.
+catalog_entries_per_cell = 256
+truth_batch_size = 256
+
+[benchmark]
+result_root = "../../results/optimize_prefilter"
+# One dictionary width. Comparing 12 against 16 bits is a separate question
+# from where prefiltering pays, and running both doubles every cell.
+onpair_configs = ['{"bits":16}']
+# Four logical paths, the minimum that prices the prefilter against what it
+# replaces: OnPair prefilter+memmem (the subject), OnPair decode then memmem
+# over the flattened payload (the baseline the shipped profitability policy was
+# calibrated against), FSST decode then the same scan, and memmem over the
+# uncompressed payload. `memmem` per-row and the unprefiltered `kmp` DFA are
+# dropped -- neither changes the verdict, and together they were four of the
+# nine series.
+strategies = ["memmem-hay", "decode", "pf_memmem"]
+warmup = 1
+min_iters = 3
+min_millis = 50
+chunk_rows = [0]
+
+[[datasets]]
+id = "clickbench-url-1m"
+path = "../../datasets/clickbench-url-1m"
+
+[[datasets]]
+id = "amazon-title"
+path = "../../datasets/amazon-title"
+
+[[datasets]]
+id = "dbpedia-abstract"
+path = "../../datasets/dbpedia-abstract"

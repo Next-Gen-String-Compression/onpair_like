@@ -4,7 +4,7 @@
 //! and matches via compressed-domain automata. They are distinct storage
 //! schemes and distinct roster lines.
 //!
-//! One build (train + encode) exposed through three `run()` strategies, all
+//! The native `onpair_spiral` candidate exposes three `run()` strategies, all
 //! answering `LB_CONTAINS` only:
 //!
 //!   - `pf_kmp`    — `ColumnView::rows_containing_prefiltered`: the SIMD
@@ -19,6 +19,15 @@
 //!     direct analog of the C++ `onpair` candidate's `compressed` path for
 //!     contains, so the two are a head-to-head across the two libraries. Same
 //!     255-byte cap as `pf_kmp`.
+//!
+//! A separate `onpair_spiral_decode` vtable exposes the same deterministic
+//! encoding as a decode-only codec. It retains the serialized
+//! [`onpair::CompactDictionary`] and canonical row offsets. Each full-column
+//! `decode()` expands that compact dictionary to the load-free wide layout
+//! exactly once, then performs one bulk [`onpair::decode_into`] plus one offset
+//! copy. The expansion is therefore included in bulk-decompression latency,
+//! while random-access and prefilter verification keep using the compact
+//! dictionary without paying for a wide table.
 //!
 //! All three are the library's own convenience recipes, called verbatim so the
 //! benchmark measures exactly what OnPair ships (buffer sizing included). No
@@ -36,10 +45,12 @@
 
 use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
+use std::mem::MaybeUninit;
 
 use lb_abi::*;
-use onpair::search::build_token_frequency_index;
-use onpair::{search::TokenFrequencyIndex, Column, Config, MaxDictBits, Threshold, Token};
+use onpair::search::index::{build_token_frequency_index, TokenFrequencyIndex};
+use onpair::search::{analyze_prefilter, prefilter_is_likely_profitable};
+use onpair::{Column, CompactDictionary, Config, Dictionary, MaxDictBits, Threshold, Token};
 
 // ------------------------------------------------------------------ config
 
@@ -93,6 +104,12 @@ struct Handle {
     num_rows: u64,
 }
 
+struct DecodeHandle {
+    codes: Vec<Token>,
+    dictionary: CompactDictionary,
+    decoded_offsets: Vec<u64>,
+}
+
 unsafe fn write_err(err_buf: *mut c_char, err_cap: u64, msg: &str) {
     if err_buf.is_null() || err_cap == 0 {
         return;
@@ -105,7 +122,7 @@ unsafe fn write_err(err_buf: *mut c_char, err_cap: u64, msg: &str) {
     dst[n] = 0;
 }
 
-fn build_inner(v: &LbChunkView, cfg_json: &str) -> Result<Handle, String> {
+fn compress_column(v: &LbChunkView, cfg_json: &str) -> Result<Column<u32>, String> {
     let cfg = parse_config(cfg_json)?;
     let n = v.num_rows as usize;
     // SAFETY: the harness guarantees the view's pointers are valid for the
@@ -121,14 +138,32 @@ fn build_inner(v: &LbChunkView, cfg_json: &str) -> Result<Handle, String> {
     // SAFETY: as above; payload() derives its length from the same offsets.
     let bytes = unsafe { v.payload() };
     let offsets32: Vec<u32> = offsets.iter().map(|&o| o as u32).collect();
-    let col = Column::<u32>::compress(bytes, &offsets32, cfg)
-        .map_err(|e| format!("compress failed: {e}"))?;
+    Column::<u32>::compress(bytes, &offsets32, cfg).map_err(|e| format!("compress failed: {e}"))
+}
+
+fn build_inner(v: &LbChunkView, cfg_json: &str) -> Result<Handle, String> {
+    let col = compress_column(v, cfg_json)?;
     let frequencies = build_token_frequency_index(&col.codes, col.dict.num_tokens())
         .map_err(|e| format!("frequency index failed: {e}"))?;
     Ok(Handle {
         col,
         frequencies,
         num_rows: v.num_rows,
+    })
+}
+
+fn build_decode_inner(v: &LbChunkView, cfg_json: &str) -> Result<DecodeHandle, String> {
+    let col = compress_column(v, cfg_json)?;
+    // Bulk decode does not need token-row offsets. Retain the serialized compact
+    // dictionary: decode() expands it once per full-column decompression, so
+    // both its footprint and the expansion cost are attributed honestly.
+    let (dictionary, codes, _) = col.into_raw();
+    // SAFETY: the harness guarantees the input view for the build call.
+    let decoded_offsets = unsafe { v.offsets_slice() }.to_vec();
+    Ok(DecodeHandle {
+        codes,
+        dictionary,
+        decoded_offsets,
     })
 }
 
@@ -140,6 +175,22 @@ unsafe extern "C" fn build(
 ) -> *mut c_void {
     let cfg_json = CStr::from_ptr(config_json).to_str().unwrap_or("");
     match build_inner(&*view, cfg_json) {
+        Ok(h) => Box::into_raw(Box::new(h)) as *mut c_void,
+        Err(msg) => {
+            write_err(err_buf, err_cap, &msg);
+            core::ptr::null_mut()
+        }
+    }
+}
+
+unsafe extern "C" fn build_decode(
+    view: *const LbChunkView,
+    config_json: *const c_char,
+    err_buf: *mut c_char,
+    err_cap: u64,
+) -> *mut c_void {
+    let cfg_json = CStr::from_ptr(config_json).to_str().unwrap_or("");
+    match build_decode_inner(&*view, cfg_json) {
         Ok(h) => Box::into_raw(Box::new(h)) as *mut c_void,
         Err(msg) => {
             write_err(err_buf, err_cap, &msg);
@@ -179,6 +230,33 @@ unsafe extern "C" fn footprint(
     ];
     for (i, c) in components.iter().take(capacity as usize).enumerate() {
         *out.add(i) = *c;
+    }
+    components.len() as u32
+}
+
+unsafe extern "C" fn footprint_decode(
+    this: *mut c_void,
+    out: *mut LbFootprintComponent,
+    capacity: u32,
+) -> u32 {
+    let h = &*(this as *const DecodeHandle);
+    let components = [
+        LbFootprintComponent::new(
+            "codes",
+            (h.codes.len() * core::mem::size_of::<Token>()) as u64,
+        ),
+        LbFootprintComponent::new(
+            "decoded_offsets",
+            (h.decoded_offsets.len() * core::mem::size_of::<u64>()) as u64,
+        ),
+        LbFootprintComponent::new("dict_bytes", h.dictionary.logical_len() as u64),
+        LbFootprintComponent::new(
+            "dict_offsets",
+            (h.dictionary.offsets().len() * core::mem::size_of::<u32>()) as u64,
+        ),
+    ];
+    for (i, component) in components.iter().take(capacity as usize).enumerate() {
+        *out.add(i) = *component;
     }
     components.len() as u32
 }
@@ -231,8 +309,93 @@ unsafe extern "C" fn run(
     0
 }
 
+/// Static cover facts for one needle (ABI v6): what the min-cut compiles the
+/// pattern into, how much of the code stream that covers, and whether the
+/// library's own hint sanctions running the prefilter at all.
+///
+/// Called by the harness outside any measurement, which is what makes this
+/// safe to provide: `run` cannot report a prefilter/verify split without
+/// re-implementing the shipped convenience method it exists to measure
+/// (SEMANTICS.md rule 5), but analysis still needs to know what the cover was.
+/// Throughput here is governed by how a needle tokenizes rather than by how
+/// many rows match, so a result set without these cannot explain its own
+/// spread.
+unsafe extern "C" fn query_facts(
+    this: *mut c_void,
+    strategy_index: u32,
+    query: *const LbQuery,
+    out: *mut LbQueryFacts,
+) -> i32 {
+    let h = &*(this as *const Handle);
+    let q = &*query;
+    // Only the prefiltered strategies compile a cover; `kmp` (2) has none.
+    if q.op != LB_CONTAINS || q.needle_count < 1 || strategy_index > 1 {
+        return 1;
+    }
+    let nd = &*q.needles;
+    let needle = core::slice::from_raw_parts(nd.ptr, nd.len as usize);
+    if needle.is_empty() {
+        return 1; // analyze_prefilter rejects the empty pattern by contract
+    }
+    let Ok(facts) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let view = h.col.view();
+        let analysis = analyze_prefilter(needle, view.dict, &h.frequencies);
+        let cover = analysis.probe_cover();
+        LbQueryFacts {
+            cover_points: cover.points().len() as u64,
+            cover_ranges: cover.ranges().len() as u64,
+            covered_codes: u64::from(analysis.covered_frequency()),
+            // The population `covered_frequency` is counted over: the index
+            // was built from exactly this code stream.
+            indexed_codes: h.col.codes.len() as u64,
+            profitable_hint: u64::from(prefilter_is_likely_profitable(&analysis, view.num_rows())),
+        }
+    })) else {
+        return 1;
+    };
+    *out = facts;
+    0
+}
+
+/// Bulk-decode into the harness's canonical `(bytes, u64 offsets)` layout.
+/// Each invocation expands the retained compact dictionary exactly once, then
+/// bulk-decodes the entire code stream. This deliberately includes wide-table
+/// construction in full decompression latency; random-access decode elsewhere
+/// continues to use the compact dictionary directly.
+unsafe extern "C" fn decode(
+    this: *mut c_void,
+    bytes_out: *mut u8,
+    bytes_cap: u64,
+    offsets_out: *mut u64,
+) -> i32 {
+    if bytes_out.is_null() || offsets_out.is_null() {
+        return 1;
+    }
+    let h = &*(this as *const DecodeHandle);
+    let decoded_len = h.decoded_offsets.last().copied().unwrap_or(0) as usize;
+    let Ok(capacity) = usize::try_from(bytes_cap) else {
+        return 1;
+    };
+    if capacity < decoded_len.saturating_add(onpair::DECODE_PADDING) {
+        return 1;
+    }
+    let dictionary = h.dictionary.to_wide();
+    let output = core::slice::from_raw_parts_mut(bytes_out.cast::<MaybeUninit<u8>>(), capacity);
+    let written = onpair::decode_into(&h.codes, dictionary.as_view(), output);
+    if written != decoded_len {
+        return 1;
+    }
+    let offsets = core::slice::from_raw_parts_mut(offsets_out, h.decoded_offsets.len());
+    offsets.copy_from_slice(&h.decoded_offsets);
+    0
+}
+
 unsafe extern "C" fn destroy(this: *mut c_void) {
     drop(Box::from_raw(this as *mut Handle));
+}
+
+unsafe extern "C" fn destroy_decode(this: *mut c_void) {
+    drop(Box::from_raw(this as *mut DecodeHandle));
 }
 
 static STRATEGIES: [LbStrategy; 3] = [
@@ -253,7 +416,7 @@ static STRATEGIES: [LbStrategy; 3] = [
 static VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
     name: c"onpair_spiral".as_ptr(),
-    version: c"0.1.0+5927cce".as_ptr(),
+    version: c"0.1.0+75e80c4".as_ptr(),
     // The prefilter uses baseline NEON on aarch64 and dispatches between
     // SSE2/AVX2/AVX-512 on x86_64; it has no scalar fallback.
     cpu_features: core::ptr::null(),
@@ -265,8 +428,67 @@ static VTABLE: LbCandidate = LbCandidate {
     view: None,
     decode: None,
     destroy: Some(destroy),
+    query_facts: Some(query_facts),
+};
+
+static DECODE_VTABLE: LbCandidate = LbCandidate {
+    abi_version: LB_ABI_VERSION,
+    name: c"onpair_spiral_decode".as_ptr(),
+    version: c"0.3.0+75e80c4.compact-bulk-expand".as_ptr(),
+    cpu_features: core::ptr::null(),
+    strategies: core::ptr::null(),
+    strategy_count: 0,
+    build: Some(build_decode),
+    footprint: Some(footprint_decode),
+    run: None,
+    view: None,
+    decode: Some(decode),
+    destroy: Some(destroy_decode),
+    query_facts: None,
 };
 
 pub fn vtable() -> &'static LbCandidate {
     &VTABLE
+}
+
+pub fn vtable_decode() -> &'static LbCandidate {
+    &DECODE_VTABLE
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_candidate_round_trips_from_its_compact_dictionary() {
+        let bytes = b"alphabetagamma";
+        let offsets = [0u64, 5, 9, 14];
+        let view = LbChunkView {
+            bytes: bytes.as_ptr(),
+            offsets: offsets.as_ptr(),
+            num_rows: 3,
+        };
+        let handle = build_decode_inner(&view, r#"{"bits":9}"#).unwrap();
+        assert!(handle.dictionary.num_tokens() > 0);
+
+        let handle = Box::into_raw(Box::new(handle)) as *mut c_void;
+        let mut output = vec![0u8; bytes.len() + LB_DECODE_PAD];
+        let mut decoded_offsets = vec![0u64; offsets.len()];
+        let rc = unsafe {
+            decode(
+                handle,
+                output.as_mut_ptr(),
+                output.len() as u64,
+                decoded_offsets.as_mut_ptr(),
+            )
+        };
+        assert_eq!(rc, 0);
+        assert_eq!(&output[..bytes.len()], bytes);
+        assert_eq!(decoded_offsets, offsets);
+        unsafe { destroy_decode(handle) };
+
+        assert!(vtable().decode.is_none());
+        assert!(vtable_decode().decode.is_some());
+        assert_eq!(vtable_decode().strategy_count, 0);
+    }
 }

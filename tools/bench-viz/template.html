@@ -31,7 +31,7 @@
       </div>
       <div class="export-cluster">
         <label class="compact-field">
-          <span>PNG size</span>
+          <span>PNG export size</span>
           <select id="export-scale" aria-label="PNG export scale">
             <option value="1">1200 px</option>
             <option value="2">2400 px</option>
@@ -39,18 +39,21 @@
             <option value="4">4800 px</option>
           </select>
         </label>
-        <button id="export-png" class="primary-button" type="button">
-          <span>Export PNG</span><span aria-hidden="true">↗</span>
-        </button>
       </div>
     </header>
 
+    <nav class="tab-strip" role="tablist" aria-label="Analysis section">
+      <button type="button" data-tab="throughput" role="tab" aria-selected="true" class="is-active">Throughput</button>
+      <button type="button" data-tab="prefilter" role="tab" aria-selected="false">Prefilter</button>
+    </nav>
+
+    <div id="panel-throughput" data-panel="throughput">
     <section class="control-card" aria-label="Plot configuration">
       <div class="filter-grid">
-        <label><span>Run</span><select id="source-select"></select></label>
+        <label id="source-field"><span>Run</span><select id="source-select"></select></label>
         <label><span>Dataset</span><select id="dataset-select"></select></label>
-        <label><span>Operation</span><select id="op-select"></select></label>
-        <label><span>Chunk rows</span><select id="chunk-select"></select></label>
+        <label id="op-field"><span>Operation</span><select id="op-select"></select></label>
+        <label id="chunk-field"><span>Chunk rows</span><select id="chunk-select"></select></label>
         <label><span>X measure</span><select id="x-metric">
           <option value="selectivity">Selectivity</option>
           <option value="needle_len">Needle length</option>
@@ -92,6 +95,13 @@
           <button id="focus-reset" class="range-reset" type="button">reset</button>
           <span id="focus-error" class="focus-error" role="status"></span>
         </div>
+        <div class="focus-control">
+          <span id="ylimit-label" class="control-label">Clip Y (GB/s)</span>
+          <input id="ylimit-min" type="number" inputmode="decimal" placeholder="auto" aria-label="Minimum Y value">
+          <span class="range-separator">to</span>
+          <input id="ylimit-max" type="number" inputmode="decimal" placeholder="auto" aria-label="Maximum Y value">
+          <button id="ylimit-reset" class="range-reset" type="button">reset</button>
+        </div>
         <label class="check-control"><input id="show-points" type="checkbox" checked><span>Raw points</span></label>
         <label class="check-control"><input id="show-band" type="checkbox" checked><span>IQR band</span></label>
         <button id="edit-labels" class="quiet-button" type="button" aria-expanded="false">Edit labels</button>
@@ -99,7 +109,7 @@
 
       <div id="label-editor" class="label-editor" hidden>
         <label><span>Title</span><input id="title-input" type="text"></label>
-        <label><span>Subtitle</span><input id="subtitle-input" type="text"></label>
+        <label><span>Subtitle</span><input id="subtitle-input" type="text" placeholder="describes the selection; clear to restore"></label>
         <label><span>X-axis label</span><input id="x-label-input" type="text"></label>
         <label><span>Y-axis label</span><input id="y-label-input" type="text"></label>
       </div>
@@ -140,8 +150,117 @@
       </div>
       <div class="plot-footer">
         <span id="plot-status"></span>
-        <span>Median line · interquartile band · hover for values</span>
+        <span class="plot-footer-right">
+          <span>Median line · interquartile band · hover for values</span>
+          <button class="png-button" type="button" data-export="plot"
+                  data-export-name="throughput">Export PNG</button>
+        </span>
       </div>
+    </section>
+    </div>
+
+    <section id="panel-prefilter" class="prefilter-card" data-panel="prefilter" hidden>
+      <p id="pf-error" class="pf-error" role="status" hidden></p>
+      <div class="pf-toolbar">
+        <label id="pf-source-field"><span>Run</span><select id="pf-source"></select></label>
+        <label><span>Dataset</span><select id="pf-dataset"></select></label>
+        <label><span>Candidate</span><select id="pf-subject"></select></label>
+        <label><span>Baseline</span><select id="pf-baseline"></select></label>
+      </div>
+
+
+      <article class="pf-panel">
+        <header><h3>The column</h3></header>
+        <div id="pf-columns-body"></div>
+      </article>
+
+
+      <article class="pf-panel">
+        <header><h3>What predicts throughput</h3>
+          <p>Which quantities track throughput, and what one threshold on each is
+             worth.</p></header>
+        <div class="pf-plot-wrap">
+          <svg id="pf-correlation-plot" role="img" aria-label="Predictor against throughput"></svg>
+        </div>
+        <div id="pf-correlation-body"></div>
+        <div class="pf-panel-actions">
+          <label class="pf-inline-field"><span>Plotted against</span>
+            <select id="pf-predictor"></select></label>
+          <div class="scale-control">
+            <span class="control-label">X scale</span>
+            <div class="segmented" role="group" aria-label="Predictor X axis scale">
+              <button type="button" data-pf-axis="corrX" data-scale="linear">Linear</button>
+              <button type="button" data-pf-axis="corrX" data-scale="log">Log</button>
+            </div>
+          </div>
+          <div class="scale-control">
+            <span class="control-label">Y scale</span>
+            <div class="segmented" role="group" aria-label="Predictor Y axis scale">
+              <button type="button" data-pf-axis="corrY" data-scale="linear">Linear</button>
+              <button type="button" data-pf-axis="corrY" data-scale="log">Log</button>
+            </div>
+          </div>
+          <button class="png-button" type="button" data-export="pf-correlation-plot"
+                  data-export-name="predictors">Export PNG</button>
+        </div>
+      </article>
+
+      <div class="pf-policy-bar">
+        <span class="pf-policy-kicker">POLICY</span>
+        <label class="pf-inline-field"><span>Max SIMD cost</span>
+          <input id="pf-max-cost" type="number" min="1" step="1"></label>
+        <label class="pf-inline-field"><span>Max covered codes ÷ rows (%)</span>
+          <input id="pf-max-rows" type="number" min="0" step="0.001"></label>
+        <button id="pf-gate-reset" class="quiet-button" type="button">shipped</button>
+        <button id="pf-gate-best" class="quiet-button" type="button">fastest here</button>
+        <button id="pf-gate-safe" class="quiet-button" type="button">safest here</button>
+        <span id="pf-policy-note" class="pf-policy-note"></span>
+      </div>
+
+      <article class="pf-panel">
+        <header><h3>The frontier</h3>
+          <p>The two quantities the shipped policy decides on, coloured by what actually
+             happened.</p></header>
+        <div class="pf-gate-row">
+          <div class="scale-control">
+            <span class="control-label">X scale</span>
+            <div class="segmented" role="group" aria-label="Frontier X axis scale">
+              <button type="button" data-pf-axis="x" data-scale="linear">Linear</button>
+              <button type="button" data-pf-axis="x" data-scale="log">Log</button>
+            </div>
+          </div>
+          <div class="scale-control">
+            <span class="control-label">Y scale</span>
+            <div class="segmented" role="group" aria-label="Frontier Y axis scale">
+              <button type="button" data-pf-axis="y" data-scale="linear">Linear</button>
+              <button type="button" data-pf-axis="y" data-scale="log">Log</button>
+            </div>
+          </div>
+        </div>
+        <div class="pf-plot-wrap">
+          <svg id="pf-frontier-plot" role="img" aria-label="SIMD cost against covered codes per row"></svg>
+        </div>
+        <p id="pf-frontier-status" class="pf-note"></p>
+        <div class="pf-panel-actions">
+          <button class="png-button" type="button" data-export="pf-frontier-plot"
+                  data-export-name="frontier">Export PNG</button>
+        </div>
+      </article>
+
+      <article class="pf-panel">
+        <header><h3>Is it worth it?</h3>
+          <p>Where the baseline's time goes and how much of it the policy can reach. A large
+             speedup on a small share of the work is a small speedup.</p></header>
+        <div class="pf-plot-wrap">
+          <svg id="pf-verdict-plot" role="img" aria-label="Time under each policy"></svg>
+        </div>
+        <div id="pf-verdict-body"></div>
+        <div class="pf-panel-actions">
+          <button class="png-button" type="button" data-export="pf-verdict-plot"
+                  data-export-name="verdict">Export PNG</button>
+        </div>
+      </article>
+
     </section>
   </main>
 
@@ -149,6 +268,8 @@
 
   <script id="bench-viz-data" type="application/json">__BENCH_VIZ_DATA__</script>
   <script id="bench-viz-defaults" type="application/json">__BENCH_VIZ_DEFAULTS__</script>
+  <script id="bench-viz-analysis" type="application/json">__BENCH_VIZ_ANALYSIS__</script>
   <script>__BENCH_VIZ_JS__</script>
+  <script>__BENCH_VIZ_PREFILTER_JS__</script>
 </body>
 </html>

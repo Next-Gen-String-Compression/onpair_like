@@ -8,11 +8,11 @@
 // deliberately exposes NO decode() (that decode-then-scan baseline is the `fsst`
 // candidate's job) and answers queries one way — the "comet" strategy.
 //
-// FSST REUSE: build() and footprint() are the SHARED fsst_common front-end
+// FSST REUSE: build() starts with the SHARED fsst_common front-end
 // (candidates/common/fsst_common/fsst_build.hpp) — byte-for-byte the same
 // train+compress+concatenate+export path as `fsst` and `fsst_like_tum`, so all
-// three FSST candidates compress identically and their footprints are directly
-// comparable. This file's cand_build() just calls fsst_common::Build() and then
+// three FSST candidates compress identically and their common stored components
+// are directly comparable. This file's cand_build() calls fsst_common::Build() and then
 // does the one UTN-specific step: rebuild the repo's FsstDecoder from the
 // exported symbol table (fsst_import), which drives the comet automaton. The
 // FSST fork here (alexandervanrenen, the repo's own submodule) is DISTINCT from
@@ -83,6 +83,9 @@ void* cand_build(const lb_chunk_view* view, const char* /*config_json*/,
     // Same fork on both sides of export/import, so the blob round-trips.
     h->decoder.DeserializeDecoder(std::span<const char>(
         reinterpret_cast<const char*>(h->b.symtab.data()), h->b.symtab.size()));
+    // Comet scans compressed rows and never consumes canonical decoded
+    // boundaries. Retain the compressed index only.
+    fsst_common::ReleaseDecodedOffsets(h->b);
     return h.release();
   } catch (const std::exception& e) {
     return fail((std::string("build failed: ") + e.what()).c_str());
@@ -93,7 +96,10 @@ void* cand_build(const lb_chunk_view* view, const char* /*config_json*/,
 
 uint32_t cand_footprint(void* self, lb_footprint_component* out,
                         uint32_t capacity) {
-  return fsst_common::Footprint(static_cast<Handle*>(self)->b, out, capacity);
+  auto* h = static_cast<Handle*>(self);
+  const uint32_t base = fsst_common::Footprint(h->b, out, capacity);
+  if (base < capacity) out[base] = {"decode_table", sizeof(fsst_decoder_t)};
+  return base + 1;
 }
 
 // "comet" strategy: build the KMP-over-symbols automaton for this query
@@ -192,7 +198,7 @@ const lb_strategy kStrategies[] = {
 const lb_candidate kVtable = {
     /*abi_version=*/LB_ABI_VERSION,
     /*name=*/"fsst_like_utn",
-    /*version=*/"0.1.0+08a6fd4",
+    /*version=*/"0.2.0+08a6fd4.resident-state",
     /*cpu_features=*/nullptr,
     /*strategies=*/kStrategies,
     /*strategy_count=*/1,

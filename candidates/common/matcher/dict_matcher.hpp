@@ -16,9 +16,10 @@
 // prefilter) or a compressed-domain engine (FSST-LIKE) — so `dict_<child>`
 // pipelines compose by construction.
 //
-// Footprint = the child's footprint over the unique dictionary + the per-row
-// codes, bit-packed to ceil(log2(n_unique)) bits/row (the representative
-// resident cost of a dictionary column; the reference DictionaryAlgorithm).
+// Footprint = the child's footprint over the unique dictionary + the actual
+// resident per-row u32 codes. Reporting hypothetical bit-packing while scanning
+// an unpacked vector would give the candidate the space benefit without its
+// extraction cost.
 
 #include "matcher.hpp"
 
@@ -31,7 +32,9 @@ namespace lb {
 
 class DictMatcher final : public Matcher {
  public:
-  explicit DictMatcher(std::unique_ptr<Matcher> child) : child_(std::move(child)) {}
+  explicit DictMatcher(std::unique_ptr<Matcher> child,
+                       bool child_copies_input = false)
+      : child_(std::move(child)), child_copies_input_(child_copies_input) {}
 
   bool build(const uint8_t* bytes, const uint64_t* offsets, uint64_t n,
              char* err_buf, uint64_t err_cap) override {
@@ -55,10 +58,16 @@ class DictMatcher final : public Matcher {
     }
     num_unique_ = static_cast<uint32_t>(unique_offsets_.size() - 1);
 
-    // Build the child over the unique values only. Our buffers outlive the
-    // child (both members here), satisfying the non-owning lifetime contract.
-    return child_->build(unique_blob_.data(), unique_offsets_.data(), num_unique_,
-                         err_buf, err_cap);
+    // Build the child over the unique values only. Plaintext children borrow
+    // these buffers for their lifetime; compressed children copy their stored
+    // representation and declare that the build input can be released.
+    const bool ok = child_->build(unique_blob_.data(), unique_offsets_.data(),
+                                  num_unique_, err_buf, err_cap);
+    if (ok && child_copies_input_) {
+      std::vector<uint8_t>().swap(unique_blob_);
+      std::vector<uint64_t>().swap(unique_offsets_);
+    }
+    return ok;
   }
 
   int run(const lb_query* q, uint64_t* out, lb_run_stats* stats) override {
@@ -93,10 +102,7 @@ class DictMatcher final : public Matcher {
     // The child's cost is measured over the unique dictionary (its "payload"
     // and "offsets" are unique-domain).
     child_->footprint(out);
-    // Per-row codes, bit-packed: ceil(log2(n_unique)) bits each (min 1).
-    uint32_t bits = 1;
-    while ((uint64_t{1} << bits) < num_unique_) bits++;
-    out.push_back({"codes", (n_ * bits + 7) / 8});
+    out.push_back({"dict_codes", codes_.size() * sizeof(uint32_t)});
   }
 
   uint64_t num_rows() const override { return n_; }
@@ -108,6 +114,7 @@ class DictMatcher final : public Matcher {
   std::vector<uint32_t> codes_;           // one per row
   uint64_t n_ = 0;
   uint32_t num_unique_ = 0;
+  bool child_copies_input_ = false;
 };
 
 }  // namespace lb

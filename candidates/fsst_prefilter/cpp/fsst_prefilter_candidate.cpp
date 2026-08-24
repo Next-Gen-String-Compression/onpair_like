@@ -107,7 +107,8 @@ class FsstPrefilter final : public lb::Matcher {
 
     // Flat-scan plumbing. The kernels index one contiguous buffer with 32-bit
     // absolute offsets, so the u64 compressed-row offsets are narrowed once
-    // here and then released (resident cost unchanged).
+    // here and then released. Footprint still charges the benchmark's uniform
+    // u64-per-row index policy; actual execution retains only this u32 index.
     cbytes_ = b_.coffsets[n];
     if (cbytes_ > uint64_t{UINT32_MAX} - BUFFER_SLACK) {
       if (ec > 0)
@@ -117,8 +118,8 @@ class FsstPrefilter final : public lb::Matcher {
     }
     coff32_.resize(n + 1);
     for (uint64_t i = 0; i <= n; i++) coff32_[i] = static_cast<uint32_t>(b_.coffsets[i]);
-    b_.coffsets.clear();
-    b_.coffsets.shrink_to_fit();
+    fsst_common::ReleaseCompressedOffsets(b_);
+    fsst_common::ReleaseDecodedOffsets(b_);
     // Readable slack past the last row: a superblock probe starting inside the
     // buffer reads up to CODE_LEN-1 bytes past its end.
     b_.compressed.resize(cbytes_ + BUFFER_SLACK, 0);
@@ -199,6 +200,7 @@ class FsstPrefilter final : public lb::Matcher {
       if (std::strcmp(comps[i].name, "payload_fsst") == 0) comps[i].bytes = cbytes_;
       out.push_back(comps[i]);
     }
+    out.push_back({"decode_table", sizeof(fsst_decoder_t)});
   }
 
   uint64_t num_rows() const override { return b_.num_rows; }
@@ -269,20 +271,22 @@ void* build_plain(const lb_chunk_view* view, const char*, char* eb, uint64_t ec)
 }
 void* build_dict(const lb_chunk_view* view, const char*, char* eb, uint64_t ec) {
   auto child = std::make_unique<FsstPrefilter>();
-  return lb::adapter_build(std::make_unique<lb::DictMatcher>(std::move(child)), view, eb, ec);
+  return lb::adapter_build(
+      std::make_unique<lb::DictMatcher>(std::move(child), /*child_copies_input=*/true),
+      view, eb, ec);
 }
 
 const uint32_t kOps = LB_OP_BIT(LB_CONTAINS) | LB_OP_BIT(LB_CONTAINS_ANY);
 
 const lb_strategy kPlainStrats[] = {{"fsst-prefilter", kOps}};
 const lb_candidate kPlainVtable = {
-    LB_ABI_VERSION, "fsst_prefilter", "0.2.0+e638d4c", nullptr,
+    LB_ABI_VERSION, "fsst_prefilter", "0.3.0+e638d4c.resident-state", nullptr,
     kPlainStrats, 1, build_plain, lb::adapter_footprint, lb::adapter_run,
     nullptr, nullptr, lb::adapter_destroy};
 
 const lb_strategy kDictStrats[] = {{"dict+fsst-prefilter", kOps}};
 const lb_candidate kDictVtable = {
-    LB_ABI_VERSION, "dict_fsst_prefilter", "0.2.0+e638d4c", nullptr,
+    LB_ABI_VERSION, "dict_fsst_prefilter", "0.3.0+e638d4c.resident-state", nullptr,
     kDictStrats, 1, build_dict, lb::adapter_footprint, lb::adapter_run,
     nullptr, nullptr, lb::adapter_destroy};
 

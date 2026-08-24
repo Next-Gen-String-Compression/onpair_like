@@ -101,6 +101,8 @@ class FsstLikeTum final : public lb::Matcher {
       encoder_ = std::make_unique<Encoder>(st);
       fsst_destroy(b_.enc);
       b_.enc = nullptr;
+      // Compressed-domain execution needs only compressed-row boundaries.
+      fsst_common::ReleaseDecodedOffsets(b_);
       return true;
     } catch (const std::exception& e) {
       if (b_.enc) { fsst_destroy(b_.enc); b_.enc = nullptr; }
@@ -147,6 +149,8 @@ class FsstLikeTum final : public lb::Matcher {
     lb_footprint_component comps[3];
     const uint32_t n = fsst_common::Footprint(b_, comps, 3);
     for (uint32_t i = 0; i < n; i++) out.push_back(comps[i]);
+    out.push_back({"encoder_table",
+                   sizeof(libfsst::Encoder) + sizeof(libfsst::SymbolTable)});
   }
 
   uint64_t num_rows() const override { return b_.num_rows; }
@@ -158,7 +162,9 @@ class FsstLikeTum final : public lb::Matcher {
 
 void* build(const lb_chunk_view* view, const char* /*config*/, char* eb, uint64_t ec) {
   auto child = std::make_unique<FsstLikeTum>();
-  return lb::adapter_build(std::make_unique<lb::DictMatcher>(std::move(child)), view, eb, ec);
+  return lb::adapter_build(
+      std::make_unique<lb::DictMatcher>(std::move(child), /*child_copies_input=*/true),
+      view, eb, ec);
 }
 
 const lb_strategy kStrategies[] = {
@@ -168,7 +174,7 @@ const lb_strategy kStrategies[] = {
 const lb_candidate kVtable = {
     /*abi_version=*/LB_ABI_VERSION,
     /*name=*/"dict_fsst_like_tum",
-    /*version=*/"0.1.0+b1eb3ab",
+    /*version=*/"0.2.0+b1eb3ab.resident-state",
     /*cpu_features=*/nullptr,
     /*strategies=*/kStrategies,
     /*strategy_count=*/1,

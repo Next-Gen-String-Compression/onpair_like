@@ -11,9 +11,7 @@ use crate::bitmap::Bitmap;
 use crate::chunks::{self, Chunks};
 use crate::dataset::PreparedDataset;
 use crate::registry::{self, BuiltChunk, Candidate, QueryFfi, Scanner};
-use crate::results::{
-    CellKey, GateReport, PhaseNs, PrefilterReport, Row, Speed, Status, Writer,
-};
+use crate::results::{CellKey, GateReport, PhaseNs, PrefilterReport, Row, Speed, Status, Writer};
 use crate::spec::{config_hash, LoadedSpec};
 use crate::suite::{PreparedQuery, Suite};
 use crate::timing::{measure, MeasureCfg};
@@ -31,7 +29,11 @@ pub struct WorkerSummary {
 /// How a cell answers queries: a candidate-implemented strategy, or a
 /// harness-composed pipeline over view()/decode() with a scanner.
 enum Strat<'a> {
-    Candidate { index: u32, name: String, supported_ops: u32 },
+    Candidate {
+        index: u32,
+        name: String,
+        supported_ops: u32,
+    },
     Direct(&'a Scanner),
     Decode(&'a Scanner),
 }
@@ -97,6 +99,68 @@ impl StatsAgg {
         add(&mut self.setup_ns, s.setup_ns);
         add(&mut self.eval_domain, s.eval_domain);
         add(&mut self.eval_domain_matches, s.eval_domain_matches);
+    }
+}
+
+/// Static cover facts summed across chunks (ABI v6).
+///
+/// Counts add the way rows do — each chunk has its own dictionary and its own
+/// cover, so `cover_points` is the total probe count across chunks rather than
+/// one cover's shape. For the single-chunk runs the two coincide. The
+/// profitability hint is a conjunction: unprofitable in any chunk is reported
+/// as unprofitable.
+#[derive(Default, Clone, Copy)]
+struct FactsAgg {
+    cover_points: Option<u64>,
+    cover_ranges: Option<u64>,
+    covered_codes: Option<u64>,
+    indexed_codes: Option<u64>,
+    profitable: Option<bool>,
+}
+
+impl FactsAgg {
+    fn absorb(&mut self, f: &lb_abi::LbQueryFacts) {
+        fn add(acc: &mut Option<u64>, v: u64) {
+            if v != lb_abi::LB_FACT_UNSET {
+                *acc = Some(acc.unwrap_or(0) + v);
+            }
+        }
+        add(&mut self.cover_points, f.cover_points);
+        add(&mut self.cover_ranges, f.cover_ranges);
+        add(&mut self.covered_codes, f.covered_codes);
+        add(&mut self.indexed_codes, f.indexed_codes);
+        if f.profitable_hint != lb_abi::LB_FACT_UNSET {
+            let yes = f.profitable_hint != 0;
+            self.profitable = Some(self.profitable.unwrap_or(true) && yes);
+        }
+    }
+
+    fn comparison_cost(&self) -> Option<u64> {
+        match (self.cover_points, self.cover_ranges) {
+            (Some(p), Some(r)) => Some(p + 2 * r),
+            (Some(p), None) => Some(p),
+            (None, Some(r)) => Some(2 * r),
+            (None, None) => None,
+        }
+    }
+
+    fn covered_fraction(&self) -> Option<f64> {
+        match (self.covered_codes, self.indexed_codes) {
+            (Some(c), Some(t)) if t > 0 => Some(c as f64 / t as f64),
+            _ => None,
+        }
+    }
+
+    /// Expected share of rows the cover admits, mirroring the library's
+    /// `PrefilterAnalysis::expected_candidate_row_fraction`. Reported by the
+    /// harness rather than the candidate because the row count is the
+    /// harness's, and because it makes the quantity available for candidates
+    /// whose own policy does not use it.
+    fn candidate_row_fraction(&self, num_rows: u64) -> Option<f64> {
+        match self.covered_codes {
+            Some(c) if num_rows > 0 => Some((c as f64 / num_rows as f64).min(1.0)),
+            _ => None,
+        }
     }
 }
 
@@ -200,10 +264,8 @@ fn exec_once(
                 // exist only in instrumented mode.
                 match &mut mode {
                     Mode::Timing => {
-                        let rc = handle.decode(
-                            &mut scratch.bytes[..cap],
-                            &mut scratch.offsets[..n + 1],
-                        );
+                        let rc =
+                            handle.decode(&mut scratch.bytes[..cap], &mut scratch.offsets[..n + 1]);
                         if rc != 0 {
                             return Err(format!("decode() returned {rc}").into());
                         }
@@ -219,10 +281,8 @@ fn exec_once(
                     }
                     Mode::Instrumented(agg, phases) => {
                         let t0 = Instant::now();
-                        let rc = handle.decode(
-                            &mut scratch.bytes[..cap],
-                            &mut scratch.offsets[..n + 1],
-                        );
+                        let rc =
+                            handle.decode(&mut scratch.bytes[..cap], &mut scratch.offsets[..n + 1]);
                         if rc != 0 {
                             return Err(format!("decode() returned {rc}").into());
                         }
@@ -286,7 +346,10 @@ pub fn run_worker(
         .ok_or("config index out of range")?
         .clone();
 
-    let ds_ref = spec.datasets.get(dataset_idx).ok_or("dataset index out of range")?;
+    let ds_ref = spec
+        .datasets
+        .get(dataset_idx)
+        .ok_or("dataset index out of range")?;
     let ds = PreparedDataset::load(&ds_ref.path, !spec.measure.skip_checksum_verify)?;
 
     // Suites bound to this dataset (binding verified checksum-strict).
@@ -374,6 +437,8 @@ pub fn run_worker(
             footprint_total_bytes: footprint_total,
             footprint_components: components,
             raw_bytes: ds.raw_bytes(),
+            num_rows: ds.num_rows(),
+            payload_bytes: ds.manifest.payload_bytes,
         })?;
 
         // ---- strategies over this one build ----
@@ -400,7 +465,12 @@ pub fn run_worker(
             strats.retain(|s| spec.strategies.iter().any(|n| *n == s.strategy_name()));
         }
 
-        let max_payload = chunks.chunks.iter().map(|c| c.payload_bytes).max().unwrap_or(0);
+        let max_payload = chunks
+            .chunks
+            .iter()
+            .map(|c| c.payload_bytes)
+            .max()
+            .unwrap_or(0);
         let max_rows = chunks.chunks.iter().map(|c| c.num_rows).max().unwrap_or(0);
         let mut scratch = Scratch {
             // + LB_DECODE_PAD: the contract's guaranteed headroom for
@@ -414,8 +484,16 @@ pub fn run_worker(
             for query in &suite.queries {
                 for strat in &strats {
                     let row = run_cell(
-                        &key, strat, query, &candidate, &handles, &chunks, &ds,
-                        &mut scratch, &mut bitmap, &measure_cfg,
+                        &key,
+                        strat,
+                        query,
+                        &candidate,
+                        &handles,
+                        &chunks,
+                        &ds,
+                        &mut scratch,
+                        &mut bitmap,
+                        &measure_cfg,
                         spec.measure.raw_samples,
                     )?;
                     let status = match &row {
@@ -474,6 +552,22 @@ fn run_cell(
     };
 
     let qffi = QueryFfi::new(query.op, &query.needles);
+    // Static cover facts, gathered before anything is timed. Deliberately
+    // outside the measurement loop: a candidate that calls a shipped
+    // convenience method must not split its own pipeline to report counters
+    // (SEMANTICS.md rule 5), but describing the query costs the measurement
+    // nothing here.
+    let facts = {
+        let mut agg = FactsAgg::default();
+        if let Strat::Candidate { index, .. } = strat {
+            for handle in handles {
+                if let Some(f) = handle.query_facts(*index, &qffi.query) {
+                    agg.absorb(&f);
+                }
+            }
+        }
+        agg
+    };
     // Op-mask gate first, then the optional per-query capability probe: a
     // scanner that declares this specific query out of its envelope makes
     // the cell Unsupported, not Error.
@@ -486,7 +580,14 @@ fn run_cell(
     // ---- 1. verification pass: gate before any number exists ----
     if let Err(e) = exec_once(strat, handles, chunks, &qffi, scratch, bitmap, Mode::Timing) {
         eprintln!("error: {}/{}: {e}", candidate.name, query.record.id);
-        return Ok(mk_row(Status::Error, None, None, None, None, Some(e.to_string())));
+        return Ok(mk_row(
+            Status::Error,
+            None,
+            None,
+            None,
+            None,
+            Some(e.to_string()),
+        ));
     }
     let count = bitmap.count();
     let hash = bitmap.truth_hash();
@@ -499,7 +600,10 @@ fn run_cell(
         let (div_bytes, expected) = match div {
             // A divergent bit at or past num_rows is a padding scribble — an
             // out-of-range write; there is no row to print.
-            Some(i) if i >= ds.num_rows() => (Some("<padding bit past num_rows — out-of-range write>".into()), Some(false)),
+            Some(i) if i >= ds.num_rows() => (
+                Some("<padding bit past num_rows — out-of-range write>".into()),
+                Some(false),
+            ),
             Some(i) => {
                 let raw = ds.row(i);
                 let printable = String::from_utf8_lossy(&raw[..raw.len().min(128)]).into_owned();
@@ -513,7 +617,10 @@ fn run_cell(
              (oracle says match={expected:?}) bytes={div_bytes:?}",
             candidate.name,
             strat.strategy_name(),
-            strat.scanner_name().map(|s| format!(" scanner={s}")).unwrap_or_default(),
+            strat
+                .scanner_name()
+                .map(|s| format!(" scanner={s}"))
+                .unwrap_or_default(),
             query.record.id,
             truth.count,
             truth.hash,
@@ -528,7 +635,10 @@ fn run_cell(
                 first_divergent_row_bytes: div_bytes,
                 expected_match: expected,
             }),
-            None, None, None, None,
+            None,
+            None,
+            None,
+            None,
         ));
     }
     let gate = GateReport {
@@ -544,10 +654,22 @@ fn run_cell(
     let mut agg = StatsAgg::default();
     let mut phases = HarnessPhases::default();
     if let Err(e) = exec_once(
-        strat, handles, chunks, &qffi, scratch, bitmap,
+        strat,
+        handles,
+        chunks,
+        &qffi,
+        scratch,
+        bitmap,
         Mode::Instrumented(&mut agg, &mut phases),
     ) {
-        return Ok(mk_row(Status::Error, Some(gate), None, None, None, Some(e.to_string())));
+        return Ok(mk_row(
+            Status::Error,
+            Some(gate),
+            None,
+            None,
+            None,
+            Some(e.to_string()),
+        ));
     }
 
     // ---- 3. timing loop: uninstrumented samples only ----
@@ -593,20 +715,47 @@ fn run_cell(
         // Decode strategies: the harness owns the joint, so its measurement
         // is authoritative even when a tiny chunk quantizes to 0 ticks.
         let decode_ns = if matches!(strat, Strat::Decode(_)) {
-            Some(PhaseNs { ns: phases.decode_ns, origin: "harness" })
+            Some(PhaseNs {
+                ns: phases.decode_ns,
+                origin: "harness",
+            })
         } else {
-            agg.decode_ns.map(|ns| PhaseNs { ns, origin: "self_reported" })
+            agg.decode_ns.map(|ns| PhaseNs {
+                ns,
+                origin: "self_reported",
+            })
         };
-        let scan_ns = composed.then_some(PhaseNs { ns: phases.scan_ns, origin: "harness" });
-        let prefilter_ns = agg.prefilter_ns.map(|ns| PhaseNs { ns, origin: "self_reported" });
-        let verify_ns = agg.verify_ns.map(|ns| PhaseNs { ns, origin: "self_reported" });
-        let setup_ns = agg.setup_ns.map(|ns| PhaseNs { ns, origin: "self_reported" });
+        let scan_ns = composed.then_some(PhaseNs {
+            ns: phases.scan_ns,
+            origin: "harness",
+        });
+        let prefilter_ns = agg.prefilter_ns.map(|ns| PhaseNs {
+            ns,
+            origin: "self_reported",
+        });
+        let verify_ns = agg.verify_ns.map(|ns| PhaseNs {
+            ns,
+            origin: "self_reported",
+        });
+        let setup_ns = agg.setup_ns.map(|ns| PhaseNs {
+            ns,
+            origin: "self_reported",
+        });
+        let cover_points = facts.cover_points;
+        let cover_ranges = facts.cover_ranges;
+        let comparison_cost = facts.comparison_cost();
+        let covered_fraction = facts.covered_fraction();
+        let candidate_row_fraction = facts.candidate_row_fraction(num_rows);
+        let profitable_hint = facts.profitable;
         if prefilter_candidates.is_none()
             && decode_ns.is_none()
             && scan_ns.is_none()
             && prefilter_ns.is_none()
             && verify_ns.is_none()
             && setup_ns.is_none()
+            && comparison_cost.is_none()
+            && covered_fraction.is_none()
+            && profitable_hint.is_none()
         {
             None
         } else {
@@ -620,6 +769,14 @@ fn run_cell(
                 prefilter_ns,
                 verify_ns,
                 setup_ns,
+                cover_points,
+                cover_ranges,
+                comparison_cost,
+                covered_fraction,
+                covered_codes: facts.covered_codes,
+                indexed_codes: facts.indexed_codes,
+                candidate_row_fraction,
+                profitable_hint,
             })
         }
     };
