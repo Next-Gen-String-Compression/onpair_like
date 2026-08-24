@@ -164,6 +164,9 @@ its suite. Run it and build the self-contained Benchmark Explorer with:
 ./experiments/optimize_prefilter/benchmark.sh --profile substantial --seed 42
 ```
 
+The explorer opens in your browser when the script is run interactively; set
+`OPEN_EXPLORER=0`, or redirect stdout, to only print its path.
+
 The resulting `results/optimize_prefilter/<profile>/seed-42/explorer.html`
 plots exact selectivity or needle length and can switch datasets, strategies,
 scales, and aggregations without regenerating the benchmark. The run spec

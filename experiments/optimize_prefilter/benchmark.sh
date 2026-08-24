@@ -52,3 +52,13 @@ python3 tools/bench-viz/bench_viz.py "$results" \
   --out "$explorer"
 
 echo "explorer: $explorer"
+
+# Open it, unless stdout is redirected (CI, a log file) or the caller opted out.
+# The explorer is a single self-contained file, so the browser needs nothing else.
+if [[ "${OPEN_EXPLORER:-1}" == "1" && -t 1 ]]; then
+  if command -v open >/dev/null 2>&1; then
+    open "$explorer"
+  elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$explorer"
+  fi
+fi
