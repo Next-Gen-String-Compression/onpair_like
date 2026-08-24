@@ -39,6 +39,16 @@ function slice(dataset, seriesKey) {
     && row.op === "contains" && key(row) === seriesKey);
 }
 
+// The figures below are pinned to one specific run, so a payload from any other
+// one -- the standard `experiments/optimize_prefilter/benchmark.sh` output, for
+// instance, whose source is named after its seed -- has nothing to check here.
+// Say so and stop, rather than reducing an empty slice and dying on the null.
+if (!DATA.some(row => row.source === "needle-sweep")) {
+  print("figures.test.js: skipped (payload carries no `needle-sweep` run; "
+    + "these figures are pinned to that one)");
+  return;
+}
+
 let failures = 0;
 function near(name, actual, expected, tol) {
   const ok = Math.abs(actual - expected) <= tol;
