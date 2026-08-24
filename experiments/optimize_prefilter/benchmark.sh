@@ -40,11 +40,13 @@ fi
 
 cargo build --release -p lb-harness --bin bench \
   --no-default-features \
-  --features cand-uncompressed-memmem,cand-onpair-spiral,cand-fsst,scan-memmem
-target/release/bench run "$spec" --out "$results" "${bench_args[@]}"
+  --features cand-uncompressed-memmem,cand-onpair-spiral,scan-memmem
+# bash 3.2, which macOS still ships, treats an empty array expansion as an
+# unbound variable under `set -u`, so the plain no-argument invocation aborted
+# here. The `+` form expands to nothing when the array is empty.
+target/release/bench run "$spec" --out "$results" ${bench_args[@]+"${bench_args[@]}"}
 python3 tools/bench-viz/bench_viz.py "$results" \
   --show memmem \
-  --show kmp \
   --title "OnPair prefilter experiment ($profile, seed $seed)" \
   --subtitle "Profile $profile; exact selectivity; needle lengths 1-64" \
   --out "$explorer"
