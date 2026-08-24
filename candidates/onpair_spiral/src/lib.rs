@@ -416,7 +416,7 @@ static STRATEGIES: [LbStrategy; 3] = [
 static VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
     name: c"onpair_spiral".as_ptr(),
-    version: c"0.1.0+5936ffc".as_ptr(),
+    version: c"0.1.0+75e80c4".as_ptr(),
     // The prefilter uses baseline NEON on aarch64 and dispatches between
     // SSE2/AVX2/AVX-512 on x86_64; it has no scalar fallback.
     cpu_features: core::ptr::null(),
@@ -434,7 +434,7 @@ static VTABLE: LbCandidate = LbCandidate {
 static DECODE_VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
     name: c"onpair_spiral_decode".as_ptr(),
-    version: c"0.3.0+5936ffc.compact-bulk-expand".as_ptr(),
+    version: c"0.3.0+75e80c4.compact-bulk-expand".as_ptr(),
     cpu_features: core::ptr::null(),
     strategies: core::ptr::null(),
     strategy_count: 0,

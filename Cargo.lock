@@ -1205,7 +1205,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 [[package]]
 name = "onpair"
 version = "0.2.0"
-source = "git+https://github.com/spiraldb/onpair.git?rev=5936ffc8f2938cc180b47be48c929b8581f1f29e#5936ffc8f2938cc180b47be48c929b8581f1f29e"
+source = "git+https://github.com/spiraldb/onpair.git?rev=75e80c4392e912428542488bc3ba164847b3c1d5#75e80c4392e912428542488bc3ba164847b3c1d5"
 dependencies = [
  "hashbrown 0.16.1",
  "memchr",
