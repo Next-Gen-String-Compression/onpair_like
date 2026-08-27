@@ -151,11 +151,27 @@
       <div class="plot-footer">
         <span id="plot-status"></span>
         <span class="plot-footer-right">
-          <span>Median line · interquartile band · hover for values</span>
+          <span>Median line · interquartile band · hover for values · click to inspect</span>
           <button class="png-button" type="button" data-export="plot"
                   data-export-name="throughput">Export PNG</button>
         </span>
       </div>
+      <details id="query-details" class="query-details">
+        <summary>
+          <span class="section-kicker">QUERY DETAILS</span>
+          <span id="query-details-summary">Click a raw point or median point to inspect its query data</span>
+        </summary>
+        <div class="query-details-content">
+          <div class="query-details-toolbar">
+            <p>Raw points select one query; median points select every query in that bin.
+              Shift-, Ctrl-, or Command-click to compare selections.</p>
+            <button id="query-details-clear" class="png-button" type="button" disabled>Clear selection</button>
+          </div>
+          <div id="query-details-body" aria-live="polite">
+            <p class="query-details-empty">Nothing selected yet. Click a point in the plot above.</p>
+          </div>
+        </div>
+      </details>
     </section>
     </div>
 

@@ -40,7 +40,8 @@
     "label-editor", "title-input", "subtitle-input", "x-label-input",
     "y-label-input", "series-count", "series-search", "series-all", "series-none",
     "series-chips", "decode-section", "decode-all", "decode-none", "decode-chips",
-    "plot", "plot-status", "tooltip", "export-scale"
+    "plot", "plot-status", "tooltip", "export-scale", "query-details",
+    "query-details-summary", "query-details-clear", "query-details-body"
   ].map(id => [id, document.getElementById(id)]));
 
   const state = {
@@ -76,6 +77,7 @@
     },
     visibleSeries: new Set(),
     visibleDecode: new Set(),
+    selectedQueryIds: new Set(),
     catalogSignature: null,
     decodeSignature: null,
     initialPatterns: (DEFAULTS.show || []).map(value => String(value).toLowerCase()),
@@ -473,6 +475,7 @@
         q1: quantile(ys, 0.25),
         q3: quantile(ys, 0.75),
         n: group.length,
+        queryIds: unique(group.map(point => point.row.query_id).filter(Boolean)),
       };
     }).sort((a, b) => a.x - b.x);
   }
@@ -737,6 +740,274 @@
     return rows;
   }
 
+  function htmlElement(name, className = "", text = null) {
+    const node = document.createElement(name);
+    if (className) node.className = className;
+    if (text !== null) node.textContent = text;
+    return node;
+  }
+
+  function queryValue(rows, key) {
+    const row = rows.find(item => item[key] !== null && item[key] !== undefined);
+    return row ? row[key] : null;
+  }
+
+  function countText(value) {
+    return finite(value) ? Math.round(value).toLocaleString("en-GB") : "—";
+  }
+
+  function durationText(value) {
+    if (!finite(value)) return "—";
+    if (value >= 1e9) return `${formatSignificant(value / 1e9, 4)} s`;
+    if (value >= 1e6) return `${formatSignificant(value / 1e6, 4)} ms`;
+    if (value >= 1e3) return `${formatSignificant(value / 1e3, 4)} µs`;
+    return `${formatSignificant(value, 4)} ns`;
+  }
+
+  function optionalPercent(value) {
+    return finite(value) ? percentText(value) : "—";
+  }
+
+  function needleText(needles) {
+    if (!Array.isArray(needles) || !needles.length) return "needle bytes unavailable";
+    return needles.map(needle => JSON.stringify(needle.display)).join("  |  ");
+  }
+
+  function appendMetric(list, label, value, title = "") {
+    const term = htmlElement("dt", "", label);
+    if (title) term.title = title;
+    const detail = htmlElement("dd", "", value);
+    list.append(term, detail);
+  }
+
+  function snapshotForQuery(queryId, rows) {
+    const queryRows = rows.filter(row => row.query_id === queryId);
+    const points = queryValue(queryRows, "cover_points");
+    const ranges = queryValue(queryRows, "cover_ranges");
+    const selectivity = queryValue(queryRows, "selectivity");
+    const admitted = queryValue(queryRows, "candidate_row_fraction");
+    return {
+      id: queryId,
+      rows: queryRows,
+      needles: queryValue(queryRows, "needles"),
+      op: queryValue(queryRows, "op"),
+      needleLen: queryValue(queryRows, "needle_len"),
+      needleLens: queryValue(queryRows, "needle_lens"),
+      selectivity,
+      matches: queryValue(queryRows, "match_count"),
+      rarestByte: queryValue(queryRows, "rarest_byte_freq"),
+      points,
+      ranges,
+      comparisons: queryValue(queryRows, "comparison_cost"),
+      coveredCodes: queryValue(queryRows, "covered_codes"),
+      indexedCodes: queryValue(queryRows, "indexed_codes"),
+      coveredFraction: queryValue(queryRows, "covered_fraction"),
+      admitted,
+      amplification: finite(admitted) && finite(selectivity) && selectivity > 0
+        ? admitted / selectivity : null,
+      profitable: queryValue(queryRows, "profitable"),
+      prefilterCandidates: queryValue(queryRows, "candidate_rows"),
+      pruneRate: queryValue(queryRows, "prune_rate"),
+      falsePositiveRate: queryValue(queryRows, "false_positive_rate"),
+      verifyPerSurvivor: queryValue(queryRows, "verify_per_survivor"),
+      gateExpected: queryValue(queryRows, "gate_expected_count"),
+      gateActual: queryValue(queryRows, "gate_actual_count"),
+      gateHashOk: queryValue(queryRows, "gate_hash_ok"),
+      meta: queryValue(queryRows, "query_meta"),
+    };
+  }
+
+  function coverShapeText(snapshot) {
+    if (!finite(snapshot.points) && !finite(snapshot.ranges)) return "—";
+    return `${countText(snapshot.points || 0)} point${snapshot.points === 1 ? "" : "s"}`
+      + ` · ${countText(snapshot.ranges || 0)} range${snapshot.ranges === 1 ? "" : "s"}`;
+  }
+
+  function renderMeasurementTable(snapshot, selectedSeries) {
+    const visible = new Set(selectedSeries.map(meta => meta.id));
+    const measurements = snapshot.rows.filter(row => visible.has(seriesKey(row)));
+    const wrap = htmlElement("div", "query-measurements");
+    const heading = htmlElement("h4", "", "Visible-series measurements");
+    wrap.appendChild(heading);
+    if (!measurements.length) {
+      wrap.appendChild(htmlElement("p", "query-details-empty", "No selected series measured this query."));
+      return wrap;
+    }
+    const tableWrap = htmlElement("div", "query-table-wrap");
+    const table = htmlElement("table", "query-measurement-table");
+    const head = htmlElement("thead");
+    const headRow = htmlElement("tr");
+    ["Series", "Throughput", "Latency / row", "Median", "IQR", "Samples", "Measured phases"]
+      .forEach(label => headRow.appendChild(htmlElement("th", "", label)));
+    head.appendChild(headRow);
+    table.appendChild(head);
+    const body = htmlElement("tbody");
+    measurements.forEach(row => {
+      const tr = htmlElement("tr");
+      const label = seriesMeta(row).label;
+      const phases = [
+        finite(row.prefilter_ns) ? `prefilter ${durationText(row.prefilter_ns)}` : null,
+        finite(row.verify_ns) ? `verify ${durationText(row.verify_ns)}` : null,
+        finite(row.decode_gbps) ? `decode ${formatSignificant(row.decode_gbps, 4)} GB/s` : null,
+        finite(row.scan_ns) ? `scan ${durationText(row.scan_ns)}` : null,
+      ].filter(Boolean).join(" · ") || "—";
+      [
+        label,
+        finite(row.gbps) ? `${formatSignificant(row.gbps, 4)} GB/s` : "—",
+        finite(row.ns_per_row) ? `${formatSignificant(row.ns_per_row, 4)} ns` : "—",
+        durationText(row.latency_ns),
+        finite(row.latency_p25_ns) && finite(row.latency_p75_ns)
+          ? `${durationText(row.latency_p25_ns)} – ${durationText(row.latency_p75_ns)}` : "—",
+        countText(row.latency_samples),
+        phases,
+      ].forEach((value, index) => {
+        const td = htmlElement("td", index === 0 ? "query-series-cell" : "", value);
+        if (index === 0) {
+          const config = compactConfig(row.config);
+          td.title = [row.candidate_version, config].filter(Boolean).join(" · ");
+        }
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+    table.appendChild(body);
+    tableWrap.appendChild(table);
+    wrap.appendChild(tableWrap);
+    return wrap;
+  }
+
+  function renderQueryInspector(snapshot, selectedSeries, open) {
+    const inspector = htmlElement("details", "query-inspector");
+    inspector.open = open;
+    const summary = htmlElement("summary");
+    const title = htmlElement("span", "query-inspector-id", snapshot.id);
+    const needle = htmlElement("code", "query-inspector-needle", needleText(snapshot.needles));
+    summary.append(title, needle);
+    inspector.appendChild(summary);
+
+    const content = htmlElement("div", "query-inspector-content");
+    const grids = htmlElement("div", "query-metric-groups");
+
+    const resultGroup = htmlElement("section", "query-metric-group");
+    resultGroup.appendChild(htmlElement("h4", "", "Query & result"));
+    const resultList = htmlElement("dl");
+    appendMetric(resultList, "Needle", needleText(snapshot.needles));
+    const lengths = Array.isArray(snapshot.needleLens) ? snapshot.needleLens : [];
+    const lengthText = lengths.length > 1
+      ? `${countText(snapshot.needleLen)} total (${lengths.map(countText).join(" + ")})`
+      : finite(snapshot.needleLen) ? countText(snapshot.needleLen) : "—";
+    appendMetric(resultList, "Byte length", lengthText);
+    appendMetric(resultList, "Operation", snapshot.op || "—");
+    appendMetric(resultList, "Selectivity", optionalPercent(snapshot.selectivity));
+    appendMetric(resultList, "Matching rows", countText(snapshot.matches));
+    appendMetric(resultList, "Rarest byte frequency", optionalPercent(snapshot.rarestByte));
+    const gateValid = snapshot.gateHashOk === null ? "—"
+      : snapshot.gateHashOk && snapshot.gateExpected === snapshot.gateActual ? "valid"
+        : "mismatch";
+    appendMetric(resultList, "Correctness gate", gateValid);
+    resultGroup.appendChild(resultList);
+
+    const coverGroup = htmlElement("section", "query-metric-group");
+    coverGroup.appendChild(htmlElement("h4", "", "Prefilter / mincut"));
+    const coverList = htmlElement("dl");
+    appendMetric(coverList, "Live cover shape", coverShapeText(snapshot));
+    appendMetric(coverList, "SIMD comparison cost", countText(snapshot.comparisons),
+      "points + 2 × ranges per code-stream vector");
+    appendMetric(coverList, "Mincut token occurrences", countText(snapshot.coveredCodes),
+      "Total occurrences of all token ids retained in the live mincut cover");
+    appendMetric(coverList, "All encoded token occurrences", countText(snapshot.indexedCodes),
+      "The denominator: every token occurrence in the encoded column");
+    appendMetric(coverList, "Cover share of encoded stream", optionalPercent(snapshot.coveredFraction),
+      "mincut token occurrences ÷ all encoded token occurrences; this is not row selectivity");
+    appendMetric(coverList, "Rows sent to verification", optionalPercent(snapshot.admitted));
+    appendMetric(coverList, "Verification amplification", finite(snapshot.amplification)
+      ? `${formatSignificant(snapshot.amplification, 4)}× matching rows` : "—");
+    appendMetric(coverList, "Policy hint", snapshot.profitable === null ? "—"
+      : snapshot.profitable ? "prefilter" : "fallback");
+    if (finite(snapshot.prefilterCandidates)) {
+      appendMetric(coverList, "Measured candidate rows", countText(snapshot.prefilterCandidates));
+    }
+    if (finite(snapshot.pruneRate)) {
+      appendMetric(coverList, "Measured prune rate", optionalPercent(snapshot.pruneRate));
+    }
+    if (finite(snapshot.falsePositiveRate)) {
+      appendMetric(coverList, "False-positive rate", optionalPercent(snapshot.falsePositiveRate));
+    }
+    if (finite(snapshot.verifyPerSurvivor)) {
+      appendMetric(coverList, "Verify / survivor",
+        `${formatSignificant(snapshot.verifyPerSurvivor, 4)} ns`);
+    }
+    coverGroup.appendChild(coverList);
+    grids.append(resultGroup, coverGroup);
+    content.appendChild(grids);
+    content.appendChild(renderMeasurementTable(snapshot, selectedSeries));
+
+    if (snapshot.meta) {
+      const meta = htmlElement("details", "query-meta");
+      meta.appendChild(htmlElement("summary", "", "Suite metadata / provenance"));
+      meta.appendChild(htmlElement("pre", "", JSON.stringify(snapshot.meta, null, 2)));
+      content.appendChild(meta);
+    }
+    inspector.appendChild(content);
+    return inspector;
+  }
+
+  function renderQueryDetails(rows, selectedSeries) {
+    const ids = [...state.selectedQueryIds];
+    refs["query-details-clear"].disabled = ids.length === 0;
+    refs["query-details-summary"].textContent = ids.length
+      ? `${ids.length.toLocaleString("en-GB")} quer${ids.length === 1 ? "y" : "ies"} selected`
+      : "Click a raw point or median point to inspect its query data";
+    refs["query-details-body"].replaceChildren();
+    if (!ids.length) {
+      refs["query-details-body"].appendChild(htmlElement(
+        "p", "query-details-empty", "Nothing selected yet. Click a point in the plot above."));
+      return;
+    }
+    const order = new Map(rows.map((row, index) => [row.query_id, index]));
+    const snapshots = ids
+      .map(id => snapshotForQuery(id, rows))
+      .filter(snapshot => snapshot.rows.length)
+      .sort((a, b) => (order.get(a.id) || 0) - (order.get(b.id) || 0));
+    const intro = htmlElement("p", "query-selection-note",
+      `${snapshots.length.toLocaleString("en-GB")} quer${snapshots.length === 1 ? "y" : "ies"} in the current view. `
+      + "Open a row for complete measurements and provenance.");
+    refs["query-details-body"].appendChild(intro);
+    snapshots.forEach((snapshot, index) => {
+      refs["query-details-body"].appendChild(
+        renderQueryInspector(snapshot, selectedSeries, snapshots.length === 1 || index === 0));
+    });
+  }
+
+  function selectQueries(event, queryIds) {
+    const ids = unique(queryIds.filter(Boolean));
+    if (!ids.length) return;
+    const additive = event.shiftKey || event.ctrlKey || event.metaKey;
+    if (!additive) {
+      state.selectedQueryIds = new Set(ids);
+    } else {
+      const remove = ids.every(id => state.selectedQueryIds.has(id));
+      ids.forEach(id => remove ? state.selectedQueryIds.delete(id) : state.selectedQueryIds.add(id));
+    }
+    refs.tooltip.hidden = true;
+    refs["query-details"].open = true;
+    renderPlot();
+  }
+
+  function makeQueryPoint(node, queryIds, label) {
+    node.classList.add("query-point");
+    node.setAttribute("tabindex", "0");
+    node.setAttribute("role", "button");
+    node.setAttribute("aria-label", label);
+    node.addEventListener("click", event => selectQueries(event, queryIds));
+    node.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        selectQueries(event, queryIds);
+      }
+    });
+  }
+
   function renderPlot() {
     const rows = filteredRows();
     const catalog = catalogs(rows);
@@ -770,6 +1041,8 @@
       .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
       .tick { fill: #788692; font-size: 11px; }
       .axis-label { fill: #52616d; font-size: 12px; font-weight: 650; }
+      .query-point { cursor: pointer; }
+      .query-point:focus { outline: none; stroke: #17212b; stroke-width: 2.4px; }
     `);
     refs.plot.appendChild(style);
     refs.plot.appendChild(svgElement("rect", {width: "100%", height: "100%", fill: "#ffffff"}));
@@ -898,8 +1171,7 @@
       }
 
       if (state.showPoints) {
-        const stride = Math.max(1, Math.ceil(raw.length / 500));
-        raw.filter((_point, index) => index % stride === 0).forEach(point => {
+        raw.forEach(point => {
           const circle = svgElement("circle", {
             cx: xScale.map(point.x), cy: yScale.map(point.y), r: 2.1,
             fill: color, opacity: 0.18
@@ -909,7 +1181,9 @@
             `${state.xLabel}: ${formatX(point.x, true)}`,
             `${state.yLabel}: ${formatY(point.y, true)}`,
             point.row.query_id,
+            "click to inspect · modifier-click to compare",
           ]);
+          makeQueryPoint(circle, [point.row.query_id], `Inspect query ${point.row.query_id}`);
           marks.appendChild(circle);
         });
       }
@@ -922,19 +1196,50 @@
         }));
       }
       aggregate.forEach(point => {
+        const selectedCount = point.queryIds.filter(id => state.selectedQueryIds.has(id)).length;
         const circle = svgElement("circle", {
-          cx: xScale.map(point.x), cy: yScale.map(point.y), r: 3.6,
-          fill: color, stroke: "#ffffff", "stroke-width": 1.2
+          cx: xScale.map(point.x), cy: yScale.map(point.y), r: selectedCount ? 4.5 : 3.6,
+          fill: color, stroke: selectedCount ? "#17212b" : "#ffffff",
+          "stroke-width": selectedCount ? 1.8 : 1.2
         });
         attachTooltip(circle, [
           meta.label,
           `median ${state.xLabel}: ${formatX(point.x, true)}`,
           `median ${state.yLabel}: ${formatY(point.y, true)}`,
           `IQR: ${formatY(point.q1, true)} – ${formatY(point.q3, true)} · n=${point.n}`,
+          `click to inspect ${point.queryIds.length} quer${point.queryIds.length === 1 ? "y" : "ies"}`,
         ]);
+        makeQueryPoint(circle, point.queryIds,
+          `Inspect ${point.queryIds.length} queries in this aggregate point`);
         marks.appendChild(circle);
       });
     });
+
+    // Persistent query highlights sit above the summaries and remain visible
+    // even when raw scatter is hidden. The same query is outlined in every
+    // visible series, making cross-candidate outliers immediately comparable.
+    if (state.selectedQueryIds.size) {
+      selectedSeries.forEach(meta => {
+        const color = colorFor(meta.id);
+        pointsForSeries(rows, meta.id)
+          .filter(point => state.selectedQueryIds.has(point.row.query_id))
+          .forEach(point => {
+            const circle = svgElement("circle", {
+              cx: xScale.map(point.x), cy: yScale.map(point.y), r: 5.2,
+              fill: color, opacity: 0.96, stroke: "#17212b", "stroke-width": 2
+            });
+            attachTooltip(circle, [
+              meta.label,
+              `${state.xLabel}: ${formatX(point.x, true)}`,
+              `${state.yLabel}: ${formatY(point.y, true)}`,
+              point.row.query_id,
+              "selected · click to keep only this query",
+            ]);
+            makeQueryPoint(circle, [point.row.query_id], `Selected query ${point.row.query_id}`);
+            marks.appendChild(circle);
+          });
+      });
+    }
 
     selectedDecode.forEach(meta => {
       const values = rows
@@ -972,7 +1277,9 @@
       ? ` · focus ${range.min === null ? "start" : formatX(range.min, true)}–${range.max === null ? "end" : formatX(range.max, true)} · ${Math.max(0, contextCount - domainRows.length)} excluded`
       : "";
     refs["plot-status"].textContent =
-      `${domainRows.length} measurements · ${selectedSeries.length} candidate series · ${selectedDecode.length} decode baselines${rangeNote}${zeroNote}`;
+      `${domainRows.length} measurements · ${selectedSeries.length} candidate series · ${selectedDecode.length} decode baselines`
+      + `${state.selectedQueryIds.size ? ` · ${state.selectedQueryIds.size} queries highlighted` : ""}${rangeNote}${zeroNote}`;
+    renderQueryDetails(contextRows(), selectedSeries);
     document.title = `${state.title} — Benchmark Explorer 3000™`;
   }
 
@@ -998,6 +1305,10 @@
 
   function rebuild() {
     const rows = filteredRows();
+    const availableQueries = new Set(rows.map(row => row.query_id));
+    state.selectedQueryIds = new Set(
+      [...state.selectedQueryIds].filter(queryId => availableQueries.has(queryId))
+    );
     const catalog = catalogs(rows);
     reconcileVisibility(catalog);
     renderChips(catalog);
@@ -1204,6 +1515,10 @@
     refs["series-none"].addEventListener("click", () => chooseAll("series", false));
     refs["decode-all"].addEventListener("click", () => chooseAll("decode", true));
     refs["decode-none"].addEventListener("click", () => chooseAll("decode", false));
+    refs["query-details-clear"].addEventListener("click", () => {
+      state.selectedQueryIds.clear();
+      renderPlot();
+    });
     bindExportButtons();
     document.querySelectorAll("[data-tab]").forEach(button => {
       button.addEventListener("click", () => selectTab(button.dataset.tab));

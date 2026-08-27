@@ -17,6 +17,10 @@ The viewer can:
 - change dataset, operation, chunking, axes, aggregation, title, subtitle, and
   axis labels without regenerating the file;
 - show raw observations, median lines, and interquartile bands; and
+- click a raw point to highlight one query, or a median point to select every
+  query in that aggregate, then inspect needles, result statistics, mincut cover
+  shape/frequency, profitability facts, timing distributions, and provenance in
+  the collapsible panel below the plot;
 - export the current view to a 1×–4× PNG (up to 4800 pixels wide).
 
 ## Build a viewer
@@ -26,6 +30,7 @@ From the repository root:
 ```sh
 python3 tools/bench-viz/bench_viz.py \
   results/my-run/results.jsonl \
+  --queries suites/my-suite \
   --show onpair --show uncompressed \
   --title "Contains throughput" \
   --out tools/bench-viz/out/my-run.html
@@ -33,6 +38,18 @@ python3 tools/bench-viz/bench_viz.py \
 
 A run directory can be passed in place of its `results.jsonl`. Multiple result
 files are accepted and appear in the **Run** selector.
+
+The harness stores a query id in each repeated candidate measurement, not the
+needle bytes themselves. The builder discovers `queries.jsonl` files beneath a
+named run directory and follows suite paths in an adjacent `manifest.json`.
+Use repeatable `--queries` options to add or override suite locations when a run
+was copied without its original suite. The detail panel still works without a
+suite, but reports that the needle bytes are unavailable.
+
+Clicking a raw point selects its query across every visible candidate. Clicking
+an aggregate point selects all queries contributing to that median. Hold Shift,
+Ctrl, or Command while clicking to compare several selections; the persistent
+outlines remain visible even when raw scatter is hidden.
 
 Open the generated HTML directly in a browser. The PNG button serializes the
 current SVG and rasterizes it locally, so the exported image includes the

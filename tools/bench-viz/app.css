@@ -557,6 +557,239 @@ button:focus-visible {
   font-size: 10px;
 }
 
+.query-details {
+  border-top: 1px solid #e0e7eb;
+  background: var(--surface);
+}
+
+.query-details > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 24px;
+  color: var(--muted);
+  background: #fbfcfd;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.query-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.query-details > summary::before {
+  content: "+";
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--accent);
+  background: #fff;
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.query-details[open] > summary::before {
+  content: "−";
+}
+
+#query-details-summary {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.query-details-content {
+  padding: 18px 24px 24px;
+  border-top: 1px solid #edf1f3;
+}
+
+.query-details-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.query-details-toolbar p,
+.query-selection-note,
+.query-details-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.query-selection-note {
+  margin-bottom: 11px;
+}
+
+.query-inspector {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.query-inspector > summary {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(240px, 1.2fr);
+  align-items: center;
+  gap: 18px;
+  min-height: 47px;
+  padding: 10px 14px;
+  background: var(--surface-soft);
+  cursor: pointer;
+}
+
+.query-inspector[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.query-inspector-id,
+.query-inspector-needle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.query-inspector-id {
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.query-inspector-needle {
+  color: var(--accent-strong);
+  font-size: 12px;
+}
+
+.query-inspector-content {
+  padding: 16px;
+}
+
+.query-metric-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.query-metric-group,
+.query-measurements {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e3e9ed;
+  border-radius: 9px;
+  background: #fcfdfd;
+}
+
+.query-metric-group h4,
+.query-measurements h4 {
+  margin: 0 0 11px;
+  color: #52616d;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.query-metric-group dl {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(120px, 1fr);
+  gap: 7px 14px;
+  margin: 0;
+  font-size: 11px;
+}
+
+.query-metric-group dt {
+  color: var(--muted);
+}
+
+.query-metric-group dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-family: var(--mono);
+  text-align: right;
+}
+
+.query-measurements {
+  margin-top: 14px;
+}
+
+.query-table-wrap {
+  overflow-x: auto;
+}
+
+.query-measurement-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.query-measurement-table th,
+.query-measurement-table td {
+  padding: 7px 9px;
+  border-bottom: 1px solid #e6ecef;
+  text-align: right;
+}
+
+.query-measurement-table th:first-child,
+.query-measurement-table td:first-child,
+.query-measurement-table td:last-child {
+  text-align: left;
+}
+
+.query-measurement-table th {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.query-measurement-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.query-series-cell {
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.query-meta {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.query-meta summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.query-meta pre {
+  max-height: 260px;
+  margin: 9px 0 0;
+  padding: 11px;
+  overflow: auto;
+  border: 1px solid #e3e9ed;
+  border-radius: 8px;
+  color: #35434e;
+  background: #f7f9fa;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
 .tooltip {
   position: fixed;
   z-index: 20;
@@ -602,7 +835,8 @@ button:focus-visible {
 
   .masthead,
   .series-heading,
-  .plot-footer {
+  .plot-footer,
+  .query-details-toolbar {
     align-items: stretch;
     flex-direction: column;
   }
@@ -640,6 +874,20 @@ button:focus-visible {
 
   #plot {
     min-height: 420px;
+  }
+
+  .query-details > summary,
+  .query-details-content {
+    padding-inline: 14px;
+  }
+
+  .query-inspector > summary,
+  .query-metric-groups {
+    grid-template-columns: 1fr;
+  }
+
+  .query-inspector > summary {
+    gap: 5px;
   }
 }
 

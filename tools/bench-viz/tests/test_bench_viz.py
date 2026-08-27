@@ -112,6 +112,76 @@ class BenchVizTests(unittest.TestCase):
         self.assertIn("\\u003c/script>", html)
         self.assertIn("Benchmark Explorer 3000™", html)
         self.assertIn('<span class="section-kicker">CANDIDATES</span>', html)
+        self.assertIn('id="query-details"', html)
+
+    def test_normalizes_query_inspection_facts(self):
+        row = query_row(
+            candidate_version="v7",
+            derived={
+                "selectivity": 0.125,
+                "needle_len_total": 8,
+                "needle_lens": [8],
+                "match_count": 25,
+                "rarest_byte_freq": 0.01,
+            },
+            gate={"expected_count": 25, "actual_count": 25, "hash_ok": True},
+            latency={
+                "min_ns": 1800, "p25_ns": 1900, "median_ns": 2000,
+                "p75_ns": 2100, "p99_ns": 2200, "max_ns": 2250,
+                "mean_ns": 2005, "stddev_ns": 80, "samples": 31,
+            },
+            prefilter={
+                "cover_points": 2, "cover_ranges": 3, "comparison_cost": 8,
+                "covered_codes": 123, "indexed_codes": 456,
+                "covered_fraction": 123 / 456, "candidate_row_fraction": 0.2,
+                "profitable_hint": True,
+                "prefilter_ns": {"ns": 400, "origin": "self_reported"},
+                "verify_ns": {"ns": 600, "origin": "self_reported"},
+                "decode_ns": {"ns": 500, "origin": "harness"},
+            },
+        )
+        point = bench_viz.normalize_query(row, "run")
+        self.assertEqual(point["candidate_version"], "v7")
+        self.assertEqual(point["needle_lens"], [8.0])
+        self.assertEqual(point["match_count"], 25.0)
+        self.assertEqual(point["covered_codes"], 123.0)
+        self.assertEqual(point["prefilter_ns"], 400.0)
+        self.assertEqual(point["latency_samples"], 31.0)
+        self.assertTrue(point["gate_hash_ok"])
+
+
+class QueryCatalogTests(unittest.TestCase):
+    def test_adds_text_and_binary_needles_to_every_measurement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "queries.jsonl"
+            path.write_text(json.dumps({
+                "id": "mini.contains",
+                "op": "contains",
+                "needles": ["hello", {"b64": "/wA="}],
+                "truth": {"hash": "xxh3:abc", "sample_indices": [3, 9]},
+                "meta": {"generator": "fixture"},
+            }) + "\n", encoding="utf-8")
+            catalog = bench_viz.load_query_catalog([path])
+        points = [
+            bench_viz.normalize_query(query_row(candidate="one"), "run"),
+            bench_viz.normalize_query(query_row(candidate="two"), "run"),
+        ]
+        matched = bench_viz.apply_query_catalog(points, catalog)
+        self.assertEqual(matched, 1)
+        self.assertEqual(points[0]["needles"][0]["display"], "hello")
+        self.assertEqual(points[0]["needles"][1]["display"], "\\xff\\x00")
+        self.assertEqual(points[1]["needles"], points[0]["needles"])
+
+    def test_explicit_suite_directory_is_discovered(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            suite = root / "suite"
+            suite.mkdir()
+            (suite / "queries.jsonl").write_text("{}\n", encoding="utf-8")
+            self.assertEqual(
+                bench_viz.discover_query_paths([], [suite]),
+                [suite / "queries.jsonl"],
+            )
 
 
 
