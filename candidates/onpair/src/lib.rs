@@ -47,6 +47,7 @@ pub fn vtable_decode() -> &'static LbCandidate {
             decode: base.decode, // -> harness composes `decode` (decompress + eval)
             destroy: base.destroy,
             query_facts: None,
+            export_artifact: None,
         })
     });
     &s.0

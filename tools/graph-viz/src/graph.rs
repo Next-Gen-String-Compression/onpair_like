@@ -14,7 +14,8 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use onpair::search::{TokenFrequencyIndex, prefix_range};
+use onpair::search::index::{TokenFrequencyIndex, TokenFrequencyIndexStorage};
+use onpair::search::prefix_range;
 use onpair::{ColumnView, DictionaryView, MAX_TOKEN_SIZE, Offset, Token, TokenRange};
 use serde::Serialize;
 
@@ -333,9 +334,9 @@ impl Weights {
     ///
     /// # Errors
     /// [`Error::IndexMismatch`] if the index does not describe this column.
-    pub fn from_column<O: Offset>(
+    pub fn from_column<O: Offset, S: TokenFrequencyIndexStorage>(
         view: ColumnView<'_, O>,
-        frequencies: &TokenFrequencyIndex,
+        frequencies: &TokenFrequencyIndex<S>,
     ) -> Result<Self, Error> {
         let num_tokens = view.dict.num_tokens();
         if frequencies.num_tokens() != num_tokens {
@@ -366,7 +367,7 @@ impl Weights {
 
     /// Term frequencies only. Row-frequency metrics silently reuse them, which
     /// is why [`from_column`](Self::from_column) is the one to prefer.
-    pub fn from_index(frequencies: &TokenFrequencyIndex) -> Self {
+    pub fn from_index<S: TokenFrequencyIndexStorage>(frequencies: &TokenFrequencyIndex<S>) -> Self {
         let cum_tf = cumulative_from_index(frequencies);
         Self {
             cum_df: cum_tf.clone(),
@@ -391,7 +392,9 @@ impl Weights {
     }
 }
 
-fn cumulative_from_index(frequencies: &TokenFrequencyIndex) -> Vec<u64> {
+fn cumulative_from_index<S: TokenFrequencyIndexStorage>(
+    frequencies: &TokenFrequencyIndex<S>,
+) -> Vec<u64> {
     let per_token: Vec<u64> = (0..frequencies.num_tokens())
         .map(|id| u64::from(frequencies.frequency(id as Token)))
         .collect();
@@ -428,9 +431,9 @@ pub struct CoverShape {
     pub points: usize,
     /// Runs of length two or more.
     pub ranges: usize,
-    /// SIMD comparisons the cover costs: one per point, one per range.
+    /// SIMD comparisons the cover costs: one per point, two per range.
     pub cmp_cost: usize,
-    /// Ids the cut selected that pruning took back out.
+    /// Ids removed while normalizing the cut (zero for the pinned planner).
     pub dead_ids: usize,
 }
 
@@ -444,32 +447,27 @@ pub struct LiveCover {
 }
 
 impl LiveCover {
-    /// Whether pruning left nothing to probe for, which settles the query: no row
-    /// holds a covered code, so no row matches.
+    /// Whether the normalized membership has nothing to probe for.
     pub fn is_empty(&self) -> bool {
         self.shape.cmp_cost == 0
     }
 }
 
 /// The cover OnPair compiles from a cut's `members`: every maximal run of set ids
-/// as one probe, minus the ids `frequencies` counts no occurrences of.
+/// as one range probe, or one point probe for a singleton.
 ///
 /// # Mirrored from OnPair, by hand
-/// Two rules of the pinned library are reproduced here — `ProbeCover::from_membership`
-/// merging membership into maximal runs, and `plan::live_span` trimming unused ids
-/// off their ends — because both are crate-private there, and a figure drawing
-/// probes the scan does not issue is a figure that lies. **When the `onpair` pin in
-/// `Cargo.toml` moves, re-read those two functions and reconcile this one.** The
-/// crate's own soundness check cannot catch a mismatch: pruned ids occur nowhere,
-/// so keeping them changes no candidate row.
-///
-/// The trim deliberately stops at run ends, which is OnPair's reasoning too. A
-/// range costs the same single comparison however wide it is, so an unused id
-/// between two used ones rides along for free — dropping it would split the run
-/// and add a comparison to every vector of the scan.
-pub fn live_cover(members: &[bool], frequencies: &TokenFrequencyIndex) -> LiveCover {
-    let unused = |id: usize| frequencies.frequency(id as Token) == 0;
-    let mut live = members.to_vec();
+/// The pinned library's `ProbeCover::from_membership` is crate-private, so its
+/// run merging and comparison pricing are reproduced here. Advisory frequencies
+/// do not alter membership: a stored index is allowed to undercount, making
+/// zero-frequency pruning unsound. **When the `onpair` pin in `Cargo.toml` moves,
+/// re-read that function and reconcile this one.**
+pub fn live_cover<S: TokenFrequencyIndexStorage>(
+    members: &[bool],
+    frequencies: &TokenFrequencyIndex<S>,
+) -> LiveCover {
+    assert_eq!(members.len(), frequencies.num_tokens());
+    let live = members.to_vec();
     let mut shape = CoverShape::default();
 
     let mut id = 0usize;
@@ -482,32 +480,15 @@ pub fn live_cover(members: &[bool], frequencies: &TokenFrequencyIndex) -> LiveCo
         while id < live.len() && live[id] {
             id += 1;
         }
-        let last = id - 1;
-
-        let mut lo = begin;
-        let mut hi = last;
-        while lo <= hi && unused(lo) {
-            lo += 1;
-        }
-        if lo > hi {
-            live[begin..=last].fill(false);
-            shape.dead_ids += last - begin + 1;
-            continue;
-        }
-        while unused(hi) {
-            hi -= 1;
-        }
-
-        live[begin..lo].fill(false);
-        live[hi + 1..=last].fill(false);
-        shape.dead_ids += (lo - begin) + (last - hi);
-        shape.member_ids += hi - lo + 1;
-        if lo == hi {
+        let run_len = id - begin;
+        shape.member_ids += run_len;
+        if run_len == 1 {
             shape.points += 1;
+            shape.cmp_cost += 1;
         } else {
             shape.ranges += 1;
+            shape.cmp_cost += 2;
         }
-        shape.cmp_cost += 1;
     }
 
     LiveCover {

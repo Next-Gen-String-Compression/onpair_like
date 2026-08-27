@@ -737,6 +737,21 @@ prepare + the query over all chunks, §6):
   the environment capture. Results
   are pure data; reporting/plots (out of scope) consume them later without
   re-running anything.
+- A candidate may expose a versioned analysis sidecar (ABI v7). Measurement
+  workers never invoke its exporter. After the parent has completed the full
+  timing matrix, it launches a distinct artifact phase that deterministically
+  rebuilds each export-capable `(candidate, config, dataset, chunk_rows)` and
+  serializes its state. Thus replayed builds, allocation, filesystem I/O, and
+  cache effects cannot affect `build_ns`, query latency, or a later candidate
+  in the same run. An exporter opts into the requirement that its build is a
+  pure function of the recorded dataset and config; `onpair_spiral` records a
+  fixed seed (default 42) for this reason. Each file is referenced by an
+  `artifact` row keyed to the exact build and chunk, with
+  `export_phase = "post_run_replay"`. Sidecars travel with `results.jsonl` and
+  `manifest.json`, and reporting must not silently reconstruct when a declared
+  file is missing. Because replay begins only after the complete matrix,
+  multi-setting `chunk_rows` sweeps can export every independently built chunk
+  without influencing one another's measurements.
 - Hot-cache latency is the phase-1 definition (data resident, candidate
   built). Cold-start behavior is a future dimension, noted, not designed here.
 

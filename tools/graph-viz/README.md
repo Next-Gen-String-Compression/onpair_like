@@ -33,7 +33,6 @@ Reading the figure:
 | card in the bottom row | an accepting terminal: tokens whose prefix is the whole remaining needle |
 | teal `MANDATORY` card | tokens holding the whole pattern: in every cover, in no cut |
 | **orange** outline, `CUT` badge | selected by the cut |
-| grey dashed, `PRUNED` badge | selected by the cut, then dropped — every id it names occurs nowhere |
 | faded node | downstream of the cut, so unreachable once the cover is in place |
 | `TF` | token occurrences in the code stream |
 | `DF` | rows holding the token; shown only under a `df` metric, the only time it is counted |
@@ -82,13 +81,45 @@ $ cargo run --release -- \
     --rows urls.txt --title "clickbench urls" --out figures --gallery \
     --pattern 'utm_source=newsletter' --pattern '/cart/checkout'
 column: 40000 rows, 181659 codes, 937 dictionary tokens
-  01-utm-source-newsletter: 4 alignments, cut 3 probes (2 pruned as never used) weight 2432 · cover 1 probes (0 whole-needle) · 2289 candidates (866 exact), onpair 2289, sound true
-  02-cart-checkout: 3 alignments, cut 3 probes (1 pruned as never used) weight 4431 · cover 3 probes (1 whole-needle) · 5571 candidates (5571 exact), onpair 5571, sound true
+  01-utm-source-newsletter: 4 alignments, cut 3 probes weight 2432 · cover 4 comparisons (0 whole-needle) · 2289 candidates (866 exact), onpair 2289, sound true
+  02-cart-checkout: 3 alignments, cut 3 probes weight 4431 · cover 5 comparisons (1 whole-needle) · 5571 candidates (5571 exact), onpair 5571, sound true
 ```
 
 One row per line; `--rows -` reads stdin. `--help` lists the rest: `--metric` for
 the cut objective (`tf`, `tf_residual`, `df`, `df_residual`), `--pattern-hex` for
 non-UTF-8 needles, `--no-measure`, `--max-states`.
+
+It can also consume the benchmark's canonical Arrow dataset and render a whole
+query catalog into the compact bundle embedded by Benchmark Explorer 3000™:
+
+```console
+$ cargo run --release -- \
+    --dataset ../../datasets/clickbench-url-1m \
+    --queries ../../suites/clickbench-url-1m-contains-s42/queries.jsonl \
+    --bits 16 --no-measure --bundle /tmp/clickbench-mincut-graphs.json
+```
+
+New ABI-v7 benchmarks export the exact compact dictionary and cumulative token
+frequency index in a deterministic replay after the complete timing matrix.
+Prefer that sidecar: it does not retrain during visualization, does not require
+the original dataset, and its decoder checks the embedded versioned fingerprint
+before drawing anything:
+
+```console
+$ cargo run --release -- \
+    --artifact ../../results/my-run/artifacts/onpair_spiral-c0-d0-rows0-chunk0.lbartifact \
+    --queries ../../suites/clickbench-url-1m-contains-s42/queries.jsonl \
+    --no-measure --bundle /tmp/clickbench-mincut-graphs.json
+```
+
+Only substring operations are included. Multi-needle queries get one graph per
+needle under the same query id. For dataset reconstruction, `--bits`,
+`--threshold`, and `--seed` must match the candidate configuration whose cover
+facts the figure explains; sidecars need none of those flags. Explorer
+bundles include an `onpair-mincut-v1` fingerprint over the ordered token bytes
+and every token's frequency. Sidecars embed and validate that same identity;
+legacy benchmark rows use recorded cover facts (and a fingerprint when one is
+available) to reject a graph reconstructed from the wrong dictionary.
 
 ## It checks itself
 
@@ -107,15 +138,14 @@ can tie on weight, and both would be sound.
 
 That check has a blind spot, and it is worth knowing where. It compares *rows*, so
 it catches any divergence that changes which rows are admitted — but not one that
-only changes the probes. Zero-frequency pruning is exactly that kind: OnPair drops
-cut probes whose tokens occur nowhere in the column, which cannot change a
-candidate set, so a figure still drawing them would measure as perfectly sound
-while showing comparisons the scan never issues. `live_cover` mirrors that rule by
-hand and the figures mark what it drops (grey, dashed, `PRUNED`).
+only changes the probe shape or its comparison price. `live_cover` therefore
+mirrors the pinned planner's normalization directly: membership is preserved,
+maximal runs become ranges, and each range costs two SIMD comparisons.
 
-**So when the `onpair` pin in `Cargo.toml` moves, re-read the planner.** The two
+**So when the shared `onpair` pin in `tools/onpair-artifact/Cargo.toml` moves,
+re-read the planner.** The two
 functions this crate copies from it are flagged at their definitions:
-`graph::live_cover` (run merging plus the zero-frequency trim) and `mincut`.
+`graph::live_cover` (run merging and comparison pricing) and `mincut`.
 
 ## Notes
 
@@ -130,6 +160,7 @@ functions this crate copies from it are flagged at their definitions:
 * **Golden figure.** `tests/golden/newsletter.svg` is byte-compared on every test
   run. Regenerate with `UPDATE_GOLDEN=1 cargo test`, and open the diff — a layout
   regression looks exactly like a layout improvement until someone does.
-* **Own workspace.** This crate pins a newer OnPair revision than the benchmark
-  candidates, and Cargo will not resolve two revisions of one git repository in a
-  single lockfile.
+* **One producer/consumer pin.** Both this crate and the `onpair_spiral`
+  candidate depend on `tools/onpair-artifact`, which owns the OnPair revision,
+  fingerprint, and sidecar codec. Updating one cannot leave the other silently
+  compiling against an older library.

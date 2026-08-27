@@ -375,9 +375,13 @@ def load_run(con, run_dir: Path) -> str:
                     row.get("scanner"),
                 )
             )
+        elif row["kind"] == "artifact":
+            # Sidecars stay in results.jsonl as provenance for reporting. They
+            # are not measurements and need no row in this derived index.
+            continue
         else:
-            # build_failed / module_unavailable: no measurement to record, but
-            # never a silent absence (DESIGN.md §9).
+            # build_failed / artifact_failed / module_unavailable: no
+            # measurement to record, but never a silent absence (DESIGN.md §9).
             print(f"  note: {row['kind']} row: {json.dumps(row)}", file=sys.stderr)
     systems = load_systems(con, cells)
 

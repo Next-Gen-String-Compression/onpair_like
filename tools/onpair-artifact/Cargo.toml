@@ -1,0 +1,13 @@
+[package]
+name = "onpair-benchmark-artifact"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Versioned OnPair dictionary/frequency sidecars shared by the benchmark and graph explorer"
+
+[dependencies]
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+# This is the single OnPair pin used by both the benchmark candidate and the
+# graph renderer. Moving it therefore cannot silently leave the explorer on a
+# different dictionary/index implementation.
+onpair-core = { package = "onpair", git = "https://github.com/spiraldb/onpair.git", rev = "75e80c4392e912428542488bc3ba164847b3c1d5" }

@@ -3,7 +3,9 @@ import json
 import re
 import sys
 import tempfile
+import types
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -28,6 +30,7 @@ def query_row(**overrides):
         "strategy": "decode",
         "scanner": "memmem",
         "dataset": "mini",
+        "dataset_checksum": "xxh3:mini",
         "chunk_rows": 0,
         "op": "contains",
         "query_id": "mini.contains",
@@ -113,6 +116,22 @@ class BenchVizTests(unittest.TestCase):
         self.assertIn("Benchmark Explorer 3000™", html)
         self.assertIn('<span class="section-kicker">CANDIDATES</span>', html)
         self.assertIn('id="query-details"', html)
+        self.assertNotIn('id="mincut-graph"', html)
+        self.assertIn('id="bench-viz-mincut-graphs"', html)
+        self.assertIn('"version":2,"archives":{}', html)
+
+    def test_html_embeds_a_compressed_mincut_archive(self):
+        point = bench_viz.normalize_query(query_row(), "run")
+        archive = {"version": 2, "archives": {
+            "mincut-demo": {
+                "encoding": "gzip+base64", "data": "H4sIAAAAA", "queries": 1,
+                "raw_bytes": 100, "compressed_bytes": 20,
+            }
+        }}
+        html = bench_viz.build_html(
+            [point], {"title": "Demo", "show": []}, mincut_archives=archive)
+        self.assertIn('"encoding":"gzip+base64"', html)
+        self.assertIn('"data":"H4sIAAAAA"', html)
 
     def test_normalizes_query_inspection_facts(self):
         row = query_row(
@@ -182,6 +201,229 @@ class QueryCatalogTests(unittest.TestCase):
                 bench_viz.discover_query_paths([], [suite]),
                 [suite / "queries.jsonl"],
             )
+
+    def mincut_point(self, *, candidate="onpair_spiral", config='{"bits":12}',
+                     version="v1", fingerprint=None, chunk_rows=0, source="run"):
+        prefilter = {
+            "cover_points": 2, "cover_ranges": 1, "comparison_cost": 4,
+            "covered_codes": 123, "indexed_codes": 456,
+        }
+        if fingerprint is not None:
+            prefilter["dictionary_fingerprint"] = fingerprint
+        point = bench_viz.normalize_query(query_row(
+            candidate=candidate, candidate_version=version, config=config,
+            config_hash=f"hash-{config}", chunk_rows=chunk_rows,
+            prefilter=prefilter,
+        ), source)
+        point["needles"] = [{"display": "needle", "byte_len": 6, "b64": None}]
+        return point
+
+    def test_mixed_dictionary_sizes_get_distinct_archives(self):
+        twelve = self.mincut_point(config='{"bits":12}')
+        sixteen = self.mincut_point(config='{"bits":16}')
+        groups = bench_viz.mincut_archive_groups([twelve, sixteen], None)
+        self.assertEqual(len(groups), 2)
+        self.assertNotEqual(twelve["mincut_archive_id"], sixteen["mincut_archive_id"])
+        self.assertEqual({group["bits"] for group in groups.values()}, {12, 16})
+
+    def test_exact_fingerprint_deduplicates_candidates(self):
+        fingerprint = "onpair-mincut-v1:0123456789abcdef"
+        first = self.mincut_point(candidate="onpair_spiral", fingerprint=fingerprint)
+        second = self.mincut_point(candidate="future_onpair", fingerprint=fingerprint,
+                                   version="v9", source="other-run")
+        groups = bench_viz.mincut_archive_groups([first, second], None)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(first["mincut_archive_id"], second["mincut_archive_id"])
+        self.assertEqual(len(next(iter(groups.values()))["profiles"]), 2)
+
+    def test_no_onpair_candidate_does_not_synthesize_a_graph(self):
+        point = self.mincut_point(candidate="fsst_prefilter")
+        self.assertEqual(bench_viz.mincut_archive_groups([point], None), {})
+        self.assertIsNone(point["mincut_archive_id"])
+
+    def test_chunked_candidate_is_not_misrepresented_by_one_dictionary(self):
+        point = self.mincut_point(chunk_rows=1000)
+        self.assertEqual(bench_viz.mincut_archive_groups([point], None), {})
+
+    def test_exact_sidecar_is_authoritative_without_retraining_config(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            artifact_dir = run / "artifacts"
+            artifact_dir.mkdir()
+            sidecar = artifact_dir / "exact.lbartifact"
+            sidecar.write_bytes(b"LBOPMC01-fixture")
+            artifact_row = {
+                "kind": "artifact",
+                "candidate": "future_onpair",
+                "candidate_version": "v9",
+                "config": '{"candidate_specific":true}',
+                "config_hash": "future-hash",
+                "dataset": "mini",
+                "dataset_checksum": "xxh3:mini",
+                "chunk_rows": 0,
+                "chunk_index": 0,
+                "artifact_format": "onpair-mincut-sidecar-v1",
+                "artifact_path": "artifacts/exact.lbartifact",
+                "artifact_bytes": sidecar.stat().st_size,
+                "export_phase": "post_run_replay",
+            }
+            (run / "results.jsonl").write_text(
+                json.dumps(artifact_row) + "\n", encoding="utf-8")
+            artifacts = bench_viz.discover_mincut_artifacts([run])
+
+            point = self.mincut_point(
+                candidate="future_onpair", version="v9",
+                config='{"candidate_specific":true}', source=run.name)
+            point["config_hash"] = "future-hash"
+            for key in ("cover_points", "cover_ranges", "comparison_cost", "covered_codes"):
+                point[key] = None
+            groups = bench_viz.mincut_archive_groups([point], None, artifacts)
+
+        self.assertEqual(len(groups), 1)
+        group = next(iter(groups.values()))
+        self.assertEqual(group["artifact_path"], sidecar.resolve())
+        self.assertIn("artifact_format", group["profiles"][0])
+        self.assertIsNotNone(point["mincut_archive_id"])
+
+    def test_declared_sidecar_cannot_silently_fall_back_when_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            row = {
+                "kind": "artifact", "candidate": "onpair_spiral",
+                "candidate_version": "v1", "config": '{"bits":12}',
+                "config_hash": "hash", "dataset": "mini",
+                "dataset_checksum": "xxh3:mini", "chunk_rows": 0,
+                "chunk_index": 0, "artifact_format": "onpair-mincut-sidecar-v1",
+                "artifact_path": "artifacts/missing.lbartifact", "artifact_bytes": 10,
+                "export_phase": "post_run_replay",
+            }
+            (run / "results.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(FileNotFoundError, "sidecar is missing"):
+                bench_viz.discover_mincut_artifacts([run])
+
+    def test_sidecar_must_come_from_the_isolated_replay_phase(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            (run / "artifact.lbartifact").write_bytes(b"LBOPMC01-fixture")
+            row = {
+                "kind": "artifact", "artifact_format": "onpair-mincut-sidecar-v1",
+                "artifact_path": "artifact.lbartifact", "artifact_bytes": 18,
+                "export_phase": "post_measurement",
+            }
+            (run / "results.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "not produced by the isolated"):
+                bench_viz.discover_mincut_artifacts([run])
+
+    def test_archive_builder_passes_the_sidecar_to_graph_viz(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory) / "run"
+            (run / "artifacts").mkdir(parents=True)
+            sidecar = run / "artifacts" / "exact.lbartifact"
+            sidecar.write_bytes(b"LBOPMC01-fixture")
+            artifact_row = {
+                "kind": "artifact", "candidate": "future_onpair",
+                "candidate_version": "v9", "config": '{"candidate_specific":true}',
+                "config_hash": "future-hash", "dataset": "mini",
+                "dataset_checksum": "xxh3:mini", "chunk_rows": 0,
+                "chunk_index": 0, "artifact_format": "onpair-mincut-sidecar-v1",
+                "artifact_path": "artifacts/exact.lbartifact",
+                "artifact_bytes": sidecar.stat().st_size,
+                "export_phase": "post_run_replay",
+            }
+            (run / "results.jsonl").write_text(
+                json.dumps(artifact_row) + "\n", encoding="utf-8")
+            point = self.mincut_point(
+                candidate="future_onpair", version="v9",
+                config='{"candidate_specific":true}', source="run")
+            point["config_hash"] = "future-hash"
+            for key in ("cover_points", "cover_ranges", "comparison_cost", "covered_codes"):
+                point[key] = None
+
+            commands = []
+
+            def fake_graph_viz(command, **_kwargs):
+                commands.append(command)
+                bundle_path = Path(command[command.index("--bundle") + 1])
+                bundle_path.write_text(json.dumps({
+                    "dictionary_bits": 8,
+                    "dictionary_fingerprint": "onpair-mincut-v1:0123456789abcdef",
+                    "graphs": {"mini.contains": [{
+                        "needle_index": 0, "states": 1, "svg": "<svg/>", "error": None,
+                    }]},
+                }), encoding="utf-8")
+                return types.SimpleNamespace(returncode=0)
+
+            with mock.patch.object(bench_viz.subprocess, "run", side_effect=fake_graph_viz):
+                archive, count = bench_viz.build_mincut_archives(
+                    [point], [run], [], None, 128)
+
+        self.assertEqual(count, 1)
+        self.assertEqual(len(archive["archives"]), 1)
+        self.assertIn("--artifact", commands[0])
+        self.assertNotIn("--dataset", commands[0])
+        self.assertEqual(
+            next(iter(archive["archives"].values()))["verification"],
+            "exact_post_run_replay_sidecar+embedded_dictionary_fingerprint",
+        )
+
+    def test_mincut_bits_is_a_filter_not_an_override(self):
+        twelve = self.mincut_point(config='{"bits":12}')
+        sixteen = self.mincut_point(config='{"bits":16}')
+        groups = bench_viz.mincut_archive_groups([twelve, sixteen], 16)
+        self.assertEqual([group["bits"] for group in groups.values()], [16])
+        self.assertIsNone(twelve["mincut_archive_id"])
+        with self.assertRaises(ValueError):
+            bench_viz.mincut_archive_groups([twelve], 8)
+
+    def test_generated_cover_facts_must_match_the_result(self):
+        point = self.mincut_point()
+        group = next(iter(bench_viz.mincut_archive_groups([point], None).values()))
+        bundle = {"graphs": {"mini.contains": [{
+            "cover_points": 2, "cover_ranges": 1, "comparison_cost": 4,
+            "covered_codes": 123,
+        }]}}
+        self.assertEqual(
+            bench_viz.validate_mincut_bundle(bundle, group),
+            (1, "all_recorded_cover_facts"))
+        bundle["graphs"]["mini.contains"][0]["comparison_cost"] = 3
+        with self.assertRaisesRegex(ValueError, "comparison_cost"):
+            bench_viz.validate_mincut_bundle(bundle, group)
+
+    def test_generated_dictionary_fingerprint_must_match_the_result(self):
+        fingerprint = "onpair-mincut-v1:0123456789abcdef"
+        point = self.mincut_point(fingerprint=fingerprint)
+        group = next(iter(bench_viz.mincut_archive_groups([point], None).values()))
+        graph = {
+            "cover_points": 2, "cover_ranges": 1, "comparison_cost": 4,
+            "covered_codes": 123,
+        }
+        bundle = {
+            "dictionary_fingerprint": fingerprint,
+            "graphs": {"mini.contains": [graph]},
+        }
+        self.assertEqual(
+            bench_viz.validate_mincut_bundle(bundle, group),
+            (1, "dictionary_fingerprint+recorded_cover_facts"))
+        bundle["dictionary_fingerprint"] = "onpair-mincut-v1:ffffffffffffffff"
+        with self.assertRaisesRegex(ValueError, "fingerprint mismatch"):
+            bench_viz.validate_mincut_bundle(bundle, group)
+
+    def test_explicit_mincut_dataset_requires_a_prepared_artifact(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            (path / "data.arrow").touch()
+            self.assertEqual(
+                bench_viz.parse_dataset_specs([f"mini={path}"]), {"mini": path})
+            with self.assertRaises(FileNotFoundError):
+                bench_viz.parse_dataset_specs([f"missing={path / 'other'}"])
+
+    def test_prepared_dataset_checksum_is_read_from_its_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            (path / "manifest.json").write_text(
+                json.dumps({"checksum": "xxh3:dataset"}), encoding="utf-8")
+            self.assertEqual(
+                bench_viz.prepared_dataset_checksum(path), "xxh3:dataset")
 
 
 
@@ -382,6 +624,7 @@ class MarkupTests(unittest.TestCase):
 
     def test_the_template_has_a_slot_for_every_injected_asset(self):
         for marker in ("__BENCH_VIZ_CSS__", "__BENCH_VIZ_DATA__", "__BENCH_VIZ_DEFAULTS__",
-                       "__BENCH_VIZ_ANALYSIS__", "__BENCH_VIZ_JS__",
+                       "__BENCH_VIZ_ANALYSIS__", "__BENCH_VIZ_MINCUT_GRAPHS__",
+                       "__BENCH_VIZ_JS__",
                        "__BENCH_VIZ_PREFILTER_JS__"):
             self.assertIn(marker, self.TEMPLATE)

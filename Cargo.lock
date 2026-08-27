@@ -882,7 +882,7 @@ name = "lb-cand-onpair-spiral"
 version = "0.1.0"
 dependencies = [
  "lb-abi",
- "onpair",
+ "onpair-benchmark-artifact",
  "serde",
  "serde_json",
 ]
@@ -1210,6 +1210,14 @@ dependencies = [
  "hashbrown 0.16.1",
  "memchr",
  "rand",
+]
+
+[[package]]
+name = "onpair-benchmark-artifact"
+version = "0.1.0"
+dependencies = [
+ "onpair",
+ "xxhash-rust",
 ]
 
 [[package]]

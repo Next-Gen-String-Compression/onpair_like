@@ -79,6 +79,136 @@ fn read_rows(path: &Path) -> Vec<serde_json::Value> {
         .collect()
 }
 
+/// ABI-v7 artifacts are emitted by a deterministic replay after the complete
+/// measurement phase and retain the exact dictionary/frequency state.
+#[cfg(feature = "cand-onpair-spiral")]
+#[test]
+fn onpair_sidecar_is_exported_in_a_separate_post_run_replay() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (ds_dir, suite_dir) = prepare_fixture(tmp.path());
+    let spec = format!(
+        r#"
+strategies = ["pf_memmem"]
+
+[[datasets]]
+path = "{}"
+
+[[suites]]
+path = "{}"
+
+[[candidates]]
+name = "onpair_spiral"
+configs = ['{{"bits":9,"seed":42}}']
+
+[measure]
+warmup = 0
+min_iters = 1
+min_millis = 0
+chunk_rows = [0, 64]
+"#,
+        ds_dir.display(),
+        suite_dir.display(),
+    );
+    let spec_path = tmp.path().join("sidecar.toml");
+    std::fs::write(&spec_path, &spec).unwrap();
+    let loaded = LoadedSpec::load(&spec_path).unwrap();
+    let run_dir = tmp.path().join("run");
+    let out_path = run_dir.join("rows.jsonl");
+    let mut writer = Writer::create(&out_path).unwrap();
+    let summary = runner::run_worker(&loaded, "onpair_spiral", 0, 0, &mut writer, false).unwrap();
+    writer.finish().unwrap();
+    assert_eq!(summary.gate_failures, 0);
+    assert_eq!(summary.errors, 0);
+    let rows = read_rows(&out_path);
+    assert!(rows.iter().any(|row| row["kind"] == "query"));
+    assert!(
+        rows.iter().all(|row| row["kind"] != "artifact"),
+        "the measurement worker must never perform artifact work"
+    );
+
+    let artifact_rows_path = run_dir.join("artifact-rows.jsonl");
+    let mut writer = Writer::create(&artifact_rows_path).unwrap();
+    let summary =
+        runner::export_worker_artifacts(&loaded, "onpair_spiral", 0, 0, &mut writer, &run_dir)
+            .unwrap();
+    writer.finish().unwrap();
+    assert_eq!(summary.errors, 0);
+
+    let artifacts = read_rows(&artifact_rows_path);
+    assert!(artifacts.len() > 2, "one artifact per physical chunk");
+    assert!(artifacts
+        .iter()
+        .all(|row| row["kind"] == "artifact" && row["export_phase"] == "post_run_replay"),);
+    assert_eq!(
+        artifacts
+            .iter()
+            .filter(|row| row["chunk_rows"] == 0)
+            .count(),
+        1,
+        "whole-column build has one chunk"
+    );
+    assert!(
+        artifacts
+            .iter()
+            .filter(|row| row["chunk_rows"] == 64)
+            .count()
+            > 1,
+        "chunked build exports every independently trained dictionary"
+    );
+    for artifact in &artifacts {
+        assert_eq!(artifact["artifact_format"], "onpair-mincut-sidecar-v1");
+        let relative = artifact["artifact_path"].as_str().unwrap();
+        let bytes = std::fs::read(run_dir.join(relative)).unwrap();
+        assert_eq!(&bytes[..8], b"LBOPMC01");
+        assert_eq!(artifact["artifact_bytes"], bytes.len() as u64);
+    }
+
+    // A second replay of the same recorded dataset/config must reproduce the
+    // byte-identical state. This is what lets the parent defer all work until
+    // after every measurement worker has exited.
+    let second_dir = tmp.path().join("second-replay");
+    let second_rows_path = second_dir.join("artifact-rows.jsonl");
+    let mut writer = Writer::create(&second_rows_path).unwrap();
+    let summary =
+        runner::export_worker_artifacts(&loaded, "onpair_spiral", 0, 0, &mut writer, &second_dir)
+            .unwrap();
+    writer.finish().unwrap();
+    assert_eq!(summary.errors, 0);
+    let second_artifacts = read_rows(&second_rows_path);
+    for (first, second) in artifacts.iter().zip(&second_artifacts) {
+        let first_bytes =
+            std::fs::read(run_dir.join(first["artifact_path"].as_str().unwrap())).unwrap();
+        let second_bytes =
+            std::fs::read(second_dir.join(second["artifact_path"].as_str().unwrap())).unwrap();
+        assert_eq!(first_bytes, second_bytes);
+    }
+
+    // Exercise the real parent/child orchestration too: results aggregation
+    // must place every replay row after every measurement worker's rows.
+    let cli_dir = tmp.path().join("cli-run");
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_bench"))
+        .arg("run")
+        .arg(&spec_path)
+        .arg("--out")
+        .arg(&cli_dir)
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let combined = read_rows(&cli_dir.join("results.jsonl"));
+    let last_query = combined
+        .iter()
+        .rposition(|row| row["kind"] == "query")
+        .unwrap();
+    let first_artifact = combined
+        .iter()
+        .position(|row| row["kind"] == "artifact")
+        .unwrap();
+    assert!(first_artifact > last_query);
+    assert!(combined[first_artifact..]
+        .iter()
+        .all(|row| row["kind"] == "artifact" && row["export_phase"] == "post_run_replay"));
+}
+
 /// Every real candidate × scanner × chunk size passes the gate — including
 /// the chunk-invariance requirement (identical gated results at 0/64/128).
 #[test]

@@ -41,10 +41,10 @@ const CONTAINED_H: f64 = 76.0;
 /// The numbers printed in the figure's header, around the graph itself.
 ///
 /// The distinction the chips are careful about: the **cut** is a set of DAG nodes
-/// and the **cover** is what OnPair actually probes for — the cut's ids, minus the
-/// ones pruned as never used, plus the mandatory tokens that hold the whole needle
-/// and are therefore not in the DAG at all. They are different sets, so a cut of
-/// weight zero can still leave a cover with several probes.
+/// and the **cover** is what OnPair actually probes for — the cut's ids plus the
+/// mandatory tokens that hold the whole needle and are therefore not in the DAG
+/// at all. They are different sets, so a cut of weight zero can still leave a
+/// cover with several probes.
 ///
 /// Only [`metric`](Self::metric), the weights and the labels are required. The
 /// optional fields are measurements over a column; when absent their chips are
@@ -74,7 +74,7 @@ pub struct RenderSummary {
     pub cover_points: usize,
     /// Id-range probes among them.
     pub cover_ranges: usize,
-    /// Cut probes the planner pruned as unusable, of the ones drawn.
+    /// Cut probes removed during cover normalization (zero for the pinned planner).
     pub dead_probes: usize,
     /// Fraction of rows that truly match, if measured.
     pub selectivity: Option<f64>,
@@ -105,7 +105,7 @@ impl RenderSummary {
             contained_tokens: 0,
             contained_frequency: 0,
             cover_frequency,
-            cover_probes: cover.cmp_cost,
+            cover_probes: cover.points + cover.ranges,
             cover_points: cover.points,
             cover_ranges: cover.ranges,
             dead_probes: 0,
@@ -791,11 +791,7 @@ fn render_contained(graph: &PathGraph, rect: Box2d, summary: &RenderSummary) -> 
     let pct = share_of_codes(graph, summary.contained_frequency);
     let mut out = format!(
         "<g class=\"contained\"><title>{} dictionary token(s) contain the whole needle; mandatory members of every cover</title><rect x=\"{:.1}\" y=\"{:.1}\" width=\"{:.1}\" height=\"{:.1}\" rx=\"8\"/>",
-        summary.contained_tokens,
-        rect.x,
-        rect.y,
-        rect.w,
-        rect.h
+        summary.contained_tokens, rect.x, rect.y, rect.w, rect.h
     );
     out.push_str(&format!(
         "<text x=\"{:.1}\" y=\"{:.1}\" class=\"probe-title\">contains the whole needle</text>",
@@ -1012,11 +1008,8 @@ fn summary_chip(x: f64, y: f64, width: f64, label: &str, value: &str) -> String 
 fn captions(summary: &RenderSummary, max_chars: usize) -> Vec<String> {
     let mut paragraphs: Vec<String> = Vec::new();
     if summary.cover_probes == 0 {
-        paragraphs.push(
-            "Pruning left the cover empty: every token the cut named occurs nowhere here, so no \
-             row can match and no scan is needed."
-                .to_string(),
-        );
+        paragraphs
+            .push("The cover is empty, so no row can match and no scan is needed.".to_string());
     } else if summary.cut_value == 0 {
         paragraphs.push(
             "The cut weighs nothing: no occurrence crosses a token boundary in this column, so \

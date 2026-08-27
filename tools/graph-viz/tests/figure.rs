@@ -5,10 +5,10 @@
 //! config seeds deterministically, and the revision is pinned in `Cargo.toml`.
 //! Both of those are what make the golden figure stable.
 
-use onpair::{Column, DEFAULT_CONFIG, DictionaryView};
+use onpair::{Column, DEFAULT_CONFIG, Dictionary, DictionaryView};
 use onpair_graph_viz::{
     Error, Options, ProbeWeight, build_path_graph, candidate_rows, index_for, live_cover,
-    minimum_vertex_cut, visualize,
+    minimum_vertex_cut, visualize, visualize_index,
 };
 
 const ROWS: &[&str] = &[
@@ -77,6 +77,51 @@ impl Corpus {
     }
 }
 
+#[test]
+fn exact_sidecar_produces_the_same_graph_without_retraining() {
+    let corpus = Corpus::new();
+    let column = corpus.column();
+    let frequencies = index_for(column.view()).expect("index builds");
+    let encoded = onpair::encode_sidecar(&column.dict, &frequencies);
+    let artifact = onpair::decode_sidecar(&encoded).expect("sidecar validates");
+    let options = Options {
+        measure: false,
+        ..Options::default()
+    };
+
+    for pattern in PATTERNS {
+        let from_column = visualize(column.view(), &frequencies, pattern.as_bytes(), &options)
+            .expect("column graph builds");
+        let from_sidecar = visualize_index(
+            artifact.dictionary.as_view(),
+            &artifact.frequencies,
+            pattern.as_bytes(),
+            &options,
+        )
+        .expect("sidecar graph builds");
+        assert_eq!(
+            (
+                from_sidecar.cover.points,
+                from_sidecar.cover.ranges,
+                from_sidecar.cover.cmp_cost,
+                from_sidecar.cover.member_ids,
+            ),
+            (
+                from_column.cover.points,
+                from_column.cover.ranges,
+                from_column.cover.cmp_cost,
+                from_column.cover.member_ids,
+            ),
+            "{pattern:?}"
+        );
+        assert_eq!(
+            from_sidecar.summary.cover_frequency, from_column.summary.cover_frequency,
+            "{pattern:?}"
+        );
+        assert_eq!(from_sidecar.cut.value, from_column.cut.value, "{pattern:?}");
+    }
+}
+
 /// The point of the whole exercise: a rendered cover must admit every true match.
 /// This graph is a second implementation of OnPair's planning logic, so it is
 /// worth proving rather than assuming.
@@ -107,6 +152,44 @@ fn every_cover_is_sound() {
                 metric.name()
             );
         }
+    }
+}
+
+/// The explorer displays these static cover facts beside the benchmark's copy,
+/// so matching admitted rows is not enough: shape, SIMD price, and frequency
+/// must agree with the exact pinned planner too.
+#[test]
+fn cover_facts_match_onpair() {
+    let corpus = Corpus::new();
+    let column = corpus.column();
+    let view = column.view();
+    let frequencies = index_for(view).expect("index builds");
+
+    for pattern in PATTERNS {
+        let figure = visualize(view, &frequencies, pattern.as_bytes(), &Options::default())
+            .expect("figure builds");
+        let analysis =
+            onpair::search::analyze_prefilter(pattern.as_bytes(), view.dict, &frequencies);
+        assert_eq!(
+            figure.cover.points,
+            analysis.probe_cover().points().len(),
+            "{pattern:?}"
+        );
+        assert_eq!(
+            figure.cover.ranges,
+            analysis.probe_cover().ranges().len(),
+            "{pattern:?}"
+        );
+        assert_eq!(
+            figure.cover.cmp_cost,
+            analysis.comparison_cost(),
+            "{pattern:?}"
+        );
+        assert_eq!(
+            figure.summary.cover_frequency,
+            u64::from(analysis.covered_frequency()),
+            "{pattern:?}"
+        );
     }
 }
 
@@ -157,17 +240,11 @@ fn selectivity_matches_onpair() {
     }
 }
 
-/// A cut is free to select tokens the code stream never uses — they weigh nothing,
-/// so its objective is indifferent between naming them and not — and OnPair takes
-/// them back out before scanning. A figure that kept them would draw comparisons
-/// that never happen, so it prunes too, and says which probes went.
-///
-/// These patterns cannot match anything, and neither can the tokens their cut
-/// picks, so the whole cover is pruned away. That OnPair then admits no rows is
-/// the part worth asserting: it is the only outside evidence that this crate's
-/// copy of the pruning rule agrees with the library's.
+/// A safety-validated stored frequency index may undercount, so the pinned planner
+/// never removes zero-weight members from a cut. They still issue comparisons,
+/// even though an exact freshly-built index proves they occur nowhere.
 #[test]
-fn probes_for_absent_tokens_are_pruned() {
+fn probes_for_absent_tokens_are_retained() {
     let corpus = Corpus::new();
     let column = corpus.column();
     let view = column.view();
@@ -182,27 +259,23 @@ fn probes_for_absent_tokens_are_pruned() {
             !figure.cut.selected_nodes.is_empty(),
             "{pattern:?}: the cut should still name the probes it chose"
         );
-        assert_eq!(
-            figure.dead_probes, figure.cut.selected_nodes,
-            "{pattern:?}: every probe the cut chose occurs nowhere"
-        );
-        assert_eq!(
-            (figure.cover.cmp_cost, figure.cover.member_ids),
-            (0, 0),
-            "{pattern:?}: a fully pruned cover costs nothing to check"
+        assert!(
+            figure.dead_probes.is_empty(),
+            "{pattern:?}: no probe is pruned"
         );
         assert!(
-            figure.cover.dead_ids > 0,
-            "{pattern:?}: nothing was dropped"
+            figure.cover.cmp_cost > 0 && figure.cover.member_ids > 0,
+            "{pattern:?}: the zero-frequency probes still cost comparisons"
         );
+        assert_eq!(figure.cover.dead_ids, 0, "{pattern:?}: nothing was dropped");
         assert_eq!(
             (measurement.candidates, measurement.onpair_candidates),
             (0, Some(0)),
             "{pattern:?}: an empty cover admits no rows, and OnPair should agree"
         );
         assert!(
-            figure.svg.expect("small graph renders").contains("PRUNED"),
-            "{pattern:?}: the figure should mark what it dropped"
+            !figure.svg.expect("small graph renders").contains("PRUNED"),
+            "{pattern:?}: the figure must retain the cut"
         );
     }
 }
@@ -261,8 +334,13 @@ fn whole_needle_tokens_are_counted_and_drawn() {
         max_states: None,
         ..Options::default()
     };
-    let figure = visualize(view, &frequencies, b"/cart/checkout?ref=newsletter", &options)
-        .expect("figure builds");
+    let figure = visualize(
+        view,
+        &frequencies,
+        b"/cart/checkout?ref=newsletter",
+        &options,
+    )
+    .expect("figure builds");
     assert_eq!(figure.summary.contained_tokens, 0);
     assert!(!figure.svg.expect("renders").contains("MANDATORY"));
 }
@@ -314,10 +392,13 @@ fn row_frequency_is_shown_only_when_it_was_counted() {
     let view = column.view();
     let frequencies = index_for(view).expect("index builds");
 
-    let figure = visualize(view, &frequencies, b"utm_source=", &Options::default())
-        .expect("figure builds");
+    let figure =
+        visualize(view, &frequencies, b"utm_source=", &Options::default()).expect("figure builds");
     let svg = figure.svg.expect("small graph renders");
-    assert!(svg.contains("TF "), "term frequency always comes from the index");
+    assert!(
+        svg.contains("TF "),
+        "term frequency always comes from the index"
+    );
     assert!(
         !svg.contains("DF "),
         "no rows were counted, so no row frequency should be claimed"
@@ -327,8 +408,7 @@ fn row_frequency_is_shown_only_when_it_was_counted() {
         metric: ProbeWeight::RowFrequency,
         ..Options::default()
     };
-    let figure =
-        visualize(view, &frequencies, b"utm_source=", &options).expect("figure builds");
+    let figure = visualize(view, &frequencies, b"utm_source=", &options).expect("figure builds");
     let svg = figure.svg.expect("small graph renders");
     assert!(
         svg.contains("DF "),
@@ -361,34 +441,32 @@ fn control_bytes_in_a_needle_do_not_break_the_svg() {
     assert_eq!(stray, None, "a control character reached the SVG");
 }
 
-/// Where the trimming rule copied from OnPair is pinned: runs merge, unused ids
-/// leave the *ends* of a run, and an unused id between two used ones stays — a
-/// range costs one comparison however wide it is, but splitting it costs two.
+/// Where the normalization copied from OnPair is pinned: membership is preserved,
+/// maximal runs merge, points cost one comparison, and ranges cost two.
 #[test]
-fn live_cover_trims_run_ends_only() {
+fn live_cover_preserves_membership_and_prices_ranges() {
     // Ids 2, 3 and 5 are used; every other id in an eight-token dictionary is not.
-    let frequencies =
-        onpair::search::build_token_frequency_index(&[2u16, 3, 5, 5], 8).expect("index builds");
+    let frequencies = onpair::search::index::build_token_frequency_index(&[2u16, 3, 5, 5], 8)
+        .expect("index builds");
 
-    // Runs 1..=5 and 7..=7. The first keeps 2..=5 — id 1 is trimmed, id 4 rides
-    // along — and the second goes entirely.
+    // Runs 1..=5 and 7..=7 become one range and one point, regardless of their
+    // exact frequencies.
     let live = live_cover(
         &[false, true, true, true, true, true, false, true],
         &frequencies,
     );
     assert_eq!(
         live.members,
-        [false, false, true, true, true, true, false, false]
+        [false, true, true, true, true, true, false, true]
     );
     assert_eq!(
         (live.shape.points, live.shape.ranges, live.shape.cmp_cost),
-        (0, 1, 1)
+        (1, 1, 3)
     );
-    assert_eq!((live.shape.member_ids, live.shape.dead_ids), (4, 2));
+    assert_eq!((live.shape.member_ids, live.shape.dead_ids), (6, 0));
     assert!(!live.is_empty());
 
-    // Trimmed down to one id, a range is probed as a point instead: run 1..=2 loses
-    // its unused first id and leaves id 2 alone.
+    // A two-id run remains a range, priced as its lower and upper comparisons.
     let live = live_cover(
         &[false, true, true, false, false, false, false, false],
         &frequencies,
@@ -400,15 +478,19 @@ fn live_cover_trims_run_ends_only() {
             live.shape.member_ids,
             live.shape.dead_ids
         ),
-        (1, 0, 1, 1)
+        (0, 1, 2, 0)
     );
 
     let live = live_cover(
         &[true, true, false, false, false, false, true, true],
         &frequencies,
     );
-    assert!(live.is_empty(), "no used id survives");
-    assert_eq!(live.shape.dead_ids, 4);
+    assert!(!live.is_empty(), "frequency does not erase membership");
+    assert_eq!(
+        (live.shape.points, live.shape.ranges, live.shape.cmp_cost),
+        (0, 2, 4)
+    );
+    assert_eq!((live.shape.member_ids, live.shape.dead_ids), (4, 0));
 }
 
 /// Past the guard the graph is still returned; only the drawing is skipped.
@@ -461,7 +543,7 @@ fn mismatched_index_is_rejected() {
     // An index over a truncated code stream still has the right token count, so
     // build one for a different dictionary size instead.
     let frequencies =
-        onpair::search::build_token_frequency_index(view.codes, view.dict.num_tokens())
+        onpair::search::index::build_token_frequency_index(view.codes, view.dict.num_tokens())
             .expect("index builds");
     let smaller = Column::compress(b"abc", &[0u32, 3], DEFAULT_CONFIG).expect("compresses");
     let smaller_view = smaller.view();
@@ -506,4 +588,3 @@ fn golden_figure() {
         .expect("golden figure missing — regenerate with UPDATE_GOLDEN=1");
     assert_eq!(svg, expected, "the rendered figure changed");
 }
-

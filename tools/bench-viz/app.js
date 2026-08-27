@@ -15,6 +15,18 @@
       return {};
     }
   })();
+  const MINCUT_CATALOG = (() => {
+    const node = document.getElementById("bench-viz-mincut-graphs");
+    if (!node) return {};
+    try {
+      return JSON.parse(node.textContent) || {};
+    } catch (_error) {
+      return {};
+    }
+  })();
+  const MINCUT_ARCHIVES = MINCUT_CATALOG.version === 2
+    && MINCUT_CATALOG.archives && typeof MINCUT_CATALOG.archives === "object"
+    ? MINCUT_CATALOG.archives : {};
   const NS = "http://www.w3.org/2000/svg";
   // Ordered for separation, not variety: consecutive entries differ in hue and
   // in lightness, so the first few selected series stay distinguishable in
@@ -941,6 +953,8 @@
     grids.append(resultGroup, coverGroup);
     content.appendChild(grids);
     content.appendChild(renderMeasurementTable(snapshot, selectedSeries));
+    const mincutInspectors = renderMincutInspectors(snapshot);
+    if (mincutInspectors) content.appendChild(mincutInspectors);
 
     if (snapshot.meta) {
       const meta = htmlElement("details", "query-meta");
@@ -950,6 +964,244 @@
     }
     inspector.appendChild(content);
     return inspector;
+  }
+
+  const mincutBundleCache = new Map();
+
+  function loadMincutBundle(archiveId) {
+    if (mincutBundleCache.has(archiveId)) return mincutBundleCache.get(archiveId);
+    const archive = MINCUT_ARCHIVES[archiveId];
+    if (!archive) return Promise.reject(new Error("no embedded graph bundle for this artifact"));
+    const pending = (async () => {
+      if (archive.encoding !== "gzip+base64") {
+        throw new Error(`unsupported graph bundle encoding ${archive.encoding || "unknown"}`);
+      }
+      if (typeof DecompressionStream !== "function") {
+        throw new Error("this browser cannot decompress the embedded graph bundle");
+      }
+      const binary = atob(archive.data);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+      const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+      const bundle = await new Response(stream).json();
+      if (!bundle || bundle.version !== 1 || !bundle.graphs) {
+        throw new Error("embedded graph bundle has an unknown format");
+      }
+      if (bundle.dictionary_bits !== archive.dictionary_bits
+          || bundle.dictionary_fingerprint !== archive.dictionary_fingerprint) {
+        throw new Error("embedded graph provenance does not match its archive metadata");
+      }
+      return bundle;
+    })();
+    mincutBundleCache.set(archiveId, pending);
+    return pending;
+  }
+
+  function mincutNeedleLabel(snapshot, index) {
+    const needle = Array.isArray(snapshot.needles) ? snapshot.needles[index] : null;
+    return needle ? JSON.stringify(needle.display) : `needle ${index + 1}`;
+  }
+
+  function mincutProfileLabel(archive) {
+    const labels = unique((archive.profiles || []).map(profile => {
+      const config = compactConfig(profile.config);
+      return [profile.candidate, config ? `[${config}]` : null,
+        profile.candidate_version || null].filter(Boolean).join(" · ");
+    }));
+    return labels.join(" / ") || `${archive.dictionary_bits}-bit OnPair dictionary`;
+  }
+
+  function renderMincutInspector(snapshot, archiveId) {
+    const archive = MINCUT_ARCHIVES[archiveId];
+    if (!archive) return null;
+    const details = htmlElement("details", "query-mincut");
+    const summary = htmlElement("summary");
+    summary.append(
+      htmlElement("span", "query-mincut-title", "Mincut graph"),
+      htmlElement("span", "query-mincut-profile", mincutProfileLabel(archive)),
+    );
+    details.appendChild(summary);
+
+    const content = htmlElement("div", "query-mincut-content");
+    const toolbar = htmlElement("div", "mincut-toolbar");
+    const verification = archive.verification === "all_recorded_cover_facts"
+      ? "Legacy artifact: reconstruction checked against every recorded single-needle cover."
+      : "Dictionary fingerprint and recorded cover facts verified.";
+    const description = htmlElement("p", "",
+      `Orange probes form the minimum weighted cut; teal paths show shared parsing states. ${verification}`);
+    const controls = htmlElement("div", "mincut-controls");
+    const needleCount = Math.max(1, Array.isArray(snapshot.needles) ? snapshot.needles.length : 0);
+    let needleIndex = 0;
+    let size = "fit";
+    let generation = 0;
+    let activeSvg = null;
+    let activeName = "mincut-graph";
+
+    const needleField = htmlElement("label");
+    needleField.appendChild(htmlElement("span", "", "Needle"));
+    const needleSelect = htmlElement("select");
+    const needleIndices = Array.from({length: needleCount}, (_unused, index) => index);
+    setOptions(needleSelect, needleIndices, needleIndex,
+      index => mincutNeedleLabel(snapshot, Number(index)));
+    needleField.appendChild(needleSelect);
+    needleField.hidden = needleCount < 2;
+
+    const sizeControls = htmlElement("div", "segmented");
+    sizeControls.setAttribute("role", "group");
+    sizeControls.setAttribute("aria-label", "Mincut graph size");
+    const fitButton = htmlElement("button", "", "Fit width");
+    const actualButton = htmlElement("button", "", "100%");
+    [fitButton, actualButton].forEach(button => { button.type = "button"; });
+    const download = htmlElement("button", "png-button", "Download SVG");
+    download.type = "button";
+    download.disabled = true;
+    sizeControls.append(fitButton, actualButton);
+    controls.append(needleField, sizeControls, download);
+    toolbar.append(description, controls);
+
+    const status = htmlElement("p", "query-selection-note mincut-graph-status");
+    status.setAttribute("role", "status");
+    const profileRows = snapshot.rows.filter(row => row.mincut_archive_id === archiveId);
+    const facts = profileRows.find(row => finite(row.comparison_cost)) || profileRows[0] || {};
+    const provenance = htmlElement("dl", "query-mincut-provenance");
+    appendMetric(provenance, "Recorded cover",
+      finite(facts.cover_points) || finite(facts.cover_ranges)
+        ? `${countText(facts.cover_points || 0)} points + ${countText(facts.cover_ranges || 0)} ranges`
+        : "—");
+    appendMetric(provenance, "Covered token occurrences", countText(facts.covered_codes));
+    appendMetric(provenance, "Dictionary budget", `${archive.dictionary_bits}-bit`);
+    appendMetric(provenance,
+      archive.verification === "all_recorded_cover_facts"
+        ? "Reconstructed fingerprint" : "Measured dictionary fingerprint",
+      archive.dictionary_fingerprint || "—");
+    const frame = htmlElement("div", "mincut-graph-frame");
+    frame.appendChild(htmlElement("p", "query-details-empty",
+      "Expand this section to load the graph."));
+    content.append(toolbar, provenance, status, frame);
+    details.appendChild(content);
+
+    function syncSizeButtons() {
+      fitButton.setAttribute("aria-pressed", String(size === "fit"));
+      actualButton.setAttribute("aria-pressed", String(size === "actual"));
+    }
+
+    function clearFrame(message) {
+      activeSvg = null;
+      download.disabled = true;
+      frame.replaceChildren(htmlElement("p", "query-details-empty", message));
+    }
+
+    function mountSvg(rawSvg, graph, bundle) {
+      const parsed = new DOMParser().parseFromString(rawSvg, "image/svg+xml");
+      if (parsed.querySelector("parsererror")) {
+        throw new Error("the embedded SVG could not be parsed");
+      }
+      const svg = parsed.documentElement;
+      const originalWidth = Number(svg.getAttribute("width")) || 1200;
+      const originalHeight = Number(svg.getAttribute("height")) || 700;
+      if (size === "fit") {
+        svg.setAttribute("width", "100%");
+        svg.removeAttribute("height");
+        svg.style.width = "100%";
+        svg.style.height = "auto";
+      } else {
+        svg.setAttribute("width", String(originalWidth));
+        svg.setAttribute("height", String(originalHeight));
+        svg.style.width = `${originalWidth}px`;
+        svg.style.height = `${originalHeight}px`;
+        svg.style.maxWidth = "none";
+      }
+      const host = htmlElement("div", "mincut-svg-host");
+      const shadow = host.attachShadow({mode: "open"});
+      shadow.appendChild(document.importNode(svg, true));
+      frame.replaceChildren(host);
+      activeSvg = rawSvg;
+      activeName = `${snapshot.id}-needle-${graph.needle_index + 1}-${archiveId}`;
+      download.disabled = false;
+      status.textContent =
+        `${graph.states.toLocaleString("en-GB")} parsing states · `
+        + `${countText(graph.cover_points)} points + ${countText(graph.cover_ranges)} ranges · `
+        + `${countText(graph.comparison_cost)} SIMD comparisons · `
+        + `${countText(graph.covered_codes)} covered token occurrences · `
+        + `${bundle.dictionary_bits}-bit dictionary · `
+        + `fingerprint ${bundle.dictionary_fingerprint.split(":").pop()}`;
+    }
+
+    async function draw() {
+      const drawGeneration = ++generation;
+      status.textContent = "Loading compressed graph bundle…";
+      clearFrame("Loading graph…");
+      try {
+        const bundle = await loadMincutBundle(archiveId);
+        if (drawGeneration !== generation || !details.open) return;
+        const graphs = bundle.graphs[snapshot.id] || [];
+        const graph = graphs.find(item => item.needle_index === needleIndex);
+        if (!graph) {
+          status.textContent = "No graph was generated for this needle.";
+          clearFrame("Graph unavailable for this query.");
+          return;
+        }
+        if (!graph.svg) {
+          const reason = graph.error || "Graph SVG unavailable.";
+          status.textContent = reason;
+          clearFrame(reason);
+          return;
+        }
+        mountSvg(graph.svg, graph, bundle);
+      } catch (error) {
+        if (drawGeneration !== generation) return;
+        const message = `Unable to load mincut graph: ${error && error.message}`;
+        status.textContent = message;
+        clearFrame(message);
+      }
+    }
+
+    details.addEventListener("toggle", () => {
+      if (details.open) void draw();
+      else generation += 1;
+    });
+    needleSelect.addEventListener("change", () => {
+      needleIndex = Number(needleSelect.value);
+      if (details.open) void draw();
+    });
+    fitButton.addEventListener("click", () => {
+      size = "fit";
+      syncSizeButtons();
+      if (details.open) void draw();
+    });
+    actualButton.addEventListener("click", () => {
+      size = "actual";
+      syncSizeButtons();
+      if (details.open) void draw();
+    });
+    download.addEventListener("click", () => {
+      if (!activeSvg) return;
+      const link = document.createElement("a");
+      const slug = activeName.toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      link.download = `${slug || "mincut-graph"}.svg`;
+      link.href = URL.createObjectURL(
+        new Blob([activeSvg], {type: "image/svg+xml;charset=utf-8"}));
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    });
+    syncSizeButtons();
+    return details;
+  }
+
+  function renderMincutInspectors(snapshot) {
+    const archiveIds = unique(snapshot.rows.map(row => row.mincut_archive_id).filter(Boolean));
+    if (!archiveIds.length) return null;
+    const wrap = htmlElement("section", "query-mincut-list");
+    wrap.appendChild(htmlElement("h4", "", archiveIds.length === 1
+      ? "Parsing graph" : "Parsing graphs by dictionary artifact"));
+    archiveIds.forEach(archiveId => {
+      const inspector = renderMincutInspector(snapshot, archiveId);
+      if (inspector) wrap.appendChild(inspector);
+    });
+    return wrap;
   }
 
   function renderQueryDetails(rows, selectedSeries) {

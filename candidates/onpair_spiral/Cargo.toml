@@ -21,4 +21,4 @@ serde_json = { workspace = true }
 # SIMD probes for any cover: a wide cover is slow everywhere rather than slow on
 # AArch64 and fast on pre-AVX-512 x86, and the one calibrated profitability
 # guard is correct on every host.
-onpair = { git = "https://github.com/spiraldb/onpair.git", rev = "75e80c4392e912428542488bc3ba164847b3c1d5" }
+onpair = { package = "onpair-benchmark-artifact", path = "../../tools/onpair-artifact" }

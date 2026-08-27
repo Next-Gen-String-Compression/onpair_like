@@ -17,7 +17,7 @@
 extern "C" {
 #endif
 
-#define LB_ABI_VERSION 6u
+#define LB_ABI_VERSION 7u
 
 /* Guaranteed writable headroom past the decoded payload in every decode()
  * output buffer (see lb_candidate.decode). Lets fixed-stride over-copying
@@ -121,6 +121,14 @@ typedef struct lb_query_facts {
   uint64_t profitable_hint; /* 1 yes, 0 no, LB_FACT_UNSET if no such notion */
 } lb_query_facts;
 
+/* Harness-owned output descriptor for export_artifact(). */
+typedef struct lb_artifact {
+  const char*    format; /* versioned format tag                          */
+  uint8_t*       bytes;
+  uint64_t       capacity;
+  uint64_t       len;
+} lb_artifact;
+
 /* ------------------------------------------------------------ strategies */
 
 /* A candidate-implemented way of answering queries (e.g. "compressed",
@@ -197,6 +205,15 @@ typedef struct lb_candidate {
    * nothing static to declare. */
   int  (*query_facts)(void* self, uint32_t strategy_index,
                       const lb_query* q, lb_query_facts* out);
+
+  /* Optional post-run artifact export (ABI v7). The harness invokes this only
+   * in a deterministic replay process after the parent has completed the full
+   * measurement matrix. Export-capable builds must therefore be reproducible
+   * from the recorded dataset/config. The harness first passes bytes=NULL and
+   * capacity=0; set format and the required len. It then calls again with a
+   * buffer of that capacity, into which the candidate writes the artifact.
+   * Return 0 on success; NULL means unsupported. */
+  int  (*export_artifact)(void* self, lb_artifact* out);
 } lb_candidate;
 /* A candidate must offer at least one of: run (with strategies), view,
  * decode. */

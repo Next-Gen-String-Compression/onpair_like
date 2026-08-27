@@ -357,6 +357,28 @@ unsafe extern "C" fn query_facts(
     0
 }
 
+/// Serialize the exact dictionary and frequency index from the deterministic
+/// post-run replay build. The harness owns the invocation boundary; this
+/// callback is never reached by a measurement worker.
+unsafe extern "C" fn export_artifact(this: *mut c_void, out: *mut LbArtifact) -> i32 {
+    if this.is_null() || out.is_null() {
+        return 1;
+    }
+    let h = &*(this as *const Handle);
+    let artifact = onpair::encode_sidecar(&h.col.dict, &h.frequencies);
+    let descriptor = &mut *out;
+    descriptor.format = onpair::FORMAT_CSTR.as_ptr();
+    descriptor.len = artifact.len() as u64;
+    if descriptor.capacity == 0 && descriptor.bytes.is_null() {
+        return 0;
+    }
+    if descriptor.bytes.is_null() || descriptor.capacity < descriptor.len {
+        return 2;
+    }
+    core::ptr::copy_nonoverlapping(artifact.as_ptr(), descriptor.bytes, artifact.len());
+    0
+}
+
 /// Bulk-decode into the harness's canonical `(bytes, u64 offsets)` layout.
 /// Each invocation expands the retained compact dictionary exactly once, then
 /// bulk-decodes the entire code stream. This deliberately includes wide-table
@@ -429,6 +451,7 @@ static VTABLE: LbCandidate = LbCandidate {
     decode: None,
     destroy: Some(destroy),
     query_facts: Some(query_facts),
+    export_artifact: Some(export_artifact),
 };
 
 static DECODE_VTABLE: LbCandidate = LbCandidate {
@@ -445,6 +468,7 @@ static DECODE_VTABLE: LbCandidate = LbCandidate {
     decode: Some(decode),
     destroy: Some(destroy_decode),
     query_facts: None,
+    export_artifact: None,
 };
 
 pub fn vtable() -> &'static LbCandidate {
@@ -490,5 +514,46 @@ mod tests {
         assert!(vtable().decode.is_none());
         assert!(vtable_decode().decode.is_some());
         assert_eq!(vtable_decode().strategy_count, 0);
+    }
+
+    #[test]
+    fn query_candidate_exports_its_exact_mincut_sidecar() {
+        let bytes = b"alphabetagammaalpha";
+        let offsets = [0u64, 5, 9, 14, 19];
+        let handle = build_inner(
+            &LbChunkView {
+                bytes: bytes.as_ptr(),
+                offsets: offsets.as_ptr(),
+                num_rows: 4,
+            },
+            r#"{"bits":9,"seed":42}"#,
+        )
+        .unwrap();
+        let handle = Box::into_raw(Box::new(handle)) as *mut c_void;
+        let mut artifact = LbArtifact {
+            format: core::ptr::null(),
+            bytes: core::ptr::null_mut(),
+            capacity: 0,
+            len: 0,
+        };
+        assert_eq!(unsafe { export_artifact(handle, &mut artifact) }, 0);
+        assert_eq!(
+            unsafe { CStr::from_ptr(artifact.format) }.to_str().unwrap(),
+            onpair::FORMAT
+        );
+        let mut encoded = vec![0; artifact.len as usize];
+        artifact.bytes = encoded.as_mut_ptr();
+        artifact.capacity = encoded.len() as u64;
+        assert_eq!(unsafe { export_artifact(handle, &mut artifact) }, 0);
+        let decoded = onpair::decode_sidecar(&encoded).unwrap();
+        assert!(decoded.dictionary_bits <= 9);
+        assert_eq!(
+            decoded.fingerprint,
+            onpair::mincut_fingerprint(decoded.dictionary.as_view(), &decoded.frequencies)
+        );
+        unsafe { destroy(handle) };
+
+        assert!(vtable().export_artifact.is_some());
+        assert!(vtable_decode().export_artifact.is_none());
     }
 }

@@ -3,6 +3,7 @@
 //! two-mode execution, timing — and writes its slice of results
 //! (DESIGN.md §7–§10). The parent orchestrates workers; see main.rs.
 
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use lb_abi::{LbChunkView, LbRunStats, LB_STAT_UNSET};
@@ -516,6 +517,138 @@ pub fn run_worker(
         }
     }
     Ok(summary)
+}
+
+/// Rebuild and export one worker's deterministic artifacts after the parent
+/// has completed the entire measurement matrix. This is deliberately a
+/// separate process phase: serialization, allocation, filesystem I/O, and
+/// even the replayed build therefore cannot warm caches or otherwise perturb
+/// any benchmark measurement in the run.
+pub fn export_worker_artifacts(
+    loaded: &LoadedSpec,
+    candidate_name: &str,
+    config_idx: usize,
+    dataset_idx: usize,
+    out: &mut Writer,
+    run_output_dir: &Path,
+) -> Result<WorkerSummary> {
+    let spec = &loaded.spec;
+    let candidate = registry::find_candidate(candidate_name)?;
+    if candidate.vt.export_artifact.is_none() {
+        return Ok(WorkerSummary::default());
+    }
+    if let Err(missing) = crate::cpu::check_features(candidate.cpu_features.as_deref()) {
+        return Err(format!(
+            "candidate {candidate_name} requires missing CPU features {missing:?}"
+        )
+        .into());
+    }
+    let config = spec
+        .candidates
+        .iter()
+        .find(|selection| selection.name == candidate_name)
+        .ok_or("candidate not in spec")?
+        .configs
+        .get(config_idx)
+        .ok_or("config index out of range")?
+        .clone();
+    let dataset_ref = spec
+        .datasets
+        .get(dataset_idx)
+        .ok_or("dataset index out of range")?;
+    let dataset = PreparedDataset::load(&dataset_ref.path, !spec.measure.skip_checksum_verify)?;
+    let has_measured_suite = spec.suites.iter().try_fold(false, |found, suite| {
+        Ok::<_, Error>(
+            found || Suite::load_unblessed(&suite.path)?.manifest.dataset.id == dataset.manifest.id,
+        )
+    })?;
+    if !has_measured_suite {
+        return Ok(WorkerSummary::default());
+    }
+    let artifact_dir = run_output_dir.join("artifacts");
+    let mut summary = WorkerSummary::default();
+
+    for &chunk_rows in &spec.measure.chunk_rows {
+        let key = CellKey {
+            candidate: candidate.name.clone(),
+            candidate_version: candidate.version.clone(),
+            config: config.clone(),
+            config_hash: config_hash(&config),
+            strategy: None,
+            scanner: None,
+            dataset: dataset.manifest.id.clone(),
+            dataset_checksum: dataset.manifest.checksum.clone(),
+            chunk_rows,
+        };
+        let chunks = chunks::slice(&dataset, chunk_rows)?;
+        for (chunk_index, chunk) in chunks.chunks.iter().enumerate() {
+            let handle = match candidate.build_chunk(&chunk.view(), &config) {
+                Ok(handle) => handle,
+                Err(error) => {
+                    out.write(&Row::ArtifactFailed {
+                        key: key.clone(),
+                        chunk_index,
+                        error: format!("deterministic replay build failed: {error}"),
+                        export_phase: "post_run_replay",
+                    })?;
+                    summary.errors += 1;
+                    continue;
+                }
+            };
+            let exported = match handle.export_artifact() {
+                Ok(Some(artifact)) => artifact,
+                Ok(None) => continue,
+                Err(error) => {
+                    out.write(&Row::ArtifactFailed {
+                        key: key.clone(),
+                        chunk_index,
+                        error: error.to_string(),
+                        export_phase: "post_run_replay",
+                    })?;
+                    summary.errors += 1;
+                    continue;
+                }
+            };
+            let file_name = format!(
+                "{}-c{config_idx}-d{dataset_idx}-rows{chunk_rows}-chunk{chunk_index}.lbartifact",
+                artifact_file_component(&candidate.name),
+            );
+            let artifact_path = artifact_dir.join(&file_name);
+            if let Err(error) = std::fs::create_dir_all(&artifact_dir)
+                .and_then(|()| std::fs::write(&artifact_path, &exported.bytes))
+            {
+                out.write(&Row::ArtifactFailed {
+                    key: key.clone(),
+                    chunk_index,
+                    error: format!("{}: {error}", artifact_path.display()),
+                    export_phase: "post_run_replay",
+                })?;
+                summary.errors += 1;
+                continue;
+            }
+            out.write(&Row::Artifact {
+                key: key.clone(),
+                chunk_index,
+                artifact_format: exported.format,
+                artifact_path: format!("artifacts/{file_name}"),
+                artifact_bytes: exported.bytes.len() as u64,
+                export_phase: "post_run_replay",
+            })?;
+        }
+    }
+    Ok(summary)
+}
+
+fn artifact_file_component(name: &str) -> String {
+    name.chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect()
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -109,7 +109,10 @@ pub fn find_candidate(name: &str) -> Result<Candidate> {
         .ok_or_else(|| {
             format!(
                 "unknown candidate {name:?}; registered: {:?}",
-                candidates().iter().map(|c| c.name.clone()).collect::<Vec<_>>()
+                candidates()
+                    .iter()
+                    .map(|c| c.name.clone())
+                    .collect::<Vec<_>>()
             )
             .into()
         })
@@ -122,7 +125,10 @@ pub fn find_scanner(name: &str) -> Result<Scanner> {
         .ok_or_else(|| {
             format!(
                 "unknown scanner {name:?}; registered: {:?}",
-                scanners().iter().map(|s| s.name.clone()).collect::<Vec<_>>()
+                scanners()
+                    .iter()
+                    .map(|s| s.name.clone())
+                    .collect::<Vec<_>>()
             )
             .into()
         })
@@ -148,7 +154,9 @@ pub struct Candidate {
 
 impl Candidate {
     fn validate(vt: &'static LbCandidate) -> Result<Candidate> {
-        let name = unsafe { cstr(vt.name) }.ok_or("candidate name missing")?.to_string();
+        let name = unsafe { cstr(vt.name) }
+            .ok_or("candidate name missing")?
+            .to_string();
         if vt.abi_version != LB_ABI_VERSION {
             return Err(format!(
                 "candidate {name}: ABI version {} != harness {}",
@@ -186,10 +194,9 @@ impl Candidate {
             return Err(format!("candidate {name}: declares strategies but run is NULL").into());
         }
         if strategies.is_empty() && vt.view.is_none() && vt.decode.is_none() {
-            return Err(format!(
-                "candidate {name}: must offer at least one of run/view/decode"
-            )
-            .into());
+            return Err(
+                format!("candidate {name}: must offer at least one of run/view/decode").into(),
+            );
         }
         Ok(Candidate {
             vt,
@@ -205,6 +212,9 @@ impl Candidate {
     }
     pub fn has_decode(&self) -> bool {
         self.vt.decode.is_some()
+    }
+    pub fn has_artifact_export(&self) -> bool {
+        self.vt.export_artifact.is_some()
     }
 
     /// Build one chunk; harness-timed by the caller.
@@ -241,6 +251,12 @@ pub struct BuiltChunk {
     vt: &'static LbCandidate,
     handle: *mut core::ffi::c_void,
     pub num_rows: u64,
+}
+
+/// Owned copy of a candidate's post-run replay artifact.
+pub struct ExportedArtifact {
+    pub format: String,
+    pub bytes: Vec<u8>,
 }
 
 impl BuiltChunk {
@@ -295,6 +311,43 @@ impl BuiltChunk {
         (rc == 0).then_some(out)
     }
 
+    /// Copy this chunk's optional artifact during the post-run replay phase.
+    pub fn export_artifact(&self) -> Result<Option<ExportedArtifact>> {
+        let Some(export) = self.vt.export_artifact else {
+            return Ok(None);
+        };
+        let mut out = LbArtifact {
+            format: std::ptr::null(),
+            bytes: std::ptr::null_mut(),
+            capacity: 0,
+            len: 0,
+        };
+        // SAFETY: the callback receives the handle created by the same vtable
+        // and a live output slot. Its returned view is copied immediately.
+        let rc = unsafe { export(self.handle, &mut out) };
+        if rc != 0 {
+            return Err(format!("export_artifact() returned {rc}").into());
+        }
+        let format = unsafe { cstr(out.format) }
+            .ok_or("export_artifact() returned no format")?
+            .to_string();
+        let len = usize::try_from(out.len).map_err(|_| "artifact is too large for this host")?;
+        if len > isize::MAX as usize {
+            return Err("artifact is too large for this host".into());
+        }
+        let mut bytes = vec![0u8; len];
+        out.bytes = bytes.as_mut_ptr();
+        out.capacity = bytes.len() as u64;
+        let rc = unsafe { export(self.handle, &mut out) };
+        if rc != 0 {
+            return Err(format!("export_artifact() write returned {rc}").into());
+        }
+        if out.len != bytes.len() as u64 {
+            return Err("export_artifact() changed its required length".into());
+        }
+        Ok(Some(ExportedArtifact { format, bytes }))
+    }
+
     pub fn view(&self) -> Result<LbChunkView> {
         let mut out = LbChunkView {
             bytes: std::ptr::null(),
@@ -347,7 +400,9 @@ impl Scanner {
             )
             .into());
         }
-        let name = unsafe { cstr(vt.name) }.ok_or("scanner name missing")?.to_string();
+        let name = unsafe { cstr(vt.name) }
+            .ok_or("scanner name missing")?
+            .to_string();
         if vt.prepare.is_none() || vt.scan.is_none() || vt.release.is_none() {
             return Err(format!("scanner {name}: prepare/scan/release are required").into());
         }

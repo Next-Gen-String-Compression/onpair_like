@@ -173,6 +173,18 @@ unsafe extern "C" fn run(
     0
 }
 
+/// Forward post-run replay export to the exact inner build.
+unsafe extern "C" fn export_artifact(this: *mut c_void, out: *mut LbArtifact) -> i32 {
+    if this.is_null() || out.is_null() {
+        return 1;
+    }
+    let h = &*(this as *const Handle);
+    let Some(export) = h.inner_vt.export_artifact else {
+        return 1;
+    };
+    export(h.inner_handle, out)
+}
+
 unsafe extern "C" fn destroy(this: *mut c_void) {
     let h = Box::from_raw(this as *mut Handle);
     // Destroy the inner BEFORE `h` (and its blob/offsets) is freed.
@@ -209,6 +221,7 @@ static ONPAIR_VTABLE: LbCandidate = LbCandidate {
     decode: None,
     destroy: Some(destroy),
     query_facts: None,
+    export_artifact: None,
 };
 
 pub fn vtable() -> &'static LbCandidate {
@@ -252,6 +265,7 @@ static SPIRAL_VTABLE: LbCandidate = LbCandidate {
     decode: None,
     destroy: Some(destroy),
     query_facts: None,
+    export_artifact: Some(export_artifact),
 };
 
 pub fn vtable_spiral() -> &'static LbCandidate {

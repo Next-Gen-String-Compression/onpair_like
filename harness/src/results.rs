@@ -75,6 +75,28 @@ pub enum Row {
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
     },
+    /// One candidate-owned sidecar per deterministically replayed chunk.
+    /// Emitted in a separate process phase only after the parent has completed
+    /// the full measurement matrix (ABI v7).
+    Artifact {
+        #[serde(flatten)]
+        key: CellKey,
+        chunk_index: usize,
+        artifact_format: String,
+        /// Path relative to the run directory.
+        artifact_path: String,
+        artifact_bytes: u64,
+        export_phase: &'static str,
+    },
+    /// A supported post-run replay/export failed. Query measurements remain
+    /// valid and precede this row, but the run is incomplete for provenance.
+    ArtifactFailed {
+        #[serde(flatten)]
+        key: CellKey,
+        chunk_index: usize,
+        error: String,
+        export_phase: &'static str,
+    },
     /// build() failed for this (candidate, config, dataset, chunk_rows);
     /// every cell it would have produced is withheld.
     BuildFailed {

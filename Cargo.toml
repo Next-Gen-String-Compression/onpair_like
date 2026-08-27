@@ -16,6 +16,7 @@ members = [
     "candidates/cpp_identity",
     "candidates/onpair",
     "candidates/onpair_spiral",
+    "tools/onpair-artifact",
     "candidates/lz4",
     "candidates/zstd",
     "candidates/fsst",

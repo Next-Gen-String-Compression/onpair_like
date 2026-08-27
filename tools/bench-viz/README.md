@@ -16,11 +16,14 @@ The viewer can:
 - fit the y-axis to only the currently visible candidate series and decode baselines;
 - change dataset, operation, chunking, axes, aggregation, title, subtitle, and
   axis labels without regenerating the file;
-- show raw observations, median lines, and interquartile bands; and
+- show raw observations, median lines, and interquartile bands;
 - click a raw point to highlight one query, or a median point to select every
   query in that aggregate, then inspect needles, result statistics, mincut cover
   shape/frequency, profitability facts, timing distributions, and provenance in
   the collapsible panel below the plot;
+- optionally embed the full parsing DAG and highlighted minimum cut inside each
+  query row, collapsed and loaded only on demand, with fit-width/actual-size
+  views and SVG download; and
 - export the current view to a 1×–4× PNG (up to 4800 pixels wide).
 
 ## Build a viewer
@@ -32,6 +35,7 @@ python3 tools/bench-viz/bench_viz.py \
   results/my-run/results.jsonl \
   --queries suites/my-suite \
   --show onpair --show uncompressed \
+  --mincut-graphs \
   --title "Contains throughput" \
   --out tools/bench-viz/out/my-run.html
 ```
@@ -45,6 +49,30 @@ named run directory and follows suite paths in an adjacent `manifest.json`.
 Use repeatable `--queries` options to add or override suite locations when a run
 was copied without its original suite. The detail panel still works without a
 suite, but reports that the needle bytes are unavailable.
+
+`--mincut-graphs` uses `tools/graph-viz` to draw each DAG. ABI-v7 runs export the
+exact token dictionary and frequency index in a deterministic replay phase
+after the complete measurement matrix; when an artifact row is present, it is
+authoritative and the explorer never re-trains. Graphs are grouped by the full
+measured build identity, so several
+OnPair candidates and dictionary sizes can coexist in one explorer. Legacy
+runs without sidecars retain the stricter reconstruction fallback: a
+fingerprint must agree when available, and older `onpair_spiral` results are
+accepted only after every recorded single-needle cover matches. Chunked cells
+are omitted because they contain several independently trained dictionaries,
+and a run with no compatible candidate simply embeds no graphs—no hypothetical
+dictionary is made.
+
+The replay phase runs after every candidate's measurements, so chunk-size
+sweeps can export all of their independently built sidecars without affecting
+timings. The current explorer still omits chunked cells rather than pretending
+that several per-chunk dictionaries are one whole-column graph.
+
+The builder discovers datasets through the run manifest and remaps paths from
+other checkouts onto `datasets/` here; use repeatable
+`--mincut-dataset DATASET=PATH` overrides when necessary. Each compressed bundle
+is loaded only when its collapsed graph row is opened, so selecting a median
+with hundreds of queries does not eagerly parse or mount hundreds of SVGs.
 
 Clicking a raw point selects its query across every visible candidate. Clicking
 an aggregate point selects all queries contributing to that median. Hold Shift,
@@ -120,6 +148,6 @@ implementations of the same statistics, in different languages, agreeing to
 four digits is stronger evidence than either passing its own unit tests.
 
 It is opt-in rather than part of the suite above: it needs a `needle-sweep` run
-with ABI v6 cover facts and a decode baseline, and re-running the Python side
+with cover facts/artifact fingerprints and a decode baseline, and re-running the Python side
 needs numpy. Given neither, the figures it pins still guard the JavaScript
 reductions against drift.

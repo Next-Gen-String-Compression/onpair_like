@@ -12,7 +12,7 @@
 //! built for it:
 //!
 //! ```no_run
-//! use onpair::search::build_token_frequency_index;
+//! use onpair::search::index::build_token_frequency_index;
 //! use onpair::{Column, DEFAULT_CONFIG, DictionaryView};
 //! use onpair_graph_viz::{Options, visualize};
 //!
@@ -47,16 +47,16 @@
 //! truth — see [`Measurement`].
 //!
 //! # Keeping up with the pin
-//! `Cargo.toml` pins `onpair` to one revision, and the figures are only as
+//! `tools/onpair-artifact/Cargo.toml` owns the one `onpair` revision used by
+//! both the benchmark candidate and this renderer. The figures are only as
 //! truthful as this crate's copy of that revision's planning rules. Everything the
 //! library exposes is called, not reimplemented — the dictionary, `prefix_range`,
 //! the frequency index, [`BytesVerifier`], `prefilter_candidates` — but the DAG,
 //! the cut and the cover shape are re-derived, so **moving the pin means reviewing
 //! them**. The two places that copy a private rule say so at their definitions:
-//! [`live_cover`] (run merging and zero-frequency trimming) and
-//! [`mincut`]. [`Measurement`] catches divergence that changes which rows are
-//! admitted; it cannot catch divergence that only changes the probes, since a
-//! probe for a token that occurs nowhere admits nothing either way.
+//! [`live_cover`] (run merging and comparison pricing) and [`mincut`].
+//! [`Measurement`] catches divergence that changes which rows are admitted; it
+//! cannot catch divergence that only changes zero-frequency probes.
 
 #![deny(missing_docs)]
 
@@ -64,10 +64,11 @@ pub mod graph;
 pub mod mincut;
 pub mod render;
 
-use onpair::search::{
-    BytesVerifier, PrefilterError, TokenFrequencyIndex, TokenFrequencyIndexError,
-    analyze_prefilter, prefilter_candidates,
+use onpair::search::index::{
+    TokenFrequencyIndex, TokenFrequencyIndexError, TokenFrequencyIndexStorage,
+    build_token_frequency_index,
 };
+use onpair::search::{BytesVerifier, PrefilterError, analyze_prefilter, prefilter_candidates};
 use onpair::{ColumnView, DictionaryView, Offset};
 use serde::Serialize;
 
@@ -96,6 +97,10 @@ pub enum Error {
     },
     /// The index could not be built for this column.
     Index(TokenFrequencyIndexError),
+    /// Candidate/exact-row measurement needs a code stream and row offsets.
+    MeasurementNeedsColumn,
+    /// Document-frequency metrics need a code stream and row offsets.
+    RowMetricNeedsColumn,
 }
 
 impl std::fmt::Display for Error {
@@ -110,6 +115,10 @@ impl std::fmt::Display for Error {
                 "frequency index covers {index_tokens} tokens, dictionary holds {dict_tokens}"
             ),
             Self::Index(error) => write!(f, "{error}"),
+            Self::MeasurementNeedsColumn => {
+                f.write_str("measurement needs a full column; use --no-measure with a sidecar")
+            }
+            Self::RowMetricNeedsColumn => f.write_str("row-frequency metrics need a full column"),
         }
     }
 }
@@ -183,12 +192,10 @@ pub struct Figure {
     pub graph: PathGraph,
     /// Its minimum cut under [`Options::metric`].
     pub cut: CutResult,
-    /// The cover's point/range shape and SIMD comparison cost, after pruning.
+    /// The cover's point/range shape and SIMD comparison cost.
     pub cover: CoverShape,
-    /// Cut nodes pruning left with nothing to probe for — every id they named
-    /// occurs nowhere in the code stream, so OnPair issues no comparison for them.
-    /// Drawn as dead rather than hidden: the picture should say why the cut named
-    /// something the scan then ignored.
+    /// Cut nodes removed by cover normalization. Empty for the pinned planner,
+    /// which preserves membership even when advisory frequency is zero.
     pub dead_probes: Vec<usize>,
     /// The header numbers.
     pub summary: RenderSummary,
@@ -214,9 +221,9 @@ impl Figure {
 /// # Errors
 /// [`Error::EmptyPattern`] for an empty pattern, [`Error::IndexMismatch`] if the
 /// index does not describe this column's dictionary.
-pub fn visualize<O: Offset>(
+pub fn visualize<O: Offset, S: TokenFrequencyIndexStorage>(
     view: ColumnView<'_, O>,
-    frequencies: &TokenFrequencyIndex,
+    frequencies: &TokenFrequencyIndex<S>,
     pattern: &[u8],
     options: &Options,
 ) -> Result<Figure, Error> {
@@ -225,13 +232,67 @@ pub fn visualize<O: Offset>(
     } else {
         Weights::from_index(frequencies)
     };
-    let graph = build_path_graph(view.dict, pattern, &weights)?;
+    let total_rows = view.num_rows();
+    visualize_with_weights(
+        view.dict,
+        frequencies,
+        pattern,
+        options,
+        weights,
+        |members| {
+            options
+                .measure
+                .then(|| measure(view, frequencies, pattern, members))
+        },
+        Some(total_rows),
+    )
+}
+
+/// Build a graph from the exact dictionary and frequency index alone.
+///
+/// This is the sidecar entry point. Term-frequency objectives are exact;
+/// measurement and row-frequency objectives require the omitted code stream.
+pub fn visualize_index<D: DictionaryView, S: TokenFrequencyIndexStorage>(
+    dictionary: D,
+    frequencies: &TokenFrequencyIndex<S>,
+    pattern: &[u8],
+    options: &Options,
+) -> Result<Figure, Error> {
+    if options.measure {
+        return Err(Error::MeasurementNeedsColumn);
+    }
+    if options.metric.needs_rows() {
+        return Err(Error::RowMetricNeedsColumn);
+    }
+    visualize_with_weights(
+        dictionary,
+        frequencies,
+        pattern,
+        options,
+        Weights::from_index(frequencies),
+        |_| None,
+        None,
+    )
+}
+
+fn visualize_with_weights<
+    D: DictionaryView,
+    S: TokenFrequencyIndexStorage,
+    F: FnOnce(&[bool]) -> Option<Measurement>,
+>(
+    dictionary: D,
+    frequencies: &TokenFrequencyIndex<S>,
+    pattern: &[u8],
+    options: &Options,
+    weights: Weights,
+    measure_cover: F,
+    total_rows: Option<usize>,
+) -> Result<Figure, Error> {
+    let graph = build_path_graph(dictionary, pattern, &weights)?;
     let cut = minimum_vertex_cut(&graph, options.metric);
 
-    // The cut's ids, then the ones OnPair keeps: a cut is free to select tokens the
-    // code stream never uses, since they weigh nothing by its objective, and the
-    // planner takes them back out. Everything downstream measures and draws the
-    // kept set, so the figure is about the probes the scan really issues.
+    // The cut's ids plus mandatory whole-pattern ids, normalized into the same
+    // point/range cover OnPair issues to its SIMD scan.
     let members = graph.membership_for_cut(&cut.selected_nodes);
     let live = live_cover(&members, frequencies);
     let dead_probes = dead_probes(&graph, &cut.selected_nodes, &live);
@@ -244,9 +305,7 @@ pub fn visualize<O: Offset>(
         contained_members[id as usize] = true;
     }
 
-    let measurement = options
-        .measure
-        .then(|| measure(view, frequencies, pattern, &live.members));
+    let measurement = measure_cover(&live.members);
 
     let mut summary = RenderSummary::new(
         options.title.clone(),
@@ -265,8 +324,9 @@ pub fn visualize<O: Offset>(
     if let Some(measurement) = &measurement {
         summary.cut_candidates = Some(measurement.candidates);
         summary.exact_rows = Some(measurement.exact_rows);
-        summary.selectivity =
-            (view.num_rows() > 0).then(|| measurement.exact_rows as f64 / view.num_rows() as f64);
+        summary.selectivity = total_rows
+            .filter(|&rows| rows > 0)
+            .map(|rows| measurement.exact_rows as f64 / rows as f64);
     }
 
     let too_wide = options
@@ -315,9 +375,9 @@ pub fn candidate_rows<O: Offset>(view: ColumnView<'_, O>, members: &[bool]) -> V
         .collect()
 }
 
-fn measure<O: Offset>(
+fn measure<O: Offset, S: TokenFrequencyIndexStorage>(
     view: ColumnView<'_, O>,
-    frequencies: &TokenFrequencyIndex,
+    frequencies: &TokenFrequencyIndex<S>,
     pattern: &[u8],
     members: &[bool],
 ) -> Measurement {
@@ -366,10 +426,10 @@ fn default_subtitle(pattern: &[u8]) -> String {
 /// Build the frequency index for a column, as the tool's callers usually need it.
 ///
 /// # Errors
-/// Whatever [`build_token_frequency_index`](onpair::search::build_token_frequency_index)
+/// Whatever [`build_token_frequency_index`](onpair::search::index::build_token_frequency_index)
 /// refused with.
 pub fn index_for<O: Offset>(view: ColumnView<'_, O>) -> Result<TokenFrequencyIndex, Error> {
-    Ok(onpair::search::build_token_frequency_index(
+    Ok(build_token_frequency_index(
         view.codes,
         view.dict.num_tokens(),
     )?)

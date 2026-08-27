@@ -108,6 +108,10 @@ enum Cmd {
         worker_config: Option<usize>,
         #[arg(long, hide = true)]
         worker_dataset: Option<usize>,
+        /// Rebuild deterministic candidate state and export analysis sidecars.
+        /// The parent invokes this only after every measurement worker exits.
+        #[arg(long, hide = true)]
+        worker_artifacts_only: bool,
     },
     /// List registered candidates and scanners with their capabilities.
     List,
@@ -229,7 +233,8 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        Cmd::Run { spec, out, fail_fast, worker_candidate, worker_config, worker_dataset } => {
+        Cmd::Run { spec, out, fail_fast, worker_candidate, worker_config, worker_dataset,
+                   worker_artifacts_only } => {
             let loaded = LoadedSpec::load(&spec)?;
             match worker_candidate {
                 Some(candidate) => run_worker_process(
@@ -239,6 +244,7 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
                     worker_dataset.ok_or("--worker-dataset required")?,
                     &out,
                     fail_fast,
+                    worker_artifacts_only,
                 ),
                 None => run_parent(&loaded, &out, fail_fast),
             }
@@ -275,6 +281,10 @@ fn partial_name(candidate: &str, config_idx: usize, dataset_idx: usize) -> Strin
     format!("{candidate}.{config_idx}.{dataset_idx}.jsonl")
 }
 
+fn artifact_partial_name(candidate: &str, config_idx: usize, dataset_idx: usize) -> String {
+    format!("{candidate}.{config_idx}.{dataset_idx}.artifacts.jsonl")
+}
+
 fn run_worker_process(
     loaded: &LoadedSpec,
     candidate: &str,
@@ -282,13 +292,34 @@ fn run_worker_process(
     dataset_idx: usize,
     out_dir: &std::path::Path,
     fail_fast: bool,
+    artifacts_only: bool,
 ) -> Result<ExitCode, Error> {
-    let path = out_dir
-        .join("partials")
-        .join(partial_name(candidate, config_idx, dataset_idx));
+    let name = if artifacts_only {
+        artifact_partial_name(candidate, config_idx, dataset_idx)
+    } else {
+        partial_name(candidate, config_idx, dataset_idx)
+    };
+    let path = out_dir.join("partials").join(name);
     let mut writer = Writer::create(&path)?;
-    let summary =
-        runner::run_worker(loaded, candidate, config_idx, dataset_idx, &mut writer, fail_fast)?;
+    let summary = if artifacts_only {
+        runner::export_worker_artifacts(
+            loaded,
+            candidate,
+            config_idx,
+            dataset_idx,
+            &mut writer,
+            out_dir,
+        )?
+    } else {
+        runner::run_worker(
+            loaded,
+            candidate,
+            config_idx,
+            dataset_idx,
+            &mut writer,
+            fail_fast,
+        )?
+    };
     writer.finish()?;
     if summary.gate_failures > 0 {
         eprintln!(
@@ -498,6 +529,54 @@ fn run_parent(loaded: &LoadedSpec, out_dir: &std::path::Path, fail_fast: bool) -
                             "error: worker for candidate {} exited with {:?} (crash = one failed \
                              matrix cell, run continues)",
                             sel.name, other
+                        );
+                        any_error = true;
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- exact sidecars: a distinct phase after the full timing matrix ----
+    // Export-capable candidates promise deterministic builds from the recorded
+    // dataset/config. Replaying them here gives the exact analysis state while
+    // ensuring that no replay, serialization, allocation, or filesystem I/O
+    // can affect this run's measurements — including measurements in later
+    // candidate workers.
+    if !(fail_fast && any_gate_failure) {
+        for sel in &available_candidates {
+            if !registry::find_candidate(&sel.name)?.has_artifact_export() {
+                continue;
+            }
+            for config_idx in 0..sel.configs.len() {
+                for dataset_idx in 0..spec.datasets.len() {
+                    eprintln!(
+                        "exporting artifacts: candidate={} config#{config_idx} dataset={}",
+                        sel.name, dataset_ids[dataset_idx]
+                    );
+                    let mut cmd = std::process::Command::new(&exe);
+                    cmd.arg("run")
+                        .arg(&loaded.path)
+                        .arg("--out")
+                        .arg(out_dir)
+                        .arg("--worker-candidate")
+                        .arg(&sel.name)
+                        .arg("--worker-config")
+                        .arg(config_idx.to_string())
+                        .arg("--worker-dataset")
+                        .arg(dataset_idx.to_string())
+                        .arg("--worker-artifacts-only");
+                    let status = cmd.status()?;
+                    partials.push(out_dir.join("partials").join(artifact_partial_name(
+                        &sel.name,
+                        config_idx,
+                        dataset_idx,
+                    )));
+                    if !status.success() {
+                        eprintln!(
+                            "error: artifact replay for candidate {} exited with {:?}",
+                            sel.name,
+                            status.code()
                         );
                         any_error = true;
                     }

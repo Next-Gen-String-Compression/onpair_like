@@ -8,7 +8,7 @@
 
 use core::ffi::c_char;
 
-pub const LB_ABI_VERSION: u32 = 6;
+pub const LB_ABI_VERSION: u32 = 7;
 
 /// Guaranteed writable headroom past the decoded payload in `decode()`
 /// output buffers (mirrors `LB_DECODE_PAD`; SEMANTICS.md rule 8).
@@ -272,6 +272,23 @@ pub type QueryFactsFn = unsafe extern "C" fn(
     out: *mut LbQueryFacts,
 ) -> i32;
 
+/// Harness-owned artifact output descriptor used in post-run replay.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct LbArtifact {
+    pub format: *const c_char,
+    pub bytes: *mut u8,
+    pub capacity: u64,
+    pub len: u64,
+}
+
+/// Optional post-run export (ABI v7). The harness calls this on a deterministic
+/// replay build after the full measurement matrix. On the first call `bytes`
+/// is NULL and `capacity` zero; the candidate sets `format` and required `len`.
+/// On the second call it writes into the supplied harness buffer.
+pub type ExportArtifactFn =
+    unsafe extern "C" fn(this: *mut core::ffi::c_void, out: *mut LbArtifact) -> i32;
+
 #[repr(C)]
 pub struct LbCandidate {
     pub abi_version: u32,
@@ -286,8 +303,10 @@ pub struct LbCandidate {
     pub view: Option<ViewFn>,
     pub decode: Option<DecodeFn>,
     pub destroy: Option<DestroyFn>,
-    /// ABI v6; `None` from any candidate with nothing static to declare.
+    /// ABI v6; `None` from candidates with nothing static to declare.
     pub query_facts: Option<QueryFactsFn>,
+    /// ABI v7; invoked only in the post-run deterministic replay phase.
+    pub export_artifact: Option<ExportArtifactFn>,
 }
 
 // -------------------------------------------------------------- scanner
