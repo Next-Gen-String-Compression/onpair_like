@@ -26,11 +26,11 @@ Reading the figure:
 
 | element | meaning |
 |---|---|
-| left column, one card per row | a feasible alignment `k` — `k` needle bytes sit at the tail of the first token |
+| left column, one card per row | a feasible alignment `k` — `k` needle bytes sit at the tail of the first token; cards are grouped by downstream convergence so parallel branches remain visually separate |
 | rounded `p=N` node | parsing has consumed the needle up to byte offset `N` |
 | teal filled `p=N`, `merge ×m` | `m` alignments converged here; one probe downstream blocks all of them |
 | callout card on an edge | the single interior token greedy parsing takes at that offset |
-| card in the bottom row | an accepting terminal: tokens whose prefix is the whole remaining needle |
+| card in the bottom row | an accepting terminal: tokens whose prefix is the whole remaining needle; a one-ID prefix range is shown as one point token |
 | teal `MANDATORY` card | tokens holding the whole pattern: in every cover, in no cut |
 | **orange** outline, `CUT` badge | selected by the cut |
 | faded node | downstream of the cut, so unreachable once the cover is in place |

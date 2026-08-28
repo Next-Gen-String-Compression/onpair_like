@@ -104,10 +104,18 @@ impl ProbeSet {
     }
 
     /// A set covering a dictionary prefix range.
+    ///
+    /// Singleton prefix ranges are normalized to points. This keeps the graph's
+    /// probe shape faithful to the scanner: one id costs one equality comparison,
+    /// not a lower/upper range pair.
     pub fn range(range: TokenRange) -> Self {
-        Self::Range {
-            lo: range.begin,
-            hi: range.last,
+        if range.begin == range.last {
+            Self::Point { id: range.begin }
+        } else {
+            Self::Range {
+                lo: range.begin,
+                hi: range.last,
+            }
         }
     }
 
@@ -148,6 +156,29 @@ impl ProbeSet {
                 .map(|&id| cumulative[id as usize + 1] - cumulative[id as usize])
                 .sum(),
         }
+    }
+}
+
+#[cfg(test)]
+mod probe_set_tests {
+    use super::*;
+
+    #[test]
+    fn singleton_prefix_range_is_a_point() {
+        let set = ProbeSet::range(TokenRange {
+            begin: 17,
+            last: 17,
+        });
+        assert!(matches!(set, ProbeSet::Point { id: 17 }));
+    }
+
+    #[test]
+    fn multi_token_prefix_range_remains_a_range() {
+        let set = ProbeSet::range(TokenRange {
+            begin: 17,
+            last: 19,
+        });
+        assert!(matches!(set, ProbeSet::Range { lo: 17, hi: 19 }));
     }
 }
 
@@ -577,14 +608,23 @@ impl<'a, V: DictionaryView> Builder<'a, V> {
         let terminal = prefix_range(self.dict, suffix);
         if !terminal.is_empty() {
             let set = ProbeSet::range(terminal);
-            let label = format!("terminal range @ {offset}");
-            let detail = format!(
-                "ids {}..{} ({}), prefix \"{}\"",
-                terminal.begin,
-                terminal.last,
-                terminal.len(),
-                preview(suffix, 12)
-            );
+            let (label, detail) = if terminal.begin == terminal.last {
+                (
+                    format!("terminal token @ {offset}"),
+                    format!("id {}, prefix \"{}\"", terminal.begin, preview(suffix, 12)),
+                )
+            } else {
+                (
+                    format!("terminal range @ {offset}"),
+                    format!(
+                        "ids {}..{} ({}), prefix \"{}\"",
+                        terminal.begin,
+                        terminal.last,
+                        terminal.len(),
+                        preview(suffix, 12)
+                    ),
+                )
+            };
             let probe = self.probe(set, label, detail);
             let range_node = self.add_node(NodeKind::TerminalRange { offset }, Some(probe));
             self.range_nodes.insert(offset, range_node);

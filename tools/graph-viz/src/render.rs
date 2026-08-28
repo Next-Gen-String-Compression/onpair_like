@@ -1,12 +1,13 @@
 //! The figure: a standalone SVG of the alignment DAG with its cut highlighted.
 //!
-//! Layout is deterministic, not force-directed. Alignments become horizontal
-//! lanes ordered by `k`; byte-offset states get an x from their offset, floored
-//! to a minimum spacing so labels never collide; a merged state sits at the mean
-//! y of the lanes that reach it, which is what makes convergence visible. Interior
-//! token probes are drawn as callout cards placed by a small collision search,
-//! anchored to the edge they sit on. Terminal ranges drop to a row beneath the
-//! lanes and rail into a single `MATCH` node.
+//! Layout is deterministic, not force-directed. Alignment lanes are grouped by
+//! their downstream convergence path (and ordered by `k` within each group), so
+//! disjoint branches cannot interleave and masquerade as one serial chain.
+//! Byte-offset states get an x from their offset, floored to a minimum spacing so
+//! labels never collide; a merged state sits at the mean y of the lanes that
+//! actually reach it. Interior token probes are drawn as callout cards placed by
+//! a small collision search, anchored to the edge they sit on. Terminal probes
+//! drop to a row beneath the lanes and rail into a single `MATCH` node.
 //!
 //! Everything is inline — one `<style>` block, three marker defs, no external
 //! references — so the file drops straight into a paper or a browser. Fonts are a
@@ -302,10 +303,115 @@ fn alignments(graph: &PathGraph, adjacent: &[Vec<usize>], header_h: f64) -> Vec<
         });
     }
     entries.sort_by_key(|entry| entry.offset);
+    let chains: Vec<Vec<usize>> = entries
+        .iter()
+        .map(|entry| main_state_chain(graph, adjacent, entry.start_state))
+        .collect();
+    let offsets: Vec<usize> = entries.iter().map(|entry| entry.offset).collect();
+    let order = convergence_order(&chains, &offsets);
+    entries = order
+        .into_iter()
+        .map(|index| entries[index].clone())
+        .collect();
     for (index, entry) in entries.iter_mut().enumerate() {
         entry.y = header_h + 60.0 + index as f64 * LANE_GAP;
     }
     entries
+}
+
+/// The deterministic greedy state chain for one alignment.
+///
+/// A state can also have an accepting terminal edge, but at most one interior
+/// point edge continues parsing. Only that continuation determines which lanes
+/// share a downstream branch in the main DAG drawing.
+fn main_state_chain(graph: &PathGraph, adjacent: &[Vec<usize>], start_state: usize) -> Vec<usize> {
+    let mut chain = Vec::new();
+    let mut state = start_state;
+    let mut seen = HashSet::new();
+    loop {
+        assert!(seen.insert(state), "alignment graph contains a state cycle");
+        chain.push(state);
+        let Some(point) = adjacent[state]
+            .iter()
+            .copied()
+            .find(|&next| matches!(graph.nodes[next].kind, NodeKind::Point { .. }))
+        else {
+            break;
+        };
+        state = *adjacent[point]
+            .iter()
+            .find(|&&next| matches!(graph.nodes[next].kind, NodeKind::State { .. }))
+            .expect("an interior point must lead to a state");
+    }
+    chain
+}
+
+/// Order alignment lanes so every shared downstream branch is contiguous.
+///
+/// The old `k` order could interleave two disjoint predecessor groups. Their
+/// state centroids then landed on the same y coordinate, and a bypassing edge
+/// appeared to pass through an unrelated state. We recursively partition by the
+/// predecessor immediately before the group's longest common suffix. Groups are
+/// ordered by their smallest `k`, preserving a stable and readable order without
+/// sacrificing the topology.
+fn convergence_order(chains: &[Vec<usize>], offsets: &[usize]) -> Vec<usize> {
+    assert_eq!(chains.len(), offsets.len());
+
+    fn order_group(indices: Vec<usize>, chains: &[Vec<usize>], offsets: &[usize]) -> Vec<usize> {
+        if indices.len() <= 1 {
+            return indices;
+        }
+
+        let shortest = indices
+            .iter()
+            .map(|&index| chains[index].len())
+            .min()
+            .unwrap_or(0);
+        let mut common_suffix = 0usize;
+        while common_suffix < shortest {
+            let reference = chains[indices[0]][chains[indices[0]].len() - 1 - common_suffix];
+            if indices
+                .iter()
+                .all(|&index| chains[index][chains[index].len() - 1 - common_suffix] == reference)
+            {
+                common_suffix += 1;
+            } else {
+                break;
+            }
+        }
+        if common_suffix == 0 {
+            let mut ordered = indices;
+            ordered.sort_by_key(|&index| offsets[index]);
+            return ordered;
+        }
+
+        let mut grouped = HashMap::<Option<usize>, Vec<usize>>::new();
+        for index in indices {
+            let boundary = chains[index].len() - common_suffix;
+            let predecessor = boundary.checked_sub(1).map(|at| chains[index][at]);
+            grouped.entry(predecessor).or_default().push(index);
+        }
+        if grouped.len() == 1 {
+            let mut ordered = grouped.into_values().next().unwrap_or_default();
+            ordered.sort_by_key(|&index| offsets[index]);
+            return ordered;
+        }
+
+        let mut groups: Vec<Vec<usize>> = grouped.into_values().collect();
+        groups.sort_by_key(|group| {
+            group
+                .iter()
+                .map(|&index| offsets[index])
+                .min()
+                .unwrap_or(usize::MAX)
+        });
+        groups
+            .into_iter()
+            .flat_map(|group| order_group(group, chains, offsets))
+            .collect()
+    }
+
+    order_group((0..chains.len()).collect(), chains, offsets)
 }
 
 fn state_users(
@@ -847,6 +953,10 @@ fn render_probe(
         ) => (
             token_preview(probe),
             format!("token {id} · p{offset}→p{next_offset}"),
+        ),
+        (NodeKind::TerminalRange { offset }, ProbeSet::Point { id }) => (
+            format!("\"{}\"", needle_preview(&graph.needle[*offset..])),
+            format!("token {id} · p{offset}→match"),
         ),
         (NodeKind::TerminalRange { offset }, ProbeSet::Range { lo, hi }) => (
             "terminal token range".to_string(),
@@ -1405,4 +1515,34 @@ pub fn render_svg(
     ));
     svg.push_str("</svg>\n");
     svg
+}
+
+#[cfg(test)]
+mod tests {
+    use super::convergence_order;
+
+    #[test]
+    fn convergence_order_keeps_bypass_branches_contiguous() {
+        // k=0,2,8 converge through p8. k=1,5 converge through p15. In numeric
+        // k order the two groups interleave and both centroids land on the same
+        // lane, making p8→p20 and p15→p20 look like one serial chain.
+        let chains = vec![
+            vec![0, 8, 20],
+            vec![1, 5, 15, 20],
+            vec![2, 8, 20],
+            vec![5, 15, 20],
+            vec![8, 20],
+        ];
+        let offsets = vec![0, 1, 2, 5, 8];
+
+        assert_eq!(convergence_order(&chains, &offsets), vec![0, 2, 4, 1, 3]);
+    }
+
+    #[test]
+    fn convergence_order_preserves_k_for_one_shared_route() {
+        let chains = vec![vec![0, 8, 20], vec![2, 8, 20], vec![8, 20]];
+        let offsets = vec![0, 2, 8];
+
+        assert_eq!(convergence_order(&chains, &offsets), vec![0, 1, 2]);
+    }
 }
