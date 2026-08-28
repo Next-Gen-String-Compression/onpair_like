@@ -57,6 +57,10 @@ pub fn candidates() -> Vec<Candidate> {
     v.push(lb_cand_zstd::vtable());
     #[cfg(feature = "cand-fsst")]
     v.push(lb_cand_fsst::vtable());
+    // FSST's symbol table, planned over by OnPair's min-cut prefilter — distinct
+    // from `fsst` (decode-then-eval) and `fsst_prefilter` (C++ chain matcher).
+    #[cfg(feature = "cand-fsst-rs")]
+    v.push(lb_cand_fsst_rs::vtable());
     #[cfg(feature = "cand-fsst-like-tum")]
     v.push(lb_cand_fsst_like_tum::vtable());
     #[cfg(feature = "cand-fsst-like-utn")]

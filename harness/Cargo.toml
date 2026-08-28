@@ -30,6 +30,7 @@ default = [
     "cand-lz4",
     "cand-zstd",
     "cand-fsst",
+    "cand-fsst-rs",
     "cand-fsst-like-tum",
     "cand-fsst-like-utn",
     "cand-llm-token-tum",
@@ -58,6 +59,7 @@ cand-onpair-spiral = ["dep:lb-cand-onpair-spiral"]
 cand-lz4 = ["dep:lb-cand-lz4"]
 cand-zstd = ["dep:lb-cand-zstd"]
 cand-fsst = ["dep:lb-cand-fsst"]
+cand-fsst-rs = ["dep:lb-cand-fsst-rs"]
 cand-fsst-like-tum = ["dep:lb-cand-fsst-like-tum"]
 cand-fsst-like-utn = ["dep:lb-cand-fsst-like-utn"]
 cand-llm-token-tum = ["dep:lb-cand-llm-token-tum"]
@@ -88,6 +90,7 @@ lb-cand-onpair-spiral = { path = "../candidates/onpair_spiral", optional = true 
 lb-cand-lz4 = { path = "../candidates/lz4", optional = true }
 lb-cand-zstd = { path = "../candidates/zstd", optional = true }
 lb-cand-fsst = { path = "../candidates/fsst", optional = true }
+lb-cand-fsst-rs = { path = "../candidates/fsst_rs", optional = true }
 lb-cand-fsst-like-tum = { path = "../candidates/fsst_like_tum", optional = true }
 lb-cand-fsst-like-utn = { path = "../candidates/fsst_like_utn", optional = true }
 lb-cand-llm-token-tum = { path = "../candidates/llm_token_tum", optional = true }

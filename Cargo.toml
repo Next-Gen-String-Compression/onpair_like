@@ -18,6 +18,7 @@ members = [
     "candidates/lz4",
     "candidates/zstd",
     "candidates/fsst",
+    "candidates/fsst_rs",
     "candidates/fsst_like_tum",
     "candidates/fsst_like_utn",
     "candidates/llm_token_tum",
