@@ -27,6 +27,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
+name = "fsst-rs"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03b614a2a7f2efc50d76c1e47d64b57c55acf6e0e718b0cae78236d147c487d0"
+dependencies = [
+ "rustc-hash",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -70,8 +79,8 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 [[package]]
 name = "onpair"
 version = "0.2.0"
-source = "git+https://github.com/spiraldb/onpair.git?rev=5927cce985a6e86bc6f49f4ae24106e1fc085e80#5927cce985a6e86bc6f49f4ae24106e1fc085e80"
 dependencies = [
+ "fsst-rs",
  "hashbrown",
  "memchr",
  "rand",
@@ -81,6 +90,7 @@ dependencies = [
 name = "onpair-graph-viz"
 version = "0.1.0"
 dependencies = [
+ "fsst-rs",
  "onpair",
  "serde",
  "serde_json",
@@ -147,6 +157,12 @@ checksum = "76afc826de14238e6e8c374ddcc1fa19e374fd8dd986b0d2af0d02377261d83c"
 dependencies = [
  "getrandom",
 ]
+
+[[package]]
+name = "rustc-hash"
+version = "2.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b1e7f9a428571be2dc5bc0505c13fb6bf936822b894ec87abf8a08a4e51742d"
 
 [[package]]
 name = "serde"

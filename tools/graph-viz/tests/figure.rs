@@ -7,8 +7,8 @@
 
 use onpair::{Column, DEFAULT_CONFIG, DictionaryView};
 use onpair_graph_viz::{
-    Error, Options, ProbeWeight, build_path_graph, candidate_rows, index_for, live_cover,
-    minimum_vertex_cut, visualize,
+    EdgeKind, Error, Options, ProbeWeight, build_path_graph, candidate_rows, compile_cover,
+    index_for, minimum_cut, predicate_text, visualize,
 };
 
 const ROWS: &[&str] = &[
@@ -121,9 +121,9 @@ fn cut_membership_admits_the_matching_rows() {
     let weights = onpair_graph_viz::Weights::from_index(&frequencies);
 
     let pattern = b"utm_source=newsletter";
-    let graph = build_path_graph(view.dict, pattern, &weights).expect("graph builds");
-    let cut = minimum_vertex_cut(&graph, ProbeWeight::TermFrequency);
-    let candidates = candidate_rows(view, &graph.membership_for_cut(&cut.selected_nodes));
+    let graph = build_path_graph(view.dict, pattern, &weights, None).expect("graph builds");
+    let cut = minimum_cut(&graph, ProbeWeight::TermFrequency);
+    let candidates = candidate_rows(view, &graph.membership_for_cut(&cut.selected_edges));
 
     let truth = view.rows_containing(pattern);
     assert!(!truth.is_empty(), "the corpus should contain the pattern");
@@ -157,17 +157,15 @@ fn selectivity_matches_onpair() {
     }
 }
 
-/// A cut is free to select tokens the code stream never uses — they weigh nothing,
-/// so its objective is indifferent between naming them and not — and OnPair takes
-/// them back out before scanning. A figure that kept them would draw comparisons
-/// that never happen, so it prunes too, and says which probes went.
+/// A cut can name a probe for tokens the code stream never uses — they weigh
+/// nothing, so its objective is indifferent — and nothing downstream removes it.
+/// The pruning both sides used to do was unsound: a safety-valid stored index may
+/// hold false zeroes, so a probe dropped for looking unused can lose a real match.
 ///
-/// These patterns cannot match anything, and neither can the tokens their cut
-/// picks, so the whole cover is pruned away. That OnPair then admits no rows is
-/// the part worth asserting: it is the only outside evidence that this crate's
-/// copy of the pruning rule agrees with the library's.
+/// What is still worth asserting is the outcome: patterns that cannot match admit
+/// no rows, and OnPair agrees.
 #[test]
-fn probes_for_absent_tokens_are_pruned() {
+fn probes_for_absent_tokens_are_kept_and_admit_nothing() {
     let corpus = Corpus::new();
     let column = corpus.column();
     let view = column.view();
@@ -178,100 +176,69 @@ fn probes_for_absent_tokens_are_pruned() {
             .expect("figure builds");
         let measurement = figure.measurement.as_ref().expect("measured by default");
 
-        assert!(
-            !figure.cut.selected_nodes.is_empty(),
-            "{pattern:?}: the cut should still name the probes it chose"
-        );
         assert_eq!(
-            figure.dead_probes, figure.cut.selected_nodes,
-            "{pattern:?}: every probe the cut chose occurs nowhere"
+            measurement.candidates, 0,
+            "{pattern:?}: nothing can match, so nothing may be admitted"
         );
+        assert_eq!(measurement.exact_rows, 0, "{pattern:?}: nothing matches");
+        assert!(measurement.sound, "{pattern:?}: vacuously sound");
         assert_eq!(
-            (figure.cover.cmp_cost, figure.cover.member_ids),
-            (0, 0),
-            "{pattern:?}: a fully pruned cover costs nothing to check"
-        );
-        assert!(
-            figure.cover.dead_ids > 0,
-            "{pattern:?}: nothing was dropped"
-        );
-        assert_eq!(
-            (measurement.candidates, measurement.onpair_candidates),
-            (0, Some(0)),
-            "{pattern:?}: an empty cover admits no rows, and OnPair should agree"
-        );
-        assert!(
-            figure.svg.expect("small graph renders").contains("PRUNED"),
-            "{pattern:?}: the figure should mark what it dropped"
+            measurement.onpair_candidates,
+            Some(0),
+            "{pattern:?}: OnPair admits nothing either"
         );
     }
 }
 
-/// A token holding the whole needle is a mandatory member of every cover and has no
-/// node in the DAG, so nothing the graph draws accounts for it. That gap is what
-/// made a figure look wrong: a cut of three probes producing a cover of ten, or a
-/// cut of weight zero producing a cover at all. The figure has to name them.
+/// Where the run-merging rule copied from OnPair is pinned: every maximal run of
+/// member ids is one probe, a singleton run a point, and nothing is dropped for
+/// looking unused — stored weights may hold false zeroes, so pruning by frequency
+/// would be unsound. Both sides used to prune; neither does now.
 #[test]
-fn whole_needle_tokens_are_counted_and_drawn() {
-    let corpus = Corpus::repetitive();
-    let column = corpus.column();
-    let view = column.view();
-    let frequencies = index_for(view).expect("index builds");
+fn the_cover_merges_runs_and_prunes_nothing() {
+    // Ids 2, 3 and 5 are used; every other id in an eight-token dictionary is not.
+    let frequencies = onpair::search::index::build_token_frequency_index(&[2u16, 3, 5, 5], 8)
+        .expect("index builds");
 
-    // Frequent enough in this corpus to have been merged into single tokens, and
-    // short enough to fit in one.
-    let figure =
-        visualize(view, &frequencies, b"google", &Options::default()).expect("figure builds");
-    assert!(
-        !figure.graph.contained.is_empty(),
-        "some dictionary token should hold the whole needle"
+    // Runs 1..=5 and 7..=7: one range, one point, membership alone deciding.
+    let cover = compile_cover(
+        &[false, true, true, true, true, true, false, true],
+        &frequencies,
     );
     assert_eq!(
-        figure.summary.contained_tokens,
-        figure.graph.contained.len()
-    );
-    assert!(
-        figure.summary.contained_frequency > 0,
-        "those tokens occur in this column"
-    );
-    assert!(
-        figure.summary.cover_frequency >= figure.summary.contained_frequency,
-        "the cover holds them, so it cannot weigh less"
+        cover.members,
+        [false, true, true, true, true, true, false, true]
     );
     assert_eq!(
-        figure.summary.cover_probes,
-        figure.summary.cover_points + figure.summary.cover_ranges,
-        "every probe is a point or a range"
+        (cover.shape.points, cover.shape.ranges, cover.shape.cmp_cost),
+        (1, 1, 2)
     );
+    assert_eq!(cover.shape.member_ids, 6);
+    assert!(!cover.is_empty());
 
-    let svg = figure.svg.expect("small graph renders");
-    assert!(svg.contains("MANDATORY"), "the card should be badged");
-    assert!(
-        svg.contains("contains the whole needle"),
-        "and should say what it is"
-    );
-    assert!(
-        svg.contains("WHOLE-NEEDLE TOKENS"),
-        "and the chip should count them"
-    );
+    // A term's frequency is its own ids', off the index.
+    let terms: Vec<(u16, u16, u64)> = cover
+        .terms
+        .iter()
+        .map(|term| (term.begin, term.last, term.term_frequency))
+        .collect();
+    assert_eq!(terms, vec![(1, 5, 4), (7, 7, 0)]);
 
-    // A needle past MAX_TOKEN_SIZE cannot be contained by construction, and then
-    // the figure has no reason to mention the case at all.
-    let options = Options {
-        max_states: None,
-        ..Options::default()
-    };
-    let figure = visualize(view, &frequencies, b"/cart/checkout?ref=newsletter", &options)
-        .expect("figure builds");
-    assert_eq!(figure.summary.contained_tokens, 0);
-    assert!(!figure.svg.expect("renders").contains("MANDATORY"));
+    // A run of ids the stream never uses is still a probe: the cut chose it.
+    let cover = compile_cover(
+        &[true, true, false, false, false, false, true, true],
+        &frequencies,
+    );
+    assert!(!cover.is_empty());
+    assert_eq!(cover.shape.cmp_cost, 2);
 }
 
-/// A cut of weight zero says no occurrence crosses a token boundary — not that
-/// nothing matches. When every occurrence sits inside one token the cover is the
-/// mandatory ids alone, and it is exact.
+/// A token holding the whole needle is now an ordinary step — start to accept, no
+/// boundary crossed — so a cut has to take it and pay its frequency. It used to sit
+/// outside the graph as a mandatory member, which is why a cut could weigh zero and
+/// still produce a cover; there is no such case any more.
 #[test]
-fn a_weightless_cut_still_covers_the_matches() {
+fn the_whole_needle_step_is_taken_and_paid_for() {
     let corpus = Corpus::repetitive();
     let column = corpus.column();
     let view = column.view();
@@ -282,26 +249,62 @@ fn a_weightless_cut_still_covers_the_matches() {
     let figure =
         visualize(view, &frequencies, b"cart", &Options::default()).expect("figure builds");
     let measurement = figure.measurement.as_ref().expect("measured by default");
+
+    assert!(
+        !figure.graph.contained.is_empty(),
+        "some token holds the whole needle"
+    );
+    let step = figure
+        .graph
+        .edges
+        .iter()
+        .find(|edge| matches!(edge.kind, EdgeKind::Contained { .. }))
+        .expect("the whole-needle step is in the graph");
     assert_eq!(
-        figure.cut.value, 0,
-        "no boundary-crossing occurrence to pay for"
+        (step.from, step.to),
+        (0, figure.graph.needle.len()),
+        "it runs start to accept, crossing nothing"
     );
     assert!(
-        figure.cover.cmp_cost > 0,
-        "yet the cover still has probes to issue"
+        figure.cut.selected_edges.contains(&step.id),
+        "being the only step on its path, every cut takes it"
     );
+    assert_eq!(
+        figure.cut.value, figure.summary.contained_frequency,
+        "and pays exactly what those tokens cost"
+    );
+    assert!(figure.cover.cmp_cost > 0, "the cover has probes to issue");
     assert_eq!(
         (measurement.candidates, measurement.exact_rows),
         (view.num_rows(), view.num_rows()),
-        "and every row matches, all of them admitted exactly"
+        "every row matches, all of them admitted exactly"
     );
     assert!(measurement.sound);
+}
 
+/// Needles taken from a real column carry raw bytes, and XML 1.0 has no escape for
+/// a C0 control character — a figure with one in a label is rejected outright by
+/// every viewer, not merely ugly. So they are written as `\xNN` instead. A
+/// ClickBench URL needle with a `0x0e` in it is what found this.
+#[test]
+fn control_bytes_in_a_needle_do_not_break_the_svg() {
+    let corpus = Corpus::new();
+    let column = corpus.column();
+    let view = column.view();
+    let frequencies = index_for(view).expect("index builds");
+
+    let figure =
+        visualize(view, &frequencies, b"sho\x0ep?q=", &Options::default()).expect("figure builds");
     let svg = figure.svg.expect("small graph renders");
+
     assert!(
-        svg.contains("The cut weighs nothing"),
-        "the figure has to say why a zero weight is not an empty answer"
+        svg.contains("\\x0e"),
+        "the byte should be shown, not dropped"
     );
+    let stray = svg
+        .chars()
+        .find(|character| character.is_control() && *character != '\n');
+    assert_eq!(stray, None, "a control character reached the SVG");
 }
 
 /// Row frequency is not in OnPair's index, so under a `tf` metric there is nothing
@@ -336,79 +339,66 @@ fn row_frequency_is_shown_only_when_it_was_counted() {
     );
 }
 
-/// Needles taken from a real column carry raw bytes, and XML 1.0 has no escape for
-/// a C0 control character — a figure with one in a label is rejected outright by
-/// every viewer, not merely ugly. So they are written as `\xNN` instead. A
-/// ClickBench URL needle with a `0x0e` in it is what found this.
+/// A token holding the whole needle is now a step of its own — start to accept —
+/// and the figure has to name it. Before, it sat outside the graph entirely, and
+/// nothing the drawing showed accounted for the probes it added to the cover.
 #[test]
-fn control_bytes_in_a_needle_do_not_break_the_svg() {
-    let corpus = Corpus::new();
+fn whole_needle_tokens_are_counted_and_drawn() {
+    let corpus = Corpus::repetitive();
     let column = corpus.column();
     let view = column.view();
     let frequencies = index_for(view).expect("index builds");
 
+    // Frequent enough in this corpus to have been merged into single tokens, and
+    // short enough to fit in one.
     let figure =
-        visualize(view, &frequencies, b"sho\x0ep?q=", &Options::default()).expect("figure builds");
-    let svg = figure.svg.expect("small graph renders");
-
+        visualize(view, &frequencies, b"google", &Options::default()).expect("figure builds");
     assert!(
-        svg.contains("\\x0e"),
-        "the byte should be shown, not dropped"
-    );
-    let stray = svg
-        .chars()
-        .find(|character| character.is_control() && *character != '\n');
-    assert_eq!(stray, None, "a control character reached the SVG");
-}
-
-/// Where the trimming rule copied from OnPair is pinned: runs merge, unused ids
-/// leave the *ends* of a run, and an unused id between two used ones stays — a
-/// range costs one comparison however wide it is, but splitting it costs two.
-#[test]
-fn live_cover_trims_run_ends_only() {
-    // Ids 2, 3 and 5 are used; every other id in an eight-token dictionary is not.
-    let frequencies =
-        onpair::search::build_token_frequency_index(&[2u16, 3, 5, 5], 8).expect("index builds");
-
-    // Runs 1..=5 and 7..=7. The first keeps 2..=5 — id 1 is trimmed, id 4 rides
-    // along — and the second goes entirely.
-    let live = live_cover(
-        &[false, true, true, true, true, true, false, true],
-        &frequencies,
+        !figure.graph.contained.is_empty(),
+        "some dictionary token should hold the whole needle"
     );
     assert_eq!(
-        live.members,
-        [false, false, true, true, true, true, false, false]
+        figure.summary.contained_tokens,
+        figure.graph.contained.len()
+    );
+    assert!(
+        figure.summary.contained_frequency > 0,
+        "those tokens occur in this column"
+    );
+    assert!(
+        figure.summary.cover_frequency >= figure.summary.contained_frequency,
+        "the cover holds them, so it cannot weigh less"
     );
     assert_eq!(
-        (live.shape.points, live.shape.ranges, live.shape.cmp_cost),
-        (0, 1, 1)
-    );
-    assert_eq!((live.shape.member_ids, live.shape.dead_ids), (4, 2));
-    assert!(!live.is_empty());
-
-    // Trimmed down to one id, a range is probed as a point instead: run 1..=2 loses
-    // its unused first id and leaves id 2 alone.
-    let live = live_cover(
-        &[false, true, true, false, false, false, false, false],
-        &frequencies,
-    );
-    assert_eq!(
-        (
-            live.shape.points,
-            live.shape.ranges,
-            live.shape.member_ids,
-            live.shape.dead_ids
-        ),
-        (1, 0, 1, 1)
+        figure.summary.cover_probes,
+        figure.summary.cover_points + figure.summary.cover_ranges,
+        "every probe is a point or a range"
     );
 
-    let live = live_cover(
-        &[true, true, false, false, false, false, true, true],
-        &frequencies,
+    let svg = figure.svg.expect("small graph renders");
+    assert!(
+        svg.contains("no boundary → match"),
+        "the card should say what makes its step different"
     );
-    assert!(live.is_empty(), "no used id survives");
-    assert_eq!(live.shape.dead_ids, 4);
+    assert!(
+        svg.contains("WHOLE-NEEDLE TOKENS"),
+        "and the chip should count them"
+    );
+    assert!(
+        svg.contains("probe contained"),
+        "and it should be drawn in its own colour, not as one more orange card"
+    );
+
+    // A needle past MAX_TOKEN_SIZE cannot be contained by construction, and then
+    // the figure has no reason to mention the case at all.
+    let options = Options {
+        max_states: None,
+        ..Options::default()
+    };
+    let figure = visualize(view, &frequencies, b"/cart/checkout?ref=newsletter", &options)
+        .expect("figure builds");
+    assert_eq!(figure.summary.contained_tokens, 0);
+    assert!(!figure.svg.expect("renders").contains("MANDATORY"));
 }
 
 /// Past the guard the graph is still returned; only the drawing is skipped.
@@ -453,23 +443,378 @@ fn empty_pattern_is_rejected() {
     );
 }
 
+/// An index *narrower* than the dictionary describes something else, and weighing
+/// a token it does not cover would read past its end.
+///
+/// A wider one is not a mismatch: an FSST code stream carries escape markers and
+/// the bytes behind them as codes of their own, so the index has to be wider than
+/// the dictionary for those to be weighed at all.
 #[test]
-fn mismatched_index_is_rejected() {
+fn an_index_narrower_than_the_dictionary_is_rejected() {
     let corpus = Corpus::new();
     let column = corpus.column();
     let view = column.view();
-    // An index over a truncated code stream still has the right token count, so
-    // build one for a different dictionary size instead.
-    let frequencies =
-        onpair::search::build_token_frequency_index(view.codes, view.dict.num_tokens())
-            .expect("index builds");
-    let smaller = Column::compress(b"abc", &[0u32, 3], DEFAULT_CONFIG).expect("compresses");
-    let smaller_view = smaller.view();
 
-    let error = visualize(smaller_view, &frequencies, b"ab", &Options::default()).unwrap_err();
+    let smaller = Column::compress(b"abc", &[0u32, 3], DEFAULT_CONFIG).expect("compresses");
+    let narrow = onpair::search::index::build_token_frequency_index(
+        smaller.view().codes,
+        smaller.view().dict.num_tokens(),
+    )
+    .expect("index builds");
+
+    let error = visualize(view, &narrow, b"ab", &Options::default()).unwrap_err();
     assert!(
         matches!(error, Error::IndexMismatch { .. }),
         "expected a mismatch, got {error}"
+    );
+
+    // The other way round is fine, and is what an FSST figure needs.
+    let wide = onpair::search::index::build_token_frequency_index(
+        view.codes,
+        view.dict.num_tokens() + 8,
+    )
+    .expect("index builds");
+    visualize(view, &wide, b"ab", &Options::default()).expect("a wider index is accepted");
+}
+
+/// The predicate has to be the cover, term for term: it is the figure's answer to
+/// "what will actually be compared", and a term more or less would misstate the
+/// scan's cost as well as its meaning.
+#[test]
+fn the_predicate_has_one_term_per_comparison() {
+    for (corpus, needle) in [
+        (Corpus::new(), b"example.com".as_slice()),
+        (Corpus::repetitive(), b"newsletter".as_slice()),
+        (Corpus::repetitive(), b"google".as_slice()),
+    ] {
+        let column = corpus.column();
+        let view = column.view();
+        let frequencies = index_for(view).expect("index builds");
+        let figure = visualize(view, &frequencies, needle, &Options::default())
+            .expect("figure renders");
+
+        let text = predicate_text(&figure.graph, &figure.summary.cover_terms);
+        assert_eq!(
+            text.split(" ∨ ").count(),
+            figure.cover.cmp_cost,
+            "{}: predicate {text:?} does not match {} comparisons",
+            String::from_utf8_lossy(needle),
+            figure.cover.cmp_cost
+        );
+        // A range term is a comparison against two ends; a point is one token.
+        assert_eq!(
+            text.matches('[').count(),
+            figure.cover.ranges,
+            "{}: bracketed terms should be exactly the ranges",
+            String::from_utf8_lossy(needle)
+        );
+    }
+}
+
+/// The measured per-term row counts have to bracket the prefilter's own: no term
+/// can admit more rows than the cover does, and the cover cannot admit more than
+/// every term put together.
+///
+/// This is the check that the measured line is counted rather than copied from the
+/// estimate beside it — the two agree exactly for a token that never repeats
+/// inside a row, which is most of them, so equality proves nothing on its own.
+#[test]
+fn measured_term_rows_bracket_the_candidate_count() {
+    for (corpus, needle) in [
+        (Corpus::new(), b"example.com".as_slice()),
+        (Corpus::repetitive(), b"newsletter".as_slice()),
+        (Corpus::repetitive(), b"cart".as_slice()),
+    ] {
+        let column = corpus.column();
+        let view = column.view();
+        let frequencies = index_for(view).expect("index builds");
+        let figure = visualize(view, &frequencies, needle, &Options::default())
+            .expect("figure renders");
+        let measurement = figure.measurement.as_ref().expect("measured by default");
+        let label = String::from_utf8_lossy(needle);
+
+        assert_eq!(
+            measurement.term_rows.len(),
+            figure.summary.cover_terms.len(),
+            "{label}: one count per term"
+        );
+        let sum: u64 = measurement.term_rows.iter().sum();
+        assert!(
+            sum >= measurement.candidates as u64,
+            "{label}: terms sum to {sum} but {} rows were admitted",
+            measurement.candidates
+        );
+        for &rows in &measurement.term_rows {
+            assert!(
+                rows <= measurement.candidates as u64,
+                "{label}: a term admits {rows} rows of {} candidates",
+                measurement.candidates
+            );
+        }
+        // The estimate is an upper bound on the count, per term.
+        for term in &figure.summary.cover_terms {
+            let measured = term.measured_rows.expect("measured by default");
+            assert!(
+                measured <= term.term_frequency,
+                "{label}: term measured {measured} rows above its frequency {}",
+                term.term_frequency
+            );
+        }
+    }
+}
+
+/// No edge may pass through a state it is not attached to.
+///
+/// A probe consuming several needle bytes advances past the states in between, and
+/// the direct route runs straight through them — `p2 → p4` crossing `p=3` was the
+/// reported bug. The renderer picks that edge's route by checking candidates, so
+/// this samples the drawn curves and checks the result.
+#[test]
+fn no_edge_runs_through_a_state_it_does_not_touch() {
+    /// `x`, `y`, `w`, `h` of every state box, with the offset it stands for.
+    fn state_boxes(svg: &str) -> Vec<(String, f64, f64, f64, f64)> {
+        let mut out = Vec::new();
+        for group in svg.split("<g class=\"state").skip(1) {
+            let Some(offset) = group
+                .split("needle byte offset ")
+                .nth(1)
+                .and_then(|rest| rest.split(';').next())
+            else {
+                continue;
+            };
+            let Some(rect) = group.split("<rect ").nth(1) else {
+                continue;
+            };
+            let number = |name: &str| -> Option<f64> {
+                rect.split(&format!("{name}=\""))
+                    .nth(1)?
+                    .split('"')
+                    .next()?
+                    .parse()
+                    .ok()
+            };
+            if let (Some(x), Some(y), Some(w), Some(h)) =
+                (number("x"), number("y"), number("width"), number("height"))
+            {
+                out.push((offset.to_string(), x, y, w, h));
+            }
+        }
+        out
+    }
+
+    /// Points along one path. Handles the `M`/`H`/`V`/`C` the renderer emits.
+    fn sample(path: &str) -> Vec<(f64, f64)> {
+        let tokens: Vec<&str> = path.split([' ', ',']).filter(|t| !t.is_empty()).collect();
+        let mut points: Vec<(f64, f64)> = Vec::new();
+        let mut cursor = (0.0, 0.0);
+        let mut index = 0;
+        let number = |token: &str| token.parse::<f64>().unwrap_or(f64::NAN);
+        while index < tokens.len() {
+            match tokens[index] {
+                "M" => {
+                    cursor = (number(tokens[index + 1]), number(tokens[index + 2]));
+                    points.push(cursor);
+                    index += 3;
+                }
+                "H" | "V" => {
+                    let target = number(tokens[index + 1]);
+                    let end = if tokens[index] == "H" {
+                        (target, cursor.1)
+                    } else {
+                        (cursor.0, target)
+                    };
+                    for step in 1..=32 {
+                        let t = f64::from(step) / 32.0;
+                        points.push((
+                            cursor.0 + (end.0 - cursor.0) * t,
+                            cursor.1 + (end.1 - cursor.1) * t,
+                        ));
+                    }
+                    cursor = end;
+                    index += 2;
+                }
+                "C" => {
+                    let c1 = (number(tokens[index + 1]), number(tokens[index + 2]));
+                    let c2 = (number(tokens[index + 3]), number(tokens[index + 4]));
+                    let end = (number(tokens[index + 5]), number(tokens[index + 6]));
+                    for step in 1..=96 {
+                        let t = f64::from(step) / 96.0;
+                        let u = 1.0 - t;
+                        let (a, b, c, d) =
+                            (u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t);
+                        points.push((
+                            a * cursor.0 + b * c1.0 + c * c2.0 + d * end.0,
+                            a * cursor.1 + b * c1.1 + c * c2.1 + d * end.1,
+                        ));
+                    }
+                    cursor = end;
+                    index += 7;
+                }
+                _ => index += 1,
+            }
+        }
+        points
+    }
+
+    for (corpus, needle) in [
+        (Corpus::new(), b"example.com".as_slice()),
+        (Corpus::repetitive(), b"newsletter".as_slice()),
+        // Jumps over materialized states, which is what needs routing.
+        (Corpus::repetitive(), b"art/checkou".as_slice()),
+        (Corpus::repetitive(), b"ut?ref=newsl".as_slice()),
+        (Corpus::repetitive(), b"rg/cart/chec".as_slice()),
+    ] {
+        let column = corpus.column();
+        let view = column.view();
+        let frequencies = index_for(view).expect("index builds");
+        let figure = visualize(view, &frequencies, needle, &Options::default())
+            .expect("figure renders");
+        let svg = figure.svg.expect("figure is small enough to draw");
+        let label = String::from_utf8_lossy(needle);
+        let boxes = state_boxes(&svg);
+        assert!(!boxes.is_empty(), "{label}: no state boxes parsed");
+
+        for chunk in svg.split("<path d=\"").skip(1) {
+            let Some((path, rest)) = chunk.split_once('"') else {
+                continue;
+            };
+            if !rest.starts_with(" class=\"edge") {
+                continue;
+            }
+            let points = sample(path);
+            let (first, last) = (points[0], points[points.len() - 1]);
+            for (offset, x, y, w, h) in &boxes {
+                // An edge that starts or ends on this box is attached to it.
+                let attached = [first, last].iter().any(|&(px, py)| {
+                    px >= x - 4.0 && px <= x + w + 4.0 && py >= y - 4.0 && py <= y + h + 4.0
+                });
+                if attached {
+                    continue;
+                }
+                let inside = points.iter().any(|&(px, py)| {
+                    px > x + 3.0 && px < x + w - 3.0 && py > y + 3.0 && py < y + h - 3.0
+                });
+                assert!(
+                    !inside,
+                    "{label}: edge {path} runs through the p={offset} state box"
+                );
+            }
+        }
+    }
+}
+
+/// Nothing the figure draws may sit on top of anything else.
+///
+/// The layout places cards by hand — callouts dodge states, entry cards grow with
+/// their token list — so a collision is a plain bug that no other assertion here
+/// would notice. It was a real one: a token consuming several needle bytes had
+/// its anchor at the midpoint of the jump, which is exactly where an intermediate
+/// state sits.
+#[test]
+fn nothing_drawn_overlaps_anything_else() {
+    /// Every `<g class="…">`'s first rect: one box per drawn element.
+    fn boxes(svg: &str) -> Vec<(String, f64, f64, f64, f64)> {
+        let mut out = Vec::new();
+        for group in svg.split("<g class=\"").skip(1) {
+            let Some((class, rest)) = group.split_once('"') else {
+                continue;
+            };
+            let Some(rect) = rest.split("<rect ").nth(1) else {
+                continue;
+            };
+            let number = |name: &str| -> Option<f64> {
+                rect.split(&format!("{name}=\""))
+                    .nth(1)?
+                    .split('"')
+                    .next()?
+                    .parse()
+                    .ok()
+            };
+            if let (Some(x), Some(y), Some(w), Some(h)) = (
+                number("x"),
+                number("y"),
+                number("width"),
+                number("height"),
+            ) {
+                out.push((class.to_string(), x, y, w, h));
+            }
+        }
+        out
+    }
+
+    for (label, corpus, needle) in [
+        ("plain", Corpus::new(), b"example.com".as_slice()),
+        ("repetitive", Corpus::repetitive(), b"newsletter".as_slice()),
+        // Both shapes of the collision the anchor placement used to cause, found
+        // by rendering every substring of this corpus: a jump whose midpoint is a
+        // state's centre, and one whose midpoint is under another probe's card.
+        // Neither reproduces from a jump of odd length, which is why these two
+        // needles are spelled out rather than picked for looking representative.
+        ("repetitive", Corpus::repetitive(), b"art/checkou".as_slice()),
+        ("repetitive", Corpus::repetitive(), b"ref=new".as_slice()),
+    ] {
+        let column = corpus.column();
+        let view = column.view();
+        let frequencies = index_for(view).expect("index builds");
+        let figure = visualize(view, &frequencies, needle, &Options::default())
+            .expect("figure renders");
+        let svg = figure.svg.expect("figure is small enough to draw");
+        let drawn = boxes(&svg);
+        assert!(drawn.len() > 5, "{label}: only {} boxes parsed", drawn.len());
+
+        for (i, a) in drawn.iter().enumerate() {
+            for b in &drawn[i + 1..] {
+                let x = (a.1 + a.3).min(b.1 + b.3) - a.1.max(b.1);
+                let y = (a.2 + a.4).min(b.2 + b.4) - a.2.max(b.2);
+                assert!(
+                    x <= 0.0 || y <= 0.0,
+                    "{label} / {}: {} at ({}, {}) overlaps {} at ({}, {}) by {x}×{y}",
+                    String::from_utf8_lossy(needle),
+                    a.0,
+                    a.1,
+                    a.2,
+                    b.0,
+                    b.1,
+                    b.2
+                );
+            }
+        }
+    }
+}
+
+/// The companion table is the figure that has to be exhaustive: the DAG can
+/// legitimately omit a token, the symbol table cannot.
+#[test]
+fn the_symbol_table_names_every_token_and_marks_the_cover() {
+    let corpus = Corpus::repetitive();
+    let column = corpus.column();
+    let view = column.view();
+    let frequencies = index_for(view).expect("index builds");
+    let figure = visualize(view, &frequencies, b"newsletter", &Options::default())
+        .expect("figure renders");
+
+    let table = &figure.table_svg;
+    for id in 0..view.dict.num_tokens() {
+        assert!(
+            table.contains(&format!(">{id}</text>")),
+            "token {id} is missing from the table"
+        );
+    }
+
+    // One PROBE badge per cover member that is not a whole-needle token, which
+    // carries WHOLE instead.
+    let members = figure.graph.membership_for_cut(&figure.cut.selected_edges);
+    let live = compile_cover(&members, &frequencies);
+    let probes = live
+        .members
+        .iter()
+        .enumerate()
+        .filter(|&(id, &member)| member && !figure.graph.contained.contains(&(id as u16)))
+        .count();
+    assert_eq!(table.matches(">PROBE<").count(), probes);
+    assert_eq!(
+        table.matches(">WHOLE<").count(),
+        figure.graph.contained.len()
     );
 }
 

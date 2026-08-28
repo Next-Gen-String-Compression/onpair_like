@@ -26,7 +26,7 @@ Reading the figure:
 
 | element | meaning |
 |---|---|
-| left column, one card per row | a feasible alignment `k` — `k` needle bytes sit at the tail of the first token |
+| left column, one card per row | a feasible alignment `k` — `k` needle bytes sit at the tail of the first token, listed heaviest first |
 | rounded `p=N` node | parsing has consumed the needle up to byte offset `N` |
 | teal filled `p=N`, `merge ×m` | `m` alignments converged here; one probe downstream blocks all of them |
 | callout card on an edge | the single interior token greedy parsing takes at that offset |
@@ -37,6 +37,39 @@ Reading the figure:
 | faded node | downstream of the cut, so unreachable once the cover is in place |
 | `TF` | token occurrences in the code stream |
 | `DF` | rows holding the token; shown only under a `df` metric, the only time it is counted |
+
+Cards name their tokens, not their ids: a point card is the token it consumes, a
+range card is its two ends (`"c" … "css"`, contiguous because the dictionary is
+sorted). Ids are still the JSON's cross-reference, and the mandatory card keeps
+them in its hover text.
+
+The figure ends with two panels. The **scan predicate** is the disjunction a row is
+admitted by, one term per comparison — a token to equal, or a bracketed
+`["a" … "b"]` range of ids to fall inside — with the rows each term is *estimated*
+to admit under it:
+
+```
+["·yandex" … "·yandex.ru/"] ∨ ["a.yandex" … "a.yandex.ua/"] ∨ …
+0.6738%                     + 0.3323%                      + …   = 2.1010% of rows, estimated
+```
+
+The estimate is the term's frequency over the row count, which is what the cut
+prices against and an *upper bound* on the rows it admits: a row holding the token
+twice is counted twice. The parts add because the terms are disjoint id runs.
+
+**Measured over the column** repeats the same columns, counted rather than
+estimated — rows that really hold each term — and closes with what the prefilter
+is actually worth:
+
+```
+0.6677%   0.3323%   …   = 2.0819% admitted vs 1.8985% matching → 240 false positives (8.81% of the candidates)
+```
+
+Those three numbers are the ones to judge a cover by, and none of them can be
+derived from the panel above: the admitted share is counted per row (a row holding
+two terms is admitted once, so it sits below the estimate), the matching share
+comes from decoding and searching the candidates, and the false positives are the
+rows the verifier is handed and throws away.
 
 The **cut** is a set of DAG nodes and the **cover** is what the scan compares
 against. They are not the same set, which is why the two chips are named apart:
@@ -58,6 +91,21 @@ twice for alignments that converge, when one probe at the join blocks both, and
 they weigh a first-token set against a single terminal when picking that set would
 have obviated all of them. A cut has neither blind spot because it is not making a
 sequence of local choices at all.
+
+## The companion symbol table
+
+Every run also writes `NN-slug-table.svg`: one row per dictionary token — id,
+token, TF, share of the code stream — with this query's cover marked `PROBE` and
+its whole-needle tokens `WHOLE`, in the same orange and teal the DAG figure uses.
+Tokens the code stream never uses are greyed.
+
+The DAG answers *which tokens got probed*; the table is there for the next
+question, *why those and not their neighbours*. Rows are in id order, which in a
+sorted dictionary is bytewise order, so a token's neighbours in the table are the
+ones a prefix range would have swept over with it. It is also where an
+dictionary gives itself away as too small for its corpus: an FSST table is 255
+symbols however many rows it saw, so on real data most of its rows are the
+single-byte tokens the escapes need.
 
 ## Input
 
@@ -89,6 +137,25 @@ column: 40000 rows, 181659 codes, 937 dictionary tokens
 One row per line; `--rows -` reads stdin. `--help` lists the rest: `--metric` for
 the cut objective (`tf`, `tf_residual`, `df`, `df_residual`), `--pattern-hex` for
 non-UTF-8 needles, `--no-measure`, `--max-states`.
+
+`--dict fsst` draws the same figure over an FSST symbol table instead: train one
+over the rows, then build the dictionary in `src/fsst.rs` — the symbols plus all 256
+single-byte tokens, sorted, with escapes rewritten to the byte they carried, in a
+`Token`-wide code stream.
+
+That is deliberately **not** `onpair::fsst::encode`, which keeps codes one byte wide
+and is the right trade for an encoder. A byte-wide table has no room for the
+alphabet and so rejects any stream that escapes — and real corpora escape: ClickBench
+URLs escape about 1% of theirs across 62 distinct bytes, so that path cannot encode
+this dataset at all. Completeness is not cosmetic here either: `onpair::search`
+states it as a precondition, and given a needle byte it cannot tokenize, the
+planner's greedy step reads `TokenRange::EMPTY.begin` as a token id. An incomplete
+dictionary does not narrow what the figure shows, it makes the figure wrong.
+
+So these figures answer *what would OnPair's planner do with FSST's vocabulary*, not
+*what does `onpair::fsst::encode` produce*. The run prints the symbol count, the
+escapes it rewrote, and the resulting token count, so the distance between the two is
+on the record.
 
 ## It checks itself
 

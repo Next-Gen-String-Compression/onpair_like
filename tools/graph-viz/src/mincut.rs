@@ -1,11 +1,13 @@
-//! Minimum weighted vertex cut of the alignment DAG, by max-flow.
+//! Minimum weighted cut of the alignment DAG, by max-flow.
 //!
-//! Every node is split into an `in → out` edge whose capacity is the node's
-//! weight; probe nodes get their frequency, structural nodes and the DAG's own
-//! edges get a capacity larger than any finite cut. A minimum s-t edge cut of
-//! that graph can therefore only consist of split edges, i.e. it names a set of
-//! probes — and by max-flow/min-cut it is the cheapest set that intersects every
-//! source-to-sink path.
+//! Probes ride on the edges, so the cheapest sound cover is a minimum cut of the
+//! edge weights — max-flow directly, with no node splitting. A step no cut may
+//! select gets a capacity larger than any finite cut, which keeps the minimum cut
+//! on the edges where it means something.
+//!
+//! The point of cutting the *merged* DAG rather than choosing per alignment is
+//! that alignments converging on a shared suffix are paid for once, at the join,
+//! instead of once each.
 
 use std::collections::VecDeque;
 
@@ -117,94 +119,102 @@ impl Dinic {
     }
 }
 
-/// A minimum cut: its total weight and the probe nodes it selects.
+/// A minimum cut: its total weight and the steps it selects.
 #[derive(Clone, Debug, Serialize)]
 pub struct CutResult {
     /// Sum of the selected probes' weights under the chosen metric.
     pub value: u64,
-    /// Ids of the selected probe nodes, ascending.
-    pub selected_nodes: Vec<usize>,
+    /// Ids of the selected edges, ascending.
+    pub selected_edges: Vec<usize>,
 }
 
-/// Solve the weighted structural vertex cut.
+/// Solve the weighted minimum cut.
 ///
 /// # Panics
-/// If some source-to-sink path contains no probe node, which would mean the DAG
-/// admits a match no cover can catch. The builder cannot produce such a path:
-/// every lane ends at a terminal range, and a terminal range is a probe.
-pub fn minimum_vertex_cut(graph: &PathGraph, weights: ProbeWeight) -> CutResult {
-    let capacities: Vec<u64> = graph
-        .nodes
+/// If every cut of some start-to-accept path is infinite, which would mean the
+/// DAG admits a match no cover can catch. The builder cannot produce such a path:
+/// a lane either ends at a terminal step, which carries a probe, or dies before
+/// reaching the accept position at all.
+pub fn minimum_cut(graph: &PathGraph, weights: ProbeWeight) -> CutResult {
+    let capacities: Vec<Option<u64>> = graph
+        .edges
         .iter()
-        .map(|node| graph.node_capacity(node, weights))
+        .map(|edge| graph.edge_capacity(edge, weights))
         .collect();
-    let finite_sum = graph
-        .nodes
+    let finite_sum = capacities
         .iter()
-        .zip(&capacities)
-        .filter(|(node, _)| node.probe.is_some())
-        .try_fold(0u64, |acc, (_, &cap)| acc.checked_add(cap))
+        .flatten()
+        .try_fold(0u64, |acc, &cap| acc.checked_add(cap))
         .expect("sum of probe capacities overflowed u64");
     let infinite = finite_sum.saturating_add(1);
 
-    let mut flow = Dinic::new(graph.nodes.len() * 2);
-    let input = |node: usize| node * 2;
-    let output = |node: usize| node * 2 + 1;
-    for (node, &cap) in graph.nodes.iter().zip(&capacities) {
-        flow.add_edge(
-            input(node.id),
-            output(node.id),
-            if node.probe.is_some() { cap } else { infinite },
-        );
-    }
-    for edge in &graph.edges {
-        flow.add_edge(output(edge.from), input(edge.to), infinite);
+    let nodes = graph.end() + 1;
+    let mut flow = Dinic::new(nodes);
+    // Arc i of the flow graph is edge i of the DAG, so a saturated arc names the
+    // step it came from without a lookup table.
+    for (edge, &cap) in graph.edges.iter().zip(&capacities) {
+        flow.add_edge(edge.from, edge.to, cap.unwrap_or(infinite));
     }
 
-    let source = output(graph.source);
-    let sink = input(graph.sink);
-    let value = flow.max_flow(source, sink);
+    let value = flow.max_flow(0, graph.end());
     assert!(
         value < infinite,
-        "graph contains an uncuttable source/sink path"
+        "graph contains an uncuttable start/accept path"
     );
-    let reachable = flow.reachable(source);
-    let selected_nodes = graph
-        .nodes
+    let reachable = flow.reachable(0);
+    let selected_edges = graph
+        .edges
         .iter()
-        .filter(|node| {
-            node.probe.is_some() && reachable[input(node.id)] && !reachable[output(node.id)]
-        })
-        .map(|node| node.id)
+        .zip(&capacities)
+        .filter(|(edge, cap)| cap.is_some() && reachable[edge.from] && !reachable[edge.to])
+        .map(|(edge, _)| edge.id)
         .collect();
 
     CutResult {
         value,
-        selected_nodes,
+        selected_edges,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::{GraphEdge, GraphNode, NodeKind, PathGraph, Probe, ProbeSet};
+    use crate::graph::{EdgeKind, GraphEdge, PathGraph, Probe, ProbeSet};
 
-    fn node(id: usize, name: &str, cap: Option<u64>) -> GraphNode {
-        GraphNode {
+    /// One step, cuttable at `cap` or uncuttable when `cap` is `None`.
+    fn step(id: usize, from: usize, to: usize, cap: Option<u64>) -> GraphEdge {
+        GraphEdge {
             id,
-            kind: NodeKind::Junction {
-                label: name.to_string(),
-                offset: None,
-            },
+            from,
+            to,
+            kind: EdgeKind::Step { token: 0 },
             probe: cap.map(|tf| Probe {
                 set: ProbeSet::Point { id: id as u16 },
                 term_frequency: tf,
                 row_frequency: tf,
                 residual_term_frequency: tf,
                 residual_row_frequency: tf,
-                label: name.to_string(),
+                label: String::new(),
                 detail: String::new(),
+                heaviest: Vec::new(),
             }),
+        }
+    }
+
+    fn graph(needle_len: usize, edges: Vec<GraphEdge>) -> PathGraph {
+        PathGraph {
+            needle: vec![b'x'; needle_len],
+            edges,
+            states: (0..=needle_len).collect(),
+            contained: Vec::new(),
+            escape_token: None,
+            code_space: 8,
+            stats: Default::default(),
+            dictionary_size: 8,
+            total_codes: 10,
+            total_rows: 10,
+            column_rows: 10,
+            token_text: Vec::new(),
         }
     }
 
@@ -212,34 +222,35 @@ mod tests {
     /// converge are blocked once at the join, not twice at their own terminals.
     #[test]
     fn shared_suffix_beats_two_local_choices() {
-        // s -> a(4) -> x(6) -> t
-        // s -> b(4) -> x(6) -> t
-        let graph = PathGraph {
-            needle: b"test".to_vec(),
-            nodes: vec![
-                node(0, "s", None),
-                node(1, "a", Some(4)),
-                node(2, "b", Some(4)),
-                node(3, "x", Some(6)),
-                node(4, "t", None),
-            ],
-            edges: vec![
-                GraphEdge { from: 0, to: 1 },
-                GraphEdge { from: 0, to: 2 },
-                GraphEdge { from: 1, to: 3 },
-                GraphEdge { from: 2, to: 3 },
-                GraphEdge { from: 3, to: 4 },
-            ],
-            source: 0,
-            sink: 4,
-            contained: Vec::new(),
-            stats: Default::default(),
-            dictionary_size: 5,
-            total_codes: 10,
-            total_rows: 10,
-        };
-        let cut = minimum_vertex_cut(&graph, ProbeWeight::TermFrequency);
+        // 0 -> 1 -(4)-> 3 -(6)-> 4  and  0 -> 2 -(4)-> 3
+        let cut = minimum_cut(
+            &graph(
+                4,
+                vec![
+                    step(0, 0, 1, None),
+                    step(1, 0, 2, None),
+                    step(2, 1, 3, Some(4)),
+                    step(3, 2, 3, Some(4)),
+                    step(4, 3, 4, Some(6)),
+                ],
+            ),
+            ProbeWeight::TermFrequency,
+        );
         assert_eq!(cut.value, 6);
-        assert_eq!(cut.selected_nodes, vec![3]);
+        assert_eq!(cut.selected_edges, vec![4]);
+    }
+
+    /// An uncuttable step is paid for further along its chain, not skipped.
+    #[test]
+    fn an_unprobed_step_pushes_the_cut_downstream() {
+        let cut = minimum_cut(
+            &graph(
+                2,
+                vec![step(0, 0, 1, None), step(1, 1, 2, Some(3))],
+            ),
+            ProbeWeight::TermFrequency,
+        );
+        assert_eq!(cut.value, 3);
+        assert_eq!(cut.selected_edges, vec![1]);
     }
 }

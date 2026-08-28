@@ -12,7 +12,7 @@
 //! built for it:
 //!
 //! ```no_run
-//! use onpair::search::build_token_frequency_index;
+//! use onpair::search::index::build_token_frequency_index;
 //! use onpair::{Column, DEFAULT_CONFIG, DictionaryView};
 //! use onpair_graph_viz::{Options, visualize};
 //!
@@ -63,19 +63,20 @@
 pub mod graph;
 pub mod mincut;
 pub mod render;
+pub mod table;
 
-use onpair::search::{
-    BytesVerifier, PrefilterError, TokenFrequencyIndex, TokenFrequencyIndexError,
-    analyze_prefilter, prefilter_candidates,
-};
-use onpair::{ColumnView, DictionaryView, Offset};
+use onpair::search::index::{TokenFrequencyIndex, TokenFrequencyIndexError};
+use onpair::search::{BytesVerifier, PrefilterError, analyze_prefilter, prefilter_candidates};
+use onpair::{ColumnView, DictionaryView, Offset, Token};
 use serde::Serialize;
 
 pub use graph::{
-    CoverShape, LiveCover, PathGraph, ProbeWeight, Weights, build_path_graph, live_cover,
+    Cover, CoverShape, CoverTerm, EdgeKind, GraphEdge, PathGraph, ProbeWeight, Weights,
+    build_path_graph, compile_cover,
 };
-pub use mincut::{CutResult, minimum_vertex_cut};
-pub use render::{RenderSummary, render_svg};
+pub use mincut::{CutResult, minimum_cut};
+pub use table::render_table_svg;
+pub use render::{RenderSummary, predicate_text, render_svg};
 
 /// Default [`Options::max_states`]. One state is a column of the drawing about
 /// 148 units wide, so this caps a figure near 20 000 units — already far past
@@ -138,6 +139,18 @@ pub struct Options {
     /// what OnPair's own prefilter admits. Costs one code-stream scan plus a
     /// decode of the candidates.
     pub measure: bool,
+    /// The dictionary's escape code, when it has one — an FSST table does. A
+    /// dictionary without every single-byte token cannot tokenize every needle,
+    /// and this is what the parse continues through when it cannot.
+    pub escape_token: Option<Token>,
+    /// Rows that really contain the pattern, when the caller already knows them.
+    ///
+    /// Measuring normally decodes the candidates and searches the bytes, which is
+    /// the better check because it exercises the decoder too. An FSST-transcoded
+    /// column cannot be decoded at all — its escape markers and the literals
+    /// behind them are codes past the dictionary — so for those the caller has to
+    /// say which rows match, from the data it encoded.
+    pub true_rows: Option<Vec<usize>>,
 }
 
 impl Default for Options {
@@ -148,6 +161,8 @@ impl Default for Options {
             title: String::new(),
             subtitle: None,
             measure: true,
+            escape_token: None,
+            true_rows: None,
         }
     }
 }
@@ -174,6 +189,9 @@ pub struct Measurement {
     pub onpair_candidates: Option<usize>,
     /// Why OnPair's prefilter declined, if it did.
     pub onpair_refusal: Option<String>,
+    /// Rows holding each cover term, in the order the terms are in. Per term the
+    /// figure can then show what the planner estimated beside what it got.
+    pub term_rows: Vec<u64>,
 }
 
 /// A rendered figure and everything behind it.
@@ -185,11 +203,6 @@ pub struct Figure {
     pub cut: CutResult,
     /// The cover's point/range shape and SIMD comparison cost, after pruning.
     pub cover: CoverShape,
-    /// Cut nodes pruning left with nothing to probe for — every id they named
-    /// occurs nowhere in the code stream, so OnPair issues no comparison for them.
-    /// Drawn as dead rather than hidden: the picture should say why the cut named
-    /// something the scan then ignored.
-    pub dead_probes: Vec<usize>,
     /// The header numbers.
     pub summary: RenderSummary,
     /// Measurements, when [`Options::measure`] was set.
@@ -197,6 +210,11 @@ pub struct Figure {
     /// The SVG, or `None` when the graph exceeded [`Options::max_states`].
     #[serde(skip)]
     pub svg: Option<String>,
+    /// The companion symbol-table SVG: every dictionary token, with this cover's
+    /// members marked. Always rendered — it is one row per token, so no needle
+    /// makes it too wide to draw.
+    #[serde(skip)]
+    pub table_svg: String,
 }
 
 impl Figure {
@@ -209,7 +227,7 @@ impl Figure {
 /// Build the alignment DAG for `pattern`, cut it, and draw it.
 ///
 /// `frequencies` must have been built for `view`
-/// ([`build_token_frequency_index`](onpair::search::build_token_frequency_index)).
+/// ([`build_token_frequency_index`](onpair::search::index::build_token_frequency_index)).
 ///
 /// # Errors
 /// [`Error::EmptyPattern`] for an empty pattern, [`Error::IndexMismatch`] if the
@@ -225,16 +243,16 @@ pub fn visualize<O: Offset>(
     } else {
         Weights::from_index(frequencies)
     };
-    let graph = build_path_graph(view.dict, pattern, &weights)?;
-    let cut = minimum_vertex_cut(&graph, options.metric);
+    let mut graph = build_path_graph(view.dict, pattern, &weights, options.escape_token)?;
+    // The weights only count rows under a df metric; the column always knows how
+    // many it has, and every percentage in the figure is a share of them.
+    graph.column_rows = view.num_rows() as u64;
+    let cut = minimum_cut(&graph, options.metric);
 
-    // The cut's ids, then the ones OnPair keeps: a cut is free to select tokens the
-    // code stream never uses, since they weigh nothing by its objective, and the
-    // planner takes them back out. Everything downstream measures and draws the
-    // kept set, so the figure is about the probes the scan really issues.
-    let members = graph.membership_for_cut(&cut.selected_nodes);
-    let live = live_cover(&members, frequencies);
-    let dead_probes = dead_probes(&graph, &cut.selected_nodes, &live);
+    // The cut's steps, as the ids the scan compares against: the union of their
+    // probe sets, plus the mandatory whole-needle tokens.
+    let members = graph.membership_for_cut(&cut.selected_edges);
+    let live = compile_cover(&members, frequencies);
     let cover_frequency = weights.membership_term_frequency(&live.members);
 
     // The mandatory ids on their own, so the figure can say where the difference
@@ -246,7 +264,17 @@ pub fn visualize<O: Offset>(
 
     let measurement = options
         .measure
-        .then(|| measure(view, frequencies, pattern, &live.members));
+        .then(|| {
+            measure(
+                view,
+                frequencies,
+                pattern,
+                &live.members,
+                &live.terms,
+                options.escape_token,
+                options.true_rows.as_deref(),
+            )
+        });
 
     let mut summary = RenderSummary::new(
         options.title.clone(),
@@ -258,50 +286,40 @@ pub fn visualize<O: Offset>(
         cover_frequency,
         live.shape,
     );
+    summary.cover_terms = live.terms.clone();
+    summary.column_rows = Some(view.num_rows() as u64);
+    if let Some(measurement) = &measurement {
+        for (term, &rows) in summary.cover_terms.iter_mut().zip(&measurement.term_rows) {
+            term.measured_rows = Some(rows);
+        }
+    }
     summary.cut_value = cut.value;
     summary.contained_tokens = graph.contained.len();
     summary.contained_frequency = weights.membership_term_frequency(&contained_members);
-    summary.dead_probes = dead_probes.len();
     if let Some(measurement) = &measurement {
         summary.cut_candidates = Some(measurement.candidates);
         summary.exact_rows = Some(measurement.exact_rows);
         summary.selectivity =
             (view.num_rows() > 0).then(|| measurement.exact_rows as f64 / view.num_rows() as f64);
+        summary.candidate_selectivity =
+            (view.num_rows() > 0).then(|| measurement.candidates as f64 / view.num_rows() as f64);
     }
 
     let too_wide = options
         .max_states
         .is_some_and(|limit| graph.stats.unique_states > limit);
-    let svg = (!too_wide).then(|| render_svg(&graph, &cut.selected_nodes, &dead_probes, &summary));
+    let svg = (!too_wide).then(|| render_svg(&graph, &cut.selected_edges, &summary));
+    let table_svg = render_table_svg(view.dict, &weights, &graph, &live.members, &options.title);
 
     Ok(Figure {
         graph,
         cut,
         cover: live.shape,
-        dead_probes,
         summary,
         measurement,
         svg,
+        table_svg,
     })
-}
-
-/// The cut nodes with no surviving id in `live` — selected by the cut, dropped by
-/// the planner. Ascending, as [`CutResult::selected_nodes`] is.
-fn dead_probes(graph: &PathGraph, selected_nodes: &[usize], live: &LiveCover) -> Vec<usize> {
-    selected_nodes
-        .iter()
-        .copied()
-        .filter(|&node| {
-            let mut alive = false;
-            graph.nodes[node]
-                .probe
-                .as_ref()
-                .expect("cut selected a non-probe node")
-                .set
-                .for_each(|id| alive |= live.members[id as usize]);
-            !alive
-        })
-        .collect()
 }
 
 /// Rows holding at least one token from `members`.
@@ -315,16 +333,64 @@ pub fn candidate_rows<O: Offset>(view: ColumnView<'_, O>, members: &[bool]) -> V
         .collect()
 }
 
+/// Rows holding at least one token of each term, in term order.
+///
+/// One pass, and one bit of state per term per row: a term is counted once for a
+/// row however many of its tokens that row holds, which is what makes it
+/// comparable to the term-frequency estimate rather than a second spelling of it.
+fn term_row_counts<O: Offset>(
+    view: ColumnView<'_, O>,
+    terms: &[CoverTerm],
+    members: &[bool],
+) -> Vec<u64> {
+    let mut counts = vec![0u64; terms.len()];
+    let mut hit = vec![false; terms.len()];
+    for row in 0..view.num_rows() {
+        hit.fill(false);
+        for &code in view.row_codes(row) {
+            if !members[code as usize] {
+                continue;
+            }
+            // Terms are disjoint and ascending, so the one holding this code is a
+            // binary search away.
+            if let Ok(index) = terms.binary_search_by(|term| {
+                if code < term.begin {
+                    std::cmp::Ordering::Greater
+                } else if code > term.last {
+                    std::cmp::Ordering::Less
+                } else {
+                    std::cmp::Ordering::Equal
+                }
+            }) {
+                hit[index] = true;
+            }
+        }
+        for (count, &hit) in counts.iter_mut().zip(&hit) {
+            *count += u64::from(hit);
+        }
+    }
+    counts
+}
+
 fn measure<O: Offset>(
     view: ColumnView<'_, O>,
     frequencies: &TokenFrequencyIndex,
     pattern: &[u8],
     members: &[bool],
+    terms: &[CoverTerm],
+    escape_token: Option<Token>,
+    true_rows: Option<&[usize]>,
 ) -> Measurement {
     let candidates = candidate_rows(view, members);
 
-    let mut exact: Vec<usize> = (0..view.num_rows()).collect();
-    BytesVerifier::new(pattern).retain(view, &mut exact);
+    let exact: Vec<usize> = match true_rows {
+        Some(rows) => rows.to_vec(),
+        None => {
+            let mut exact: Vec<usize> = (0..view.num_rows()).collect();
+            BytesVerifier::new(pattern).retain(view, &mut exact);
+            exact
+        }
+    };
 
     // `candidates` is ascending, so a merge walk decides containment in one pass.
     let mut cursor = candidates.iter().copied().peekable();
@@ -340,7 +406,7 @@ fn measure<O: Offset>(
     }
 
     let mut theirs = Vec::new();
-    let analysis = analyze_prefilter(pattern, view.dict, frequencies);
+    let analysis = analyze_prefilter(pattern, view.dict, frequencies, escape_token);
     let refusal = prefilter_candidates(view.codes, view.row_offsets, &analysis, &mut theirs).err();
 
     Measurement {
@@ -349,6 +415,7 @@ fn measure<O: Offset>(
         sound,
         onpair_candidates: refusal.is_none().then_some(theirs.len()),
         onpair_refusal: refusal.map(refusal_text),
+        term_rows: term_row_counts(view, terms, members),
     }
 }
 
@@ -366,10 +433,10 @@ fn default_subtitle(pattern: &[u8]) -> String {
 /// Build the frequency index for a column, as the tool's callers usually need it.
 ///
 /// # Errors
-/// Whatever [`build_token_frequency_index`](onpair::search::build_token_frequency_index)
+/// Whatever [`build_token_frequency_index`](onpair::search::index::build_token_frequency_index)
 /// refused with.
 pub fn index_for<O: Offset>(view: ColumnView<'_, O>) -> Result<TokenFrequencyIndex, Error> {
-    Ok(onpair::search::build_token_frequency_index(
+    Ok(onpair::search::index::build_token_frequency_index(
         view.codes,
         view.dict.num_tokens(),
     )?)
