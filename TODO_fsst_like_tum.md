@@ -19,10 +19,9 @@
 > byte is 0xFF; after: LLVM only, benign) — fixed by the guard-padded stream
 > layout in the candidate; see DESIGN.md §17.7 and
 > `harness/tests/fsst_like_tum_guard.rs`.
-> **Open follow-up:** `candidates/dict_fsst_like_tum` (`dict+interp`) still
-> uses the unpadded contiguous layout and has the same 0xFF-boundary false
-> negative; port `layout_stream`/`row_ptr` (or move them into
-> `fsst_common`) when that candidate is next touched.
+> **Done (2026-09-01):** `candidates/dict_fsst_like_tum` (`dict+interp`) had the
+> same 0xFF-boundary false negative and is fixed by the same layout, now shared
+> as `fsst_common::GuardedStream` and covered by the joint regression test.
 
 > **Note (post-rename):** this candidate was renamed `fsst_like` → `fsst_like_tum`.
 > Since this TODO was written it was also made **interp-only** — the `decode()`

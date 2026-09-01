@@ -14,6 +14,13 @@
 //
 // CONTAINS_ANY is unsupported (an OR of literals is not one LIKE pattern); the
 // literal-backslash-tail limitation of the parser is inherited verbatim.
+//
+// The upstream kernels read one byte OUTSIDE the row they are handed, and a
+// 0xFF before a row turns a suffix match at its start into a false negative
+// (DESIGN.md §17.7). The unique values are concatenated exactly the way
+// fsst_like_tum's rows are, so the same hazard applies verbatim — the byte
+// before unique value i is the last byte of unique value i-1 — and the same
+// shared fsst_common::GuardedStream layout fixes it.
 
 #include "lb_candidate.h"
 
@@ -85,18 +92,12 @@ class FsstLikeTum final : public lb::Matcher {
     try {
       std::shared_ptr<libfsst::SymbolTable> sym =
           reinterpret_cast<libfsst::Encoder*>(b_.enc)->symbolTable;
-      // Escaped-byte bitmap into symbols[255], as the repo's compressFile does.
+      // Escaped-byte bitmap into symbols[255], as the repo's compressFile does;
+      // the same pass reports whether the guarded layout needs separators.
       bool bitmap[256] = {false};
-      for (uint64_t i = 0; i < b_.num_rows; i++) {
-        const uint8_t* p = b_.compressed.data() + b_.coffsets[i];
-        const size_t len = size_t(b_.coffsets[i + 1] - b_.coffsets[i]);
-        size_t j = 0;
-        while (j < len) {
-          if (p[j] == 255) { ++j; bitmap[p[j]] = true; }
-          ++j;
-        }
-      }
+      const bool ends_in_escape = fsst_common::ScanEscapes(b_, bitmap);
       std::memcpy(&sym->symbols[255], bitmap, 256 * sizeof(bool));
+      fsst_common::LayoutGuardedStream(b_, stream_, ends_in_escape);
       SymbolTable st(sym);
       encoder_ = std::make_unique<Encoder>(st);
       fsst_destroy(b_.enc);
@@ -129,9 +130,8 @@ class FsstLikeTum final : public lb::Matcher {
                                        .count());
       }
       for (uint64_t i = 0; i < b_.num_rows; i++) {
-        const uint8_t* p = b_.compressed.data() + b_.coffsets[i];
-        const size_t len = size_t(b_.coffsets[i + 1] - b_.coffsets[i]);
-        if (parser.parse(std::span<const uint8_t>(p, len)))
+        if (parser.parse(std::span<const uint8_t>(stream_.row(i),
+                                                  stream_.row_len(i))))
           out[i >> 6] |= uint64_t(1) << (i & 63);
       }
       return 0;
@@ -151,6 +151,7 @@ class FsstLikeTum final : public lb::Matcher {
     for (uint32_t i = 0; i < n; i++) out.push_back(comps[i]);
     out.push_back({"encoder_table",
                    sizeof(libfsst::Encoder) + sizeof(libfsst::SymbolTable)});
+    out.push_back({"stream_padding", stream_.padding_bytes()});
   }
 
   uint64_t num_rows() const override { return b_.num_rows; }
@@ -158,6 +159,7 @@ class FsstLikeTum final : public lb::Matcher {
  private:
   fsst_common::FsstBuilt b_;
   std::unique_ptr<Encoder> encoder_;
+  fsst_common::GuardedStream stream_;
 };
 
 void* build(const lb_chunk_view* view, const char* /*config*/, char* eb, uint64_t ec) {
@@ -174,7 +176,7 @@ const lb_strategy kStrategies[] = {
 const lb_candidate kVtable = {
     /*abi_version=*/LB_ABI_VERSION,
     /*name=*/"dict_fsst_like_tum",
-    /*version=*/"0.2.0+b1eb3ab.resident-state",
+    /*version=*/"0.3.0+b1eb3ab.guarded-stream",
     /*cpu_features=*/nullptr,
     /*strategies=*/kStrategies,
     /*strategy_count=*/1,

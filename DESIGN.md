@@ -1695,7 +1695,7 @@ The four benchmark columns contain no `0xFF` byte at all, so the recorded
 numbers were never affected; row 0 saw heap-header bytes (never `0xFF` in
 practice) and the last row's over-read landed in vector slack.
 
-**Fix (candidate-side, upstream untouched):** `cand_build` copies the rows into
+**Fix (candidate-side, upstream untouched):** `build()` copies the rows into
 `[64 zero bytes][row0][sep][row1][sep]…[64 zero bytes]`, where `sep` is one
 `0x00` byte after *every* row iff any compressed row ends in `0xFF`, else
 nothing. Uniform separators keep the single `(rows+1)×8 B` offsets index
@@ -1704,6 +1704,15 @@ reported as the `stream_padding` footprint component (128 B on all four
 benchmark columns; `128 + rows` when separators are active) and are excluded
 from `payload_fsst`. The zero padding is also what makes the LLVM over-read and
 the row-0 under-read memory-safe.
+
+The layout lives in the shared front-end as `fsst_common::GuardedStream`
+(+ `ScanEscapes` / `LayoutGuardedStream`), so **both** match-in-place
+candidates use one implementation: `fsst_like_tum` over its rows and
+`dict_fsst_like_tum` over its deduplicated unique values. Bulk-decode
+candidates (`fsst`, `fsst_prefilter`, `fsst_decode_prefilter`, `fsst_like_utn`)
+keep reading `b.compressed` directly and are unaffected; `fsst_common::Footprint`
+sources `payload_fsst` from whichever of the two survives (they are equal by
+construction whenever both exist).
 
 **Residual upstream limitations (documented, gate-guarded, not fixed here):**
 - trailing-backslash needles before a `%` — refused with code 13 (§17.3);
@@ -1722,6 +1731,10 @@ the row-0 under-read memory-safe.
   byte before the row; with the layout above that path is unreachable, and
   the 64-byte guard would absorb it anyway.
 
-`dict_fsst_like_tum` (`dict+interp`) shares the contiguous layout and the
-interpreted matcher and therefore the same `0xFF`-boundary hazard; it was not
-changed in this pass.
+**`dict_fsst_like_tum` (`dict+interp`) was affected too and is fixed** (2026-09-01,
+same guarded layout). It matches over the *deduplicated unique values*, so most
+row adjacencies do not survive dedup — but enough do: on the regression corpus,
+suppressing the separator makes it miss a row on `suffix.e` (1 of 23 cells,
+against 6 of 23 for `fsst_like_tum`). `harness/tests/fsst_like_tum_guard.rs`
+covers both candidates and asserts each one actually switched separators on, so
+the corpus cannot silently stop exercising the hazard.

@@ -1,11 +1,19 @@
-//! Regression test for the `fsst_like_tum` compressed-stream layout
-//! (DESIGN.md §17.7): the upstream FSST-LIKE kernels read one byte before the
-//! row they are handed during a backward (suffix) scan, and a 0xFF there — the
-//! previous row's escaped 0xFF literal in a contiguous layout — turns a match
-//! at the row start into a false negative in EVERY backend. The candidate now
-//! separates rows whenever any compressed row ends in 0xFF; this test builds a
-//! corpus where that is the case and drives all five strategies through the
-//! correctness gate.
+//! Regression test for the guarded compressed-stream layout shared by
+//! `fsst_like_tum` and `dict_fsst_like_tum` (DESIGN.md §17.7): the upstream
+//! FSST-LIKE kernels read one byte before the row they are handed during a
+//! backward (suffix) scan, and a 0xFF there — the previous row's escaped 0xFF
+//! literal in a contiguous layout — turns a match at the row start into a false
+//! negative in EVERY backend. Both candidates now separate rows whenever any
+//! compressed row ends in 0xFF; this test builds a corpus where that is the case
+//! and drives every strategy of both through the correctness gate.
+//!
+//! `dict_fsst_like_tum` matches over the DEDUPLICATED unique values rather than
+//! the rows, so most of the row adjacencies this corpus plants do not survive
+//! dedup — but the `long_row(0xFF)` / `"e"` pair does (its successor is a first
+//! occurrence), and that one is enough: with the separator suppressed the dict
+//! candidate misses exactly one row on `suffix.e`. Verified by disabling
+//! `sep` locally, 2026-09-01: fsst_like_tum failed 6 of 23 cells, the dict
+//! candidate 1 of 23; both are clean with it enabled.
 //!
 //! The corpus is generated in-process (a portable LCG, no fixture file): FSST
 //! trains on a ~16 KB line sample, so 0xFF is only escaped — the precondition
@@ -24,7 +32,12 @@ use lb_harness::suite;
 const SEED: u64 = 1;
 const SHORT_ROWS: usize = 3000;
 const GUARD_PAD: u64 = 64; // mirrors kGuardPad in the candidate
-const STRATEGIES: &[&str] = &["interp", "cpp", "cpp-simd", "llvm", "llvm-simd"];
+const STRATEGIES: &[&str] = &[
+    "interp", "cpp", "cpp-simd", "llvm", "llvm-simd", // fsst_like_tum
+    "dict+interp",                                    // dict_fsst_like_tum
+];
+/// (candidate, whether its padding is charged over rows or unique values)
+const CANDIDATES: &[&str] = &["fsst_like_tum", "dict_fsst_like_tum"];
 const WORDS: &[&str] = &[
     "the", "of", "and", "to", "in", "a", "is", "that", "for", "it", "as", "was", "with", "be", "by",
     "on", "not", "he", "this", "are", "or", "his", "from", "at", "which", "but", "have", "an", "had",
@@ -153,8 +166,12 @@ fn prepare(dir: &Path) -> (PathBuf, PathBuf, usize) {
 }
 
 fn write_spec(dir: &Path, ds: &Path, suite: &Path) -> PathBuf {
+    let candidate_blocks: String = CANDIDATES
+        .iter()
+        .map(|name| format!("[[candidates]]\nname = \"{name}\"\n\n"))
+        .collect();
     let spec = format!(
-        "strategies = {}\n\n[measure]\nwarmup = 0\nmin_iters = 1\nmin_millis = 0\nchunk_rows = [0]\n\n[[datasets]]\npath = \"{}\"\n\n[[suites]]\npath = \"{}\"\n\n[[candidates]]\nname = \"fsst_like_tum\"\n\n[[scanners]]\nname = \"memmem\"\n",
+        "strategies = {}\n\n[measure]\nwarmup = 0\nmin_iters = 1\nmin_millis = 0\nchunk_rows = [0]\n\n[[datasets]]\npath = \"{}\"\n\n[[suites]]\npath = \"{}\"\n\n{candidate_blocks}[[scanners]]\nname = \"memmem\"\n",
         serde_json::to_string(STRATEGIES).unwrap(),
         ds.display(),
         suite.display(),
@@ -165,43 +182,56 @@ fn write_spec(dir: &Path, ds: &Path, suite: &Path) -> PathBuf {
 }
 
 #[test]
-fn fsst_like_tum_every_backend_survives_rows_ending_in_escaped_0xff() {
+fn fsst_like_backends_survive_rows_ending_in_escaped_0xff() {
     let tmp = tempfile::tempdir().unwrap();
     let (ds_dir, suite_dir, num_rows) = prepare(tmp.path());
     let loaded = LoadedSpec::load(&write_spec(tmp.path(), &ds_dir, &suite_dir)).unwrap();
 
-    let out_path = tmp.path().join("guard.jsonl");
-    let mut writer = Writer::create(&out_path).unwrap();
-    let summary = runner::run_worker(&loaded, "fsst_like_tum", 0, 0, &mut writer, false).unwrap();
-    writer.finish().unwrap();
-    assert_eq!(summary.gate_failures, 0, "gate failures");
-    assert_eq!(summary.errors, 0, "errors");
+    for (index, candidate) in CANDIDATES.iter().enumerate() {
+        let out_path = tmp.path().join(format!("guard-{index}.jsonl"));
+        let mut writer = Writer::create(&out_path).unwrap();
+        let summary = runner::run_worker(&loaded, candidate, 0, 0, &mut writer, false).unwrap();
+        writer.finish().unwrap();
+        assert_eq!(summary.gate_failures, 0, "{candidate}: gate failures");
+        assert_eq!(summary.errors, 0, "{candidate}: errors");
 
-    let rows: Vec<serde_json::Value> = std::fs::read_to_string(&out_path)
-        .unwrap()
-        .lines()
-        .map(|l| serde_json::from_str(l).unwrap())
-        .collect();
-    let queries: Vec<&serde_json::Value> = rows.iter().filter(|r| r["kind"] == "query").collect();
-    assert!(!queries.is_empty(), "no query cells recorded");
-    for q in &queries {
-        assert_eq!(q["status"], "ok", "{} / {}", q["strategy"], q["query_id"]);
+        let rows: Vec<serde_json::Value> = std::fs::read_to_string(&out_path)
+            .unwrap()
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect();
+        let queries: Vec<&serde_json::Value> =
+            rows.iter().filter(|r| r["kind"] == "query").collect();
+        assert!(!queries.is_empty(), "{candidate}: no query cells recorded");
+        for q in &queries {
+            assert_eq!(q["status"], "ok", "{candidate} {} / {}", q["strategy"], q["query_id"]);
+        }
+        // interp/dict+interp are always registered; cpp*/llvm* are host-gated
+        // (runtime clang++, LLVM 14-16, x86-64) and simply absent elsewhere, so
+        // report those rather than requiring them.
+        let strategies: std::collections::BTreeSet<&str> =
+            queries.iter().map(|q| q["strategy"].as_str().unwrap()).collect();
+        assert!(!strategies.is_empty(), "{candidate}: no strategy ran");
+        eprintln!("{candidate} strategies exercised: {strategies:?}");
+
+        // The precondition actually held: some compressed row ends in 0xFF, so
+        // the candidate switched on separators (one byte per row on top of the
+        // two guard blocks). fsst_like_tum lays out every row; the dict wrapper
+        // lays out the deduplicated unique values, so it charges fewer.
+        let build = rows.iter().find(|r| r["kind"] == "build").unwrap();
+        let padding = build["footprint_components"]["stream_padding"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("{candidate}: no stream_padding component"));
+        let laid_out = padding
+            .checked_sub(2 * GUARD_PAD)
+            .unwrap_or_else(|| panic!("{candidate}: padding {padding} below the guard blocks"));
+        assert!(
+            laid_out > 0 && laid_out <= num_rows as u64,
+            "{candidate}: corpus no longer exercises the 0xFF-at-row-end hazard \
+             (separators inactive: {laid_out} of at most {num_rows} entries)"
+        );
+        if *candidate == "fsst_like_tum" {
+            assert_eq!(laid_out, num_rows as u64, "one separator per row");
+        }
     }
-    // `interp` is always registered; cpp*/llvm* are host-gated (runtime clang++,
-    // LLVM 14-16, x86-64) and simply absent elsewhere, so only report them.
-    let strategies: std::collections::BTreeSet<&str> =
-        queries.iter().map(|q| q["strategy"].as_str().unwrap()).collect();
-    assert!(strategies.contains("interp"), "{strategies:?}");
-    eprintln!("fsst_like_guard strategies exercised: {strategies:?}");
-
-    // The precondition actually held: some compressed row ends in 0xFF, so the
-    // candidate switched on per-row separators (one byte per row on top of the
-    // two guard blocks).
-    let build = rows.iter().find(|r| r["kind"] == "build").unwrap();
-    let padding = build["footprint_components"]["stream_padding"].as_u64().unwrap();
-    assert_eq!(
-        padding,
-        2 * GUARD_PAD + num_rows as u64,
-        "corpus no longer exercises the 0xFF-at-row-end hazard (separators inactive)"
-    );
 }

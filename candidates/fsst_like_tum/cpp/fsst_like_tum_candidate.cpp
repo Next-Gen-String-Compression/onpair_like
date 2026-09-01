@@ -47,14 +47,12 @@
 // row never influences the answer; the byte BEFORE does: 0xFF there makes the
 // backward scan treat the row's first code as an escaped literal (false
 // negative). Upstream's own benchmark never sees this because its rows live
-// in a page-padded mmap. Here the rows are therefore laid out as
-//   [kGuardPad zeros][row0][sep][row1][sep]...[row n-1][sep][kGuardPad zeros]
-// where sep is one 0x00 byte after EVERY row iff any compressed row ends in
-// 0xFF (only an escaped 0xFF literal can end a row; the escape code itself
-// never does), and zero bytes otherwise. Uniform separators keep a single
-// (n+1)-entry offsets index sufficient; the padding is reported as the
-// `stream_padding` footprint component (0 separators on all four benchmark
-// columns, which contain no 0xFF byte). Not covered, because it is inside the
+// in a page-padded mmap. Here the rows are therefore laid out by the shared
+// fsst_common::GuardedStream (guard blocks, plus a 0x00 separator after every
+// row whenever any compressed row ends in 0xFF), whose padding is reported as
+// the `stream_padding` footprint component (0 separators on all four benchmark
+// columns, which contain no 0xFF byte). dict_fsst_like_tum uses the same helper
+// for the same reason. Not covered, because it is inside the
 // row: a SUFFIX match whose first compressed code directly follows an escaped
 // 0xFF literal (e.g. raw "\xFFe" LIKE '%e') is an upstream false negative —
 // the same one-byte escape look-back — and needs raw 0xFF bytes to occur.
@@ -98,68 +96,20 @@ constexpr int kErrUnsupportedOp = 11;     // op not expressible as one LIKE patt
 constexpr int kErrMatcherFailure = 12;    // upstream automaton/codegen threw
 constexpr int kErrTrailingBackslash = 13; // needle ends in '\' before a '%'
 
-// Zero bytes kept on both sides of the compressed stream (see file header).
-constexpr uint64_t kGuardPad = 64;
-constexpr uint8_t kEscapeCode = 255;
-
 // The shared FSST build result, the FSST-LIKE Encoder (over the clobbered
-// table) that drives matching, and the guard-padded row stream the kernels
-// actually read (see file header). `b.compressed` is released once `stream`
-// is laid out; `b.coffsets` stays the single row index.
+// table) that drives matching, and the guarded row stream the kernels actually
+// read (see file header).
 struct Handle {
   fsst_common::FsstBuilt b;
   std::unique_ptr<Encoder> encoder;
-  std::vector<uint8_t> stream;
-  uint8_t sep = 0;  // 1 => one 0x00 separator after every row
+  fsst_common::GuardedStream stream;
 };
-
-uint64_t row_start(const Handle& h, uint64_t i) {
-  return kGuardPad + h.b.coffsets[i] + i * h.sep;
-}
-const uint8_t* row_ptr(const Handle& h, uint64_t i) {
-  return h.stream.data() + row_start(h, i);
-}
-size_t row_len(const Handle& h, uint64_t i) {
-  return size_t(h.b.coffsets[i + 1] - h.b.coffsets[i]);
-}
-uint64_t stream_padding_bytes(const Handle& h) {
-  return 2 * kGuardPad + h.b.num_rows * h.sep;
-}
-
-// Copy the concatenated rows of `b` into the guard-padded stream layout.
-void layout_stream(Handle& h, bool any_row_ends_in_escape_code) {
-  h.sep = any_row_ends_in_escape_code ? 1 : 0;
-  const uint64_t n = h.b.num_rows;
-  h.stream.assign(h.b.coffsets[n] + stream_padding_bytes(h), 0);
-  for (uint64_t i = 0; i < n; i++) {
-    std::memcpy(h.stream.data() + row_start(h, i),
-                h.b.compressed.data() + h.b.coffsets[i], row_len(h, i));
-  }
-  std::vector<uint8_t>().swap(h.b.compressed);
-}
-
-// One pass over the compressed rows (before layout): fills the escaped-byte
-// bitmap the matcher's isEscapable() reads, and reports whether any row's last
-// byte is 0xFF (an escaped 0xFF literal), which decides the separator layout.
-// FSST emits an escape and its literal within one row, so p[j + 1] is in range.
-bool scan_escapes(const fsst_common::FsstBuilt& b, bool (&bitmap)[256]) {
-  bool any_row_ends_in_escape_code = false;
-  for (uint64_t i = 0; i < b.num_rows; i++) {
-    const uint8_t* p = b.compressed.data() + b.coffsets[i];
-    const size_t len = size_t(b.coffsets[i + 1] - b.coffsets[i]);
-    if (len > 0 && p[len - 1] == kEscapeCode) any_row_ends_in_escape_code = true;
-    for (size_t j = 0; j < len; j++) {
-      if (p[j] == kEscapeCode) bitmap[p[++j]] = true;
-    }
-  }
-  return any_row_ends_in_escape_code;
-}
 
 // Drive `parse(ptr, len)` over every row, setting the row's bit on a hit.
 template <class Parse>
 void match_rows(const Handle& h, Parse&& parse, uint64_t* out_bitmap_words) {
   for (uint64_t i = 0; i < h.b.num_rows; i++) {
-    if (parse(row_ptr(h, i), row_len(h, i))) {
+    if (parse(h.stream.row(i), h.stream.row_len(i))) {
       out_bitmap_words[i >> 6] |= uint64_t(1) << (i & 63);
     }
   }
@@ -237,9 +187,9 @@ void* cand_build(const lb_chunk_view* view, const char* /*config_json*/,
     // Escaped-byte bitmap into symbols[255], exactly as the repo's compressFile:
     // isEscapable(b) reads reinterpret_cast<bool*>(&symbols[255])[b].
     bool bitmap[256] = {false};
-    const bool any_row_ends_in_escape_code = scan_escapes(h->b, bitmap);
+    const bool ends_in_escape = fsst_common::ScanEscapes(h->b, bitmap);
     std::memcpy(&sym->symbols[255], bitmap, 256 * sizeof(bool));
-    layout_stream(*h, any_row_ends_in_escape_code);
+    fsst_common::LayoutGuardedStream(h->b, h->stream, ends_in_escape);
 
     // FSST-LIKE Encoder over the (clobbered) table, for automaton construction.
     SymbolTable st(sym);
@@ -260,25 +210,23 @@ void* cand_build(const lb_chunk_view* view, const char* /*config_json*/,
   }
 }
 
-// The three common FSST-family components (fsst_common::Footprint's set, with
-// payload_fsst taken from the row index because `b.compressed` was released
-// into `stream`), the retained FSST-LIKE encoder table (an expanded
-// compression-side table kept for per-query automaton construction; counted
-// next to the serialized dictionary just as fsst counts its imported decode
-// table), and the guard/separator bytes of the stream layout.
+// The three shared FSST-family components, plus the retained FSST-LIKE encoder
+// table (an expanded compression-side table kept for per-query automaton
+// construction; counted next to the serialized dictionary just as fsst counts
+// its imported decode table) and the guard/separator bytes of the stream layout.
 uint32_t cand_footprint(void* self, lb_footprint_component* out,
                         uint32_t capacity) {
   auto* h = static_cast<Handle*>(self);
-  const lb_footprint_component components[] = {
-      {"payload_fsst", h->b.coffsets[h->b.num_rows]},
-      {"symbol_table", h->b.symtab.size()},
-      {"offsets", (h->b.num_rows + 1) * sizeof(uint64_t)},
+  uint32_t n = fsst_common::Footprint(h->b, out, capacity);
+  const lb_footprint_component extra[] = {
       {"encoder_table", sizeof(libfsst::Encoder) + sizeof(libfsst::SymbolTable)},
-      {"stream_padding", stream_padding_bytes(*h)},
+      {"stream_padding", h->stream.padding_bytes()},
   };
-  const uint32_t count = sizeof(components) / sizeof(components[0]);
-  for (uint32_t i = 0; i < count && i < capacity; i++) out[i] = components[i];
-  return count;
+  for (const lb_footprint_component& c : extra) {
+    if (n < capacity) out[n] = c;
+    n++;
+  }
+  return n;
 }
 
 void set_all_bits(uint64_t num_rows, uint64_t* out_bitmap_words) {
