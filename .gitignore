@@ -27,3 +27,7 @@ analysis/__marimo__/
 .idea
 # standalone guard-page driver build output (scratchpad/fsst_like_tum_guard/README.md)
 scratchpad/fsst_like_tum_guard/build/
+
+# Python bytecode from the scratchpad helper scripts
+__pycache__/
+*.pyc
