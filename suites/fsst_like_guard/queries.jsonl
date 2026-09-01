@@ -1,0 +1,23 @@
+{"id": "fsst_like_guard.suffix.e", "op": "suffix", "needles": ["e"]}
+{"id": "fsst_like_guard.suffix.the", "op": "suffix", "needles": ["the"]}
+{"id": "fsst_like_guard.suffix.he", "op": "suffix", "needles": ["he"]}
+{"id": "fsst_like_guard.suffix.t", "op": "suffix", "needles": ["t"]}
+{"id": "fsst_like_guard.suffix.cat", "op": "suffix", "needles": ["cat"]}
+{"id": "fsst_like_guard.suffix.goose", "op": "suffix", "needles": ["goose"]}
+{"id": "fsst_like_guard.suffix.se", "op": "suffix", "needles": ["se"]}
+{"id": "fsst_like_guard.suffix.ff", "op": "suffix", "needles": [{"b64": "/w=="}]}
+{"id": "fsst_like_guard.prefix.the", "op": "prefix", "needles": ["the"]}
+{"id": "fsst_like_guard.prefix.ff", "op": "prefix", "needles": [{"b64": "/w=="}]}
+{"id": "fsst_like_guard.contains.he", "op": "contains", "needles": ["he"]}
+{"id": "fsst_like_guard.contains.cat", "op": "contains", "needles": ["cat"]}
+{"id": "fsst_like_guard.contains.ff", "op": "contains", "needles": [{"b64": "/w=="}]}
+{"id": "fsst_like_guard.contains.ffff", "op": "contains", "needles": [{"b64": "//8="}]}
+{"id": "fsst_like_guard.contains.empty", "op": "contains", "needles": [""]}
+{"id": "fsst_like_guard.prefix.empty", "op": "prefix", "needles": [""]}
+{"id": "fsst_like_guard.suffix.empty", "op": "suffix", "needles": [""]}
+{"id": "fsst_like_guard.multi.c.t", "op": "multi_contains", "needles": ["c", "t"]}
+{"id": "fsst_like_guard.multi.empty2", "op": "multi_contains", "needles": ["", ""]}
+{"id": "fsst_like_guard.multi.the.empty.e", "op": "multi_contains", "needles": ["the", "", "e"]}
+{"id": "fsst_like_guard.contains.lead_bs", "op": "contains", "needles": ["\\s"]}
+{"id": "fsst_like_guard.contains.mid_bs", "op": "contains", "needles": ["k\\s"]}
+{"id": "fsst_like_guard.suffix.trailing_bs", "op": "suffix", "needles": ["g\\"]}

@@ -1587,14 +1587,18 @@ This is a documented capability gap recorded distinctly from an error; a
 follow-up may OR N automata.
 
 **Known parser limitation (trailing backslash).** A needle ending in a literal
-backslash escapes to `…\\` and, wrapped, yields e.g. `%…\\%`; the FSST-LIKE
-parser's end-detection (`pattern[size-2]=='\\'`) mis-reads the closing `%` as
-escaped and matches such rows wrong. This is a property of the upstream matcher,
-not our wiring; it is rare in real string columns (verified absent in the
-current suites) and the correctness gate is the backstop (a tripping query
-fails the gate rather than silently reporting a wrong number). All other cases —
-including literal `%` and `_` anywhere in the needle — are handled correctly
-(validated against a substring oracle).
+backslash escapes to `…\\` and, when a `%` follows it in the pattern (every
+PREFIX / CONTAINS / MULTI_CONTAINS needle: `…\\%`), the FSST-LIKE parser's
+end-detection (`pattern[size-2]=='\\'`) mis-reads that `%` as escaped and
+matches such rows wrong; `%…\\` (SUFFIX) is parsed correctly. This is a
+property of the upstream matcher, not our wiring. Since 2026-09-01 `run()`
+refuses such queries up front with return code 13 (`kErrTrailingBackslash`,
+recorded as an errored cell that reports no numbers — the candidate ABI has no
+per-query capability probe) instead of reporting a wrong bitmap; the gate would
+otherwise have caught it. Backslashes are common in dbpedia (315k rows), so a
+generated needle *can* end in one. All other cases — literal `%`, `_` and
+leading/inner backslashes anywhere in the needle, empty needles (`%%`) — are
+handled correctly (validated against a substring oracle, §17.7).
 
 ### 17.4 Per-query cost accounting
 
@@ -1642,13 +1646,82 @@ for fixed input, so ratios are stable across runs.
      match-only is comparable (tpch, url) — consistent with the paper's
      amortization story.
 
+4. **Integration audit of `interp` + all codegen backends (2026-09-01),**
+   branch `fix/fsst-tum-integration-check`: a guard-page + oracle driver over
+   every backend found two out-of-row reads in the upstream kernels and one
+   result-changing consequence in our contiguous row layout; fixed candidate-side
+   by the guarded stream layout of §17.7 (re-validated: gate exit 0 on all four
+   columns × 5 strategies; new regression test
+   `harness/tests/fsst_like_tum_guard.rs` + suite `suites/fsst_like_guard/`).
+
 Dependencies added (FetchContent-pinned): cwida/fsst, calin2110/FSST-LIKE-Matching
 (+ its calin2110/fsst, fmt). LLVM **14–16** is an *optional* build dependency
 (`llvm-14-dev`/`llvm-16-dev` apt, `llvm@16` brew); absent (or ≥17, which removed
 APIs the upstream codegen uses) ⇒ `llvm*` strategies absent, not a build failure.
 The pin needs exactly one LLVM-version compat guard (`toPtr<T>()` is 15+-only),
 applied as a FetchContent `PATCH_COMMAND` — see
-`candidates/fsst_like_tum/cpp/llvm14_compat.cmake`, the sole source deviation
-from upstream. `vectorscan`/`hybrid_string_search` from the FSST-LIKE repo are **not**
+`candidates/fsst_like_tum/cpp/fsst_like_src_patches.cmake` (patch 1; patch 2 is
+a cosmetic `ull`-suffix fix in the generated kernels), the only source
+deviations from upstream. `vectorscan`/`hybrid_string_search` from the FSST-LIKE repo are **not**
 built — those are its own decode baselines, which our `fsst` candidate + the
 harness `decode` composition already cover.
+
+### 17.7 Compressed-stream layout: out-of-row reads in the upstream kernels
+
+*Found 2026-09-01 by a standalone driver (scratch, not part of the harness)
+that compresses a synthetic corpus exactly as `cand_build` does, places every
+compressed row flush against `PROT_NONE` guard pages (row end at the page
+boundary, then row start right after one), sweeps all 256 values of the
+neighbouring byte, and checks every backend against a SEMANTICS.md oracle.*
+
+Upstream's own benchmark reads its compressed file through `mmap`, so its rows
+live in page-padded memory and reads just outside a row are invisible there.
+Against our heap `std::vector` they are not. Measured per backend (max bytes
+read outside the row, all patterns):
+
+| read | backends | bytes | changes the answer? |
+|---|---|---|---|
+| **before** the row (backward/suffix scan parked in a level-0 pseudo-end state at the row start) | interp, cpp, cpp-simd, llvm, llvm-simd | 1 | **yes, iff that byte is `0xFF`** — the scan then treats the row's first code as an escaped literal and returns *no match* (false negative); every other value gives the right answer |
+| **after** the row (LLVM emitter loads `data[strIdx]` before the state switch, so an accept/error state at `strIdx == len` still loads) | llvm, llvm-simd | 1 | no (value unused) |
+| input rows during `fsst_create`/`fsst_compress` (calin fork) | — | 0 | — |
+
+In a contiguous row layout the byte before row *i* is the last byte of row
+*i−1*; a compressed row ends in `0xFF` exactly when its raw last byte is an
+*escaped* `0xFF` (code 255 is the escape marker and never ends a row). The
+harness reproduced the false negative (gate exit 3, every strategy) on a
+corpus where FSST escapes `0xFF` and a `0xFF`-terminated row precedes a
+suffix-matching row — that corpus is now `harness/tests/fsst_like_tum_guard.rs`.
+The four benchmark columns contain no `0xFF` byte at all, so the recorded
+numbers were never affected; row 0 saw heap-header bytes (never `0xFF` in
+practice) and the last row's over-read landed in vector slack.
+
+**Fix (candidate-side, upstream untouched):** `cand_build` copies the rows into
+`[64 zero bytes][row0][sep][row1][sep]…[64 zero bytes]`, where `sep` is one
+`0x00` byte after *every* row iff any compressed row ends in `0xFF`, else
+nothing. Uniform separators keep the single `(rows+1)×8 B` offsets index
+sufficient (`row i = start + coffsets[i] + i·sep`). The extra bytes are
+reported as the `stream_padding` footprint component (128 B on all four
+benchmark columns; `128 + rows` when separators are active) and are excluded
+from `payload_fsst`. The zero padding is also what makes the LLVM over-read and
+the row-0 under-read memory-safe.
+
+**Residual upstream limitations (documented, gate-guarded, not fixed here):**
+- trailing-backslash needles before a `%` — refused with code 13 (§17.3);
+- a SUFFIX match whose first compressed code directly follows an **escaped
+  `0xFF` literal inside the row** is a false negative in every backend: the
+  backward scan's one-byte escape look-back sees the literal `255` and treats
+  the match's first code as escaped. Verified instances: raw `"\xFFe"` /
+  `"q\xFFe"` / `"\xFFthe"` LIKE `'%e'`/`'%the'`, and a needle of only `0xFF`
+  bytes against a row ending in two or more escaped `0xFF` (a `255`-run whose
+  parity the look-back cannot resolve). PREFIX and CONTAINS (forward scans)
+  were not affected in the same probes (`"\xFFhe"` LIKE `'%he%'` matches).
+  Data-dependent, so it cannot be refused per query; it needs raw `0xFF`
+  bytes, absent from all benchmark columns.
+- the LLVM *backward* loop stores `UINT64_MAX` as the level on a transition to
+  error, so had the byte before a row been `0xFF` it would have read a second
+  byte before the row; with the layout above that path is unreachable, and
+  the 64-byte guard would absorb it anyway.
+
+`dict_fsst_like_tum` (`dict+interp`) shares the contiguous layout and the
+interpreted matcher and therefore the same `0xFF`-boundary hazard; it was not
+changed in this pass.

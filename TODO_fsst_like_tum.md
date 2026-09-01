@@ -10,6 +10,19 @@
 > PATCH_COMMAND — see `candidates/fsst_like_tum/cpp/llvm14_compat.cmake`.
 > Validating against LLVM 16 exactly remains open but is not expected to change
 > anything. This file is retained as reference for the wiring/gotchas below.
+> (The compat patch now lives in `candidates/fsst_like_tum/cpp/fsst_like_src_patches.cmake`,
+> not `llvm14_compat.cmake`.)
+
+> **Integration audit (2026-09-01):** all five strategies re-validated on x86-64
+> (gate exit 0, 4 columns). A guard-page driver found that the upstream kernels
+> read one byte outside the row (before: all backends, answer-changing when that
+> byte is 0xFF; after: LLVM only, benign) — fixed by the guard-padded stream
+> layout in the candidate; see DESIGN.md §17.7 and
+> `harness/tests/fsst_like_tum_guard.rs`.
+> **Open follow-up:** `candidates/dict_fsst_like_tum` (`dict+interp`) still
+> uses the unpadded contiguous layout and has the same 0xFF-boundary false
+> negative; port `layout_stream`/`row_ptr` (or move them into
+> `fsst_common`) when that candidate is next touched.
 
 > **Note (post-rename):** this candidate was renamed `fsst_like` → `fsst_like_tum`.
 > Since this TODO was written it was also made **interp-only** — the `decode()`
