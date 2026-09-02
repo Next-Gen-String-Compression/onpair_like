@@ -52,10 +52,11 @@
 // row whenever any compressed row ends in 0xFF), whose padding is reported as
 // the `stream_padding` footprint component (0 separators on all four benchmark
 // columns, which contain no 0xFF byte). dict_fsst_like_tum uses the same helper
-// for the same reason. Not covered, because it is inside the
-// row: a SUFFIX match whose first compressed code directly follows an escaped
-// 0xFF literal (e.g. raw "\xFFe" LIKE '%e') is an upstream false negative —
-// the same one-byte escape look-back — and needs raw 0xFF bytes to occur.
+// for the same reason. Since 2026-09-02 the pinned kernels (fork branch behind
+// upstream PR #1) no longer read before the row and decide escapes by the
+// parity of the 255 run, which also fixed the in-row false negatives (raw
+// "\xFFe" LIKE '%e', "\xFF\xFF\xFFthe" LIKE '%he%'); the layout is kept as belt
+// and braces and for the LLVM after-row load, which is unchanged.
 
 #include "lb_candidate.h"
 

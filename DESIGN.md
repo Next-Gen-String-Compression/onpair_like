@@ -1695,7 +1695,7 @@ The four benchmark columns contain no `0xFF` byte at all, so the recorded
 numbers were never affected; row 0 saw heap-header bytes (never `0xFF` in
 practice) and the last row's over-read landed in vector slack.
 
-**Fix (candidate-side, upstream untouched):** `build()` copies the rows into
+**Layout fix (candidate side):** `build()` copies the rows into
 `[64 zero bytes][row0][sep][row1][sep]…[64 zero bytes]`, where `sep` is one
 `0x00` byte after *every* row iff any compressed row ends in `0xFF`, else
 nothing. Uniform separators keep the single `(rows+1)×8 B` offsets index
@@ -1714,22 +1714,36 @@ keep reading `b.compressed` directly and are unaffected; `fsst_common::Footprint
 sources `payload_fsst` from whichever of the two survives (they are equal by
 construction whenever both exist).
 
-**Residual upstream limitations (documented, gate-guarded, not fixed here):**
+**Kernel fix (2026-09-02, upstream PR):** the root cause is the kernels'
+one-byte escape look-back, and it is fixed at the source in
+<https://github.com/calin2110/FSST-LIKE-Matching/pull/1>; the candidate pins
+that branch (`Hedi-Chehaidar/FSST-LIKE-Matching@09d89812`, two commits on top
+of `b1eb3ab9`) until upstream merges. (1) The backward loop condition of all
+three kernels gains `*strIdx >= 0`, so a level-0 pseudo-end state stops at the
+row start instead of reading `data[-1]`; this alone removes the row-boundary
+dependence above. (2) One byte cannot tell an escape marker from an escaped
+`255` literal; every non-`255` byte ends a token, so the parity of the run of
+`255` bytes before a byte decides whether it is a code (even) or an escaped
+literal (odd). The suffix automaton's pseudo-ends now alternate with an "odd"
+state on `255` instead of failing on the first one, which fixes the **in-row**
+false negative (raw `"x\xFFy"` LIKE `'%y'`, `"\xFFe"` LIKE `'%e'`, a needle of
+only `0xFF` against a `255`-run) on every backend; and the middle-start scan
+loops emitted by the C++ and LLVM code generators, which skipped a candidate
+whenever the byte before it was `255` and re-entered the scan with
+`data[strIdx-1]` as that byte, now track the escape state seeded by the same
+parity walk-back. That fixes the forward twin (`"\xFF\xFF\xFFthe"` LIKE
+`'%he%'`, codegen backends only; the interpreter's forward path already handled
+escapes through its sink state). Verified with the guard-page driver over the
+synthetic corpus and over a corpus that plants the in-row rows in front of the
+fixture's suffix and contains needles: no read before the row and no false
+negative on any backend. The guarded layout stays as belt and braces; the LLVM
+after-row load is unchanged and the zero guard absorbs it.
+
+**Residual upstream limitations (documented, gate-guarded):**
 - trailing-backslash needles before a `%` — refused with code 13 (§17.3);
-- a SUFFIX match whose first compressed code directly follows an **escaped
-  `0xFF` literal inside the row** is a false negative in every backend: the
-  backward scan's one-byte escape look-back sees the literal `255` and treats
-  the match's first code as escaped. Verified instances: raw `"\xFFe"` /
-  `"q\xFFe"` / `"\xFFthe"` LIKE `'%e'`/`'%the'`, and a needle of only `0xFF`
-  bytes against a row ending in two or more escaped `0xFF` (a `255`-run whose
-  parity the look-back cannot resolve). PREFIX and CONTAINS (forward scans)
-  were not affected in the same probes (`"\xFFhe"` LIKE `'%he%'` matches).
-  Data-dependent, so it cannot be refused per query; it needs raw `0xFF`
-  bytes, absent from all benchmark columns.
-- the LLVM *backward* loop stores `UINT64_MAX` as the level on a transition to
-  error, so had the byte before a row been `0xFF` it would have read a second
-  byte before the row; with the layout above that path is unreachable, and
-  the 64-byte guard would absorb it anyway.
+- the LLVM kernels load `data[strIdx]` before the state switch, so a forward
+  scan that reaches an accept/error state at `strIdx == len` reads one byte
+  past the row (value unused); the trailing 64-byte guard absorbs it.
 
 **`dict_fsst_like_tum` (`dict+interp`) was affected too and is fixed** (2026-09-01,
 same guarded layout). It matches over the *deduplicated unique values*, so most

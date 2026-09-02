@@ -22,6 +22,10 @@
 > **Done (2026-09-01):** `candidates/dict_fsst_like_tum` (`dict+interp`) had the
 > same 0xFF-boundary false negative and is fixed by the same layout, now shared
 > as `fsst_common::GuardedStream` and covered by the joint regression test.
+> **Done (2026-09-02):** the root cause (one-byte escape look-back) is fixed in
+> the kernels themselves — upstream PR #1, pinned here via the fork — which also
+> removes the in-row escaped-0xFF false negatives; the regression corpus plants
+> those rows too. See DESIGN.md §17.7.
 
 > **Note (post-rename):** this candidate was renamed `fsst_like` → `fsst_like_tum`.
 > Since this TODO was written it was also made **interp-only** — the `decode()`
@@ -254,7 +258,9 @@ the single-global-symbol invariant either way.)
 
 ## Pinned upstream commits
 
-- FSST-LIKE-Matching: `b1eb3ab9c63ea0199a381b92371a3154190b4406`
+- FSST-LIKE-Matching: `09d89812da16703bc8b0bd10842581f11b1927e3` on the fork
+  `Hedi-Chehaidar/FSST-LIKE-Matching` (= upstream `b1eb3ab9` + the two commits of
+  upstream PR #1, the escape look-back fixes; re-pin to `calin2110` once merged)
 - calin2110/fsst: `1755328b61f4e48ab7f53b315bbb20e8130059f2`
 - fmt: tag `12.1.0`
 
