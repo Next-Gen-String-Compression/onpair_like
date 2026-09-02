@@ -1,0 +1,76 @@
+From a32460668fb0cf75afa75314a8dde7b1ba5b6f1e Mon Sep 17 00:00:00 2001
+From: Hedi Chehaidar <go69zan@mytum.de>
+Date: Wed, 2 Sep 2026 15:04:09 +0200
+Subject: [PATCH 1/2] fix: stop the backward scan at the row start instead of
+ reading data[-1]
+
+The backward (suffix) scan loop in all three matchers - the interpreted
+AutomatonTable::parse<false>, the C++ code generator and the LLVM code
+generator - is guarded only by `*strIdx + 1 >= level`. A level-0
+pseudo-end state therefore keeps iterating at strIdx == -1 and reads
+data[-1], the byte before the row.
+
+That read is not just out of bounds, it decides the answer. The pseudo-end
+state exists to check whether the match's first code is preceded by the
+escape marker 255. Rows are stored back to back (file::dumpBinary), so when
+the previous row ends in an escaped 0xFF byte the scan sees 255, treats the
+first code of the match as an escaped literal and reports no match: a false
+negative that depends on the neighbouring row.
+
+Add `*strIdx >= 0` to the loop condition in all three backends. At the row
+start the loop now exits and the existing pseudo-accept path takes over,
+which is what the reference oracle in test/EndPatternMatchingTest.cpp
+already does (`while (backwardsStrIdx >= 0 && ...)`).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_012UNVjhRTq8o6SzRbpdJkJW
+---
+ include/like_pattern_automaton.hpp | 2 +-
+ src/codegen/cppcodegen.cpp         | 2 +-
+ src/codegen/llvmcodegen.cpp        | 4 +++-
+ 3 files changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/include/like_pattern_automaton.hpp b/include/like_pattern_automaton.hpp
+index 3cecced..ee745cd 100644
+--- a/include/like_pattern_automaton.hpp
++++ b/include/like_pattern_automaton.hpp
+@@ -99,7 +99,7 @@ namespace automata::parsing {
+                         return false;
+                     *strIdx = len - fix.size() - 1;
+                 }
+-                while (currentState < error && (Forwards ? *strIdx + levels[currentState] <= len :*strIdx + 1 >= levels[currentState])) {
++                while (currentState < error && (Forwards ? *strIdx + levels[currentState] <= len : *strIdx >= 0 && *strIdx + 1 >= levels[currentState])) {
+                     if (Forwards) {
+                         if (currentState < N) {
+                             size_t level = levels[currentState];
+diff --git a/src/codegen/cppcodegen.cpp b/src/codegen/cppcodegen.cpp
+index 5e6da84..7987c0a 100644
+--- a/src/codegen/cppcodegen.cpp
++++ b/src/codegen/cppcodegen.cpp
+@@ -170,7 +170,7 @@ void automata::codegen::cpp::CppCompiler::generateBackwards(const std::optional<
+     generateSuffixCheck(params->deterministicPath.data() + params->deterministicPath.size(), params->deterministicPath.size(), 0);
+     ss << fmt::format("\tauto q = {};\n", getEnumStateName(params->start, direction));
+     ss << fmt::format("\tuint64_t level = {};\n", params->start->level);
+-    std::string condition = "*strIdx + 1 >= level";
++    std::string condition = "*strIdx >= 0 && *strIdx + 1 >= level";
+     ss << fmt::format("\twhile ({}) {{\n", condition);
+     ss << fmt::format("\t\tswitch(q) {{\n");
+ 
+diff --git a/src/codegen/llvmcodegen.cpp b/src/codegen/llvmcodegen.cpp
+index f297c13..e3eb7f3 100644
+--- a/src/codegen/llvmcodegen.cpp
++++ b/src/codegen/llvmcodegen.cpp
+@@ -272,7 +272,9 @@ void automata::codegen::llvmir::LLVMCompiler::generateBackwards(const std::optio
+     llvm::Value* lvlVal = builder.CreateLoad(i64Ty, lvlPtr, fmt::format("{}.level", type));
+     llvm::Value* constAdd = llvm::ConstantInt::get(i64Ty, 1);
+     llvm::Value* currentSum = builder.CreateAdd(strIdxVal, constAdd, fmt::format("{}.summed", type));
+-    llvm::Value* cond = builder.CreateICmpSGE(currentSum, lvlVal, fmt::format("{}.cmp", type));
++    llvm::Value* inRow = builder.CreateICmpSGE(strIdxVal, llvm::ConstantInt::get(i64Ty, 0), fmt::format("{}.inRow", type));
++    llvm::Value* levelOk = builder.CreateICmpSGE(currentSum, lvlVal, fmt::format("{}.levelOk", type));
++    llvm::Value* cond = builder.CreateAnd(inRow, levelOk, fmt::format("{}.cmp", type));
+     builder.CreateCondBr(cond, loopBodyBB, loopEndBB);
+ 
+     builder.SetInsertPoint(loopBodyBB);
+-- 
+2.34.1
+

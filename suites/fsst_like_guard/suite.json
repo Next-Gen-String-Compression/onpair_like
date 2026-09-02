@@ -1,0 +1,11 @@
+{
+  "format_version": 1,
+  "id": "fsst_like_guard",
+  "description": "fsst_like_tum regression fixture: rows ending in 0xFF followed by suffix-matching rows (compressed-row boundary under-read), SEMANTICS.md empty-needle edge cases, and backslash needles that do not end in a backslash.",
+  "dataset": {
+    "id": "fsst_like_guard"
+  },
+  "provenance": {
+    "curated_by": "fsst_like_tum integration check 2026-09-01"
+  }
+}

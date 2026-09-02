@@ -1,0 +1,142 @@
+# Full-roster head-to-head on ONE column (msmarco-query), contains-only.
+#
+# WHY THIS EXISTS. Before this spec, msmarco-query was benchmarked six ways and
+# none of them saw the whole roster:
+#
+#   specs/compression/codecs.toml            compression axis, `decode` only
+#   specs/compression/fsst_like_query.toml   fsst_like_tum's 5 backends + onpair + fsst
+#   specs/compression/onpair_spiral_query.toml  onpair_spiral kmp/pf_* + onpair
+#   specs/shootout/candidates.toml           the head-to-head — but `interp` ONLY,
+#                                            so fsst_like_tum's four CODEGEN
+#                                            backends never raced anything
+#   specs/shootout/tier1.toml, probe-msmarco.toml  16 scanners over uncompressed
+#   specs/paper/msmarco-query.toml           uncompressed_memmem + onpair, big suite
+#
+# and NO msmarco spec ever included a prefilter or dict-wrapped candidate — that
+# whole family (fsst-prefilter, decode+prefilter, dict+*, llm-token-prefilter,
+# comet) existed only on clickbench, in specs/paper/clickbench-url-1m-contains.toml.
+# This spec is that clickbench roster UNIONed with everything above, retargeted
+# at msmarco-query (short rows, ~36 B — the regime where the offset tax and the
+# per-query setup cost hurt most) over the lean 11-query contains suite.
+#
+# READ THE OUTPUT AS headline vs setup, NOT headline alone. Every run() call
+# rebuilds the query automaton/pattern (no memoization, SEMANTICS.md rule 1);
+# for fsst_like_tum's `cpp`/`cpp-simd` that is a full `clang++ -shared` per
+# call — ~400 ms, self-reported as setup_ns and INCLUDED in the headline.
+# Match-only = headline - setup_ns is what compares against the other
+# candidates; the headline is the honest cost of one cold query. Expect cpp* to
+# look ~16x slower than interp on the headline and comparable on match-only.
+#
+# RUN ON AN IDLE MACHINE. `cpp`/`cpp-simd` fork an external clang++, so they are
+# the only strategies whose numbers move with unrelated CPU load — measured 3x
+# inflation (0.43 s -> 1.3 s per compile) with background IntelliSense servers
+# running, while every in-process strategy moved <10%. Check `uptime` first.
+#
+# Single-shot (min_iters = 1), as specs/compression/*: decode strategies re-run
+# the whole payload decompression per query and cpp* recompile per call, so
+# extra samples multiply wall clock without sharpening the ranking. Raise
+# warmup/min_iters if you want the match-only spread of the cheap strategies.
+#
+# This key MUST sit above the [[...]] arrays: a bare key after an array-of-tables
+# binds to its last table, not the top-level spec (cf. specs/compression/codecs.toml).
+strategies = [
+  # --- uncompressed baselines -------------------------------------------------
+  "direct",                    # zero-copy view + scanner: the ceiling
+  "memmem", "memmem-hay",      # uncompressed_memmem's own candidate-side scans
+  "prefilter", "dict+prefilter",
+  # --- FSST family ------------------------------------------------------------
+  "decode",                    # decompress-then-scan (every decode-only codec)
+  "interp", "cpp", "cpp-simd", "llvm", "llvm-simd",  # fsst_like_tum, DaMoN'26
+  "dict+interp",
+  "fsst-prefilter", "dict+fsst-prefilter",
+  "decode+prefilter", "dict+decode+prefilter",
+  "comet",                     # fsst_like_utn (UTN)
+  # --- OnPair family ----------------------------------------------------------
+  "compressed", "dict+compressed",
+  "kmp", "pf_kmp", "pf_memmem", "dict+pf_kmp",       # onpair_spiral token-KMP ± prefilter
+  # --- LLM-token family -------------------------------------------------------
+  "llm-token-prefilter", "dict+llm-token-prefilter",
+]
+
+[measure]
+chunk_rows = [0]
+warmup = 0
+min_iters = 1
+min_millis = 0
+
+[[datasets]]
+path = "../../datasets/msmarco-query"
+
+[[suites]]
+path = "../../suites/compression/msmarco-query"
+
+# ---- uncompressed reference points -------------------------------------------
+[[candidates]]
+name = "uncompressed"
+[[candidates]]
+name = "uncompressed_memmem"
+[[candidates]]
+name = "uncompressed_prefilter"
+[[candidates]]
+name = "dict_uncompressed_prefilter"
+[[candidates]]
+name = "cpp_identity"          # memcpy "decode": the decode-path floor
+
+# ---- FSST family -------------------------------------------------------------
+[[candidates]]
+name = "fsst"                  # cwida upstream, decode-then-scan
+[[candidates]]
+name = "fsst_like_tum"         # DaMoN'26 compressed-domain automaton, all 5 backends
+[[candidates]]
+name = "dict_fsst_like_tum"
+[[candidates]]
+name = "fsst_like_utn"         # UTN "Comet"
+[[candidates]]
+name = "fsst_prefilter"
+[[candidates]]
+name = "dict_fsst_prefilter"
+[[candidates]]
+name = "fsst_decode_prefilter"
+[[candidates]]
+name = "dict_fsst_decode_prefilter"
+
+# ---- OnPair family -----------------------------------------------------------
+[[candidates]]
+name = "onpair"
+configs = ['{"bits":12}', '{"bits":16}']
+[[candidates]]
+name = "onpair_decode"         # OnPair as a plain block codec
+configs = ['{"bits":12}', '{"bits":16}']
+[[candidates]]
+name = "dict_onpair"
+[[candidates]]
+name = "onpair_spiral"         # SpiralDB Rust OnPair: token-KMP ± SIMD prefilter
+configs = ['{"bits":12}', '{"bits":16}']
+[[candidates]]
+name = "onpair_spiral_decode"
+[[candidates]]
+name = "dict_onpair_spiral"
+
+# ---- LLM-token family --------------------------------------------------------
+[[candidates]]
+name = "llm_token_tum"         # SGTT codec (decode-only)
+[[candidates]]
+name = "llm_token_prefilter"
+[[candidates]]
+name = "dict_llm_token_prefilter"
+
+# ---- general block codecs ----------------------------------------------------
+[[candidates]]
+name = "lz4"
+[[candidates]]
+name = "zstd"
+configs = ['{"level":3}', '{"level":19}']
+
+# One scanner: the harness composes it over every decode() output, so adding
+# more multiplies the decode passes. `kmp` is here as the classic-algorithm
+# counterpart to memmem's SIMD search — the scanner-side "kmp solution",
+# distinct from onpair_spiral's compressed-domain `kmp` STRATEGY above.
+[[scanners]]
+name = "memmem"
+[[scanners]]
+name = "kmp"
