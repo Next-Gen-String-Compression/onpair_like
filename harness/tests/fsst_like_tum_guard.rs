@@ -17,8 +17,10 @@
 //!
 //! The corpus is generated in-process (a portable LCG, no fixture file): FSST
 //! trains on a ~16 KB line sample, so 0xFF is only escaped — the precondition
-//! for the hazard — when the few rows carrying it are not sampled. Seed 1 over
-//! 3000 short rows is a verified such corpus; the test asserts the precondition
+//! for the hazard — when the few rows carrying it are not sampled, for BOTH
+//! candidates (the dict trains on the deduplicated values). Seed 3 over 8000
+//! short rows is a verified such corpus (seed 1 sampled a 0xFF in the dict's
+//! unique values); the test asserts the precondition
 //! through the candidate's own `stream_padding` footprint (separators active).
 
 use std::path::{Path, PathBuf};
@@ -29,8 +31,10 @@ use lb_harness::runner;
 use lb_harness::spec::LoadedSpec;
 use lb_harness::suite;
 
-const SEED: u64 = 1;
-const SHORT_ROWS: usize = 3000;
+const SEED: u64 = 3;
+// 8000, not 3000: with the in-row 0xFF rows below, less filler lets FSST's line
+// sample pick up a 0xFF and stop escaping it, which defeats the whole corpus.
+const SHORT_ROWS: usize = 8000;
 const GUARD_PAD: u64 = 64; // mirrors kGuardPad in the candidate
 const STRATEGIES: &[&str] = &[
     "interp", "cpp", "cpp-simd", "llvm", "llvm-simd", // fsst_like_tum
@@ -106,6 +110,10 @@ fn corpus() -> Vec<Vec<u8>> {
         b"back\\slash".to_vec(), b"trailing\\".to_vec(), b"\\".to_vec(),
         b"50% off_now\\here".to_vec(), b"a\\%b".to_vec(),
         rng.long_row(b"\xff"),                       // 0xFF-terminated last row
+        // Escaped 0xFF INSIDE the row, directly before a suffix/contains match:
+        // runs of 1, 2 and 3 raw 0xFF (2, 4 and 6 escape bytes), which the
+        // kernels' one-byte look-back got wrong until upstream PR #1 (§17.7).
+        b"\xffe".to_vec(), b"q\xffe".to_vec(), b"\xff\xffe".to_vec(), b"\xff\xff\xffthe".to_vec(),
     ];
     rows.extend(specials);
     rows

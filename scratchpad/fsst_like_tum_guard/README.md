@@ -19,5 +19,6 @@ corpus of `harness/tests/fsst_like_tum_guard.rs` (same LCG, byte-identical);
 `./guard_test --rows out.bin` runs the suffix queries over it, and
 `--probe-only` just reports whether FSST escaped `0xFF` (the precondition for
 the row-boundary hazard). Expected residual non-clean cells with the current
-upstream pin: the `*_bs` trailing-backslash patterns (refused by the candidate)
-and `suffix_ff*` on rows ending in ≥2 escaped `0xFF`.
+pin (fork branch of upstream PR #1, see `upstream_fix/`): the `*_bs`
+trailing-backslash patterns (refused by the candidate) and the benign LLVM
+one-byte over-read after the row.

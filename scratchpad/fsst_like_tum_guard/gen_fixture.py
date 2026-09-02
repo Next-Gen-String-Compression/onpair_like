@@ -26,7 +26,8 @@ def rows_for(seed, n_short):
     rows += [long_row(b"\xff"), b"the", long_row(b"abc\xff"), b"cat", long_row(b"\xffz\xff"), b"goose",
              long_row(b"x\xffy"), b"mouse", b"", b"the", long_row(b"\xff"), b"e", long_row(b"\xff"), b"",
              long_row(b"the\xff"), b"the", long_row(b""), b"the",
-             b"back\\slash", b"trailing\\", b"\\", b"50% off_now\\here", b"a\\%b", long_row(b"\xff")]
+             b"back\\slash", b"trailing\\", b"\\", b"50% off_now\\here", b"a\\%b", long_row(b"\xff"),
+             b"\xffe", b"q\xffe", b"\xff\xffe", b"\xff\xff\xffthe"]  # in-row escaped 0xFF before a match
     return rows
 def write_csv(rows, path):
     with open(path, "wb") as f:
