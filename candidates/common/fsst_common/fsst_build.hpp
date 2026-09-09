@@ -117,6 +117,86 @@ static void ReleaseDecodedOffsets(FsstBuilt& b) {
   std::vector<uint64_t>().swap(b.offsets);
 }
 
+// ---------------------------------------------------------------- guarded rows
+//
+// The FSST-LIKE matcher's kernels read ONE byte outside the row they are handed
+// (DESIGN.md §17.7): the backward/suffix scan reads the byte BEFORE the row, and
+// the LLVM kernels the byte AFTER it. The byte after never changes the answer;
+// the byte before does — a 0xFF there makes the scan treat the row's first code
+// as an escaped literal, a false negative. In a plain concatenation that byte is
+// the previous row's last byte, and a compressed row ends in 0xFF exactly when
+// its final raw byte was an escaped 0xFF (code 255 is the escape marker and can
+// never itself end a row).
+//
+// So every candidate that MATCHES IN PLACE lays its rows out as
+//   [kGuardPad zeros][row 0][sep][row 1][sep]...[row n-1][sep][kGuardPad zeros]
+// where `sep` is one 0x00 byte after EVERY row iff any compressed row ends in
+// 0xFF, and nothing otherwise. Uniform separators keep the single (n+1)-entry
+// `coffsets` index sufficient. Candidates that only bulk-decode do not need any
+// of this and keep using `b.compressed` directly.
+constexpr uint64_t kGuardPad = 64;
+constexpr uint8_t  kEscapeCode = 255;
+
+// The padded byte stream, plus the FsstBuilt whose `coffsets` index it is
+// addressed through. `src` must outlive the stream and must not be rebuilt.
+struct GuardedStream {
+  std::vector<uint8_t> bytes;
+  const FsstBuilt* src = nullptr;
+  uint8_t sep = 0;  // 1 => one 0x00 separator after every row
+
+  GuardedStream() = default;
+  // Non-copyable and non-movable on purpose: `src` points at the FsstBuilt this
+  // stream was laid out from (both are members of the same candidate handle), so
+  // relocating either would dangle it. Deleting these makes the compiler enforce
+  // that the owning handle is never moved.
+  GuardedStream(const GuardedStream&) = delete;
+  GuardedStream& operator=(const GuardedStream&) = delete;
+
+  uint64_t row_start(uint64_t i) const {
+    return kGuardPad + src->coffsets[i] + i * sep;
+  }
+  const uint8_t* row(uint64_t i) const { return bytes.data() + row_start(i); }
+  size_t row_len(uint64_t i) const {
+    return size_t(src->coffsets[i + 1] - src->coffsets[i]);
+  }
+  // Guard blocks + separators: the cost of the layout, reported separately so it
+  // is never mistaken for payload.
+  uint64_t padding_bytes() const {
+    return 2 * kGuardPad + src->num_rows * sep;
+  }
+};
+
+// One pass over the compressed rows: fills the escaped-byte bitmap the matcher's
+// isEscapable() reads, and returns whether any row's last byte is 0xFF (which
+// decides the separator layout). FSST emits an escape and its literal within one
+// row, so p[j + 1] is always in range.
+static bool ScanEscapes(const FsstBuilt& b, bool (&bitmap)[256]) {
+  bool any_row_ends_in_escape_code = false;
+  for (uint64_t i = 0; i < b.num_rows; i++) {
+    const uint8_t* p = b.compressed.data() + b.coffsets[i];
+    const size_t len = size_t(b.coffsets[i + 1] - b.coffsets[i]);
+    if (len > 0 && p[len - 1] == kEscapeCode) any_row_ends_in_escape_code = true;
+    for (size_t j = 0; j < len; j++) {
+      if (p[j] == kEscapeCode) bitmap[p[++j]] = true;
+    }
+  }
+  return any_row_ends_in_escape_code;
+}
+
+// Copy `b`'s concatenated rows into the guarded layout and release `b.compressed`
+// (the stream supersedes it; `b.coffsets` stays the single row index).
+static void LayoutGuardedStream(FsstBuilt& b, GuardedStream& out,
+                                bool any_row_ends_in_escape_code) {
+  out.src = &b;
+  out.sep = any_row_ends_in_escape_code ? 1 : 0;
+  out.bytes.assign(b.coffsets[b.num_rows] + out.padding_bytes(), 0);
+  for (uint64_t i = 0; i < b.num_rows; i++) {
+    std::memcpy(out.bytes.data() + out.row_start(i),
+                b.compressed.data() + b.coffsets[i], out.row_len(i));
+  }
+  std::vector<uint8_t>().swap(b.compressed);
+}
+
 // The three common footprint components every FSST-family candidate reports.
 // `offsets` charges exactly one (num_rows+1)*u64 row index: decoded offsets for
 // bulk decode, compressed offsets for match-in-place. A kernel may physically
@@ -124,8 +204,14 @@ static void ReleaseDecodedOffsets(FsstBuilt& b) {
 // policy continues to charge u64 uniformly (DESIGN.md §17.2).
 static uint32_t Footprint(const FsstBuilt& b, lb_footprint_component* out,
                           uint32_t capacity) {
+  // A match-in-place candidate has moved its rows into a GuardedStream and
+  // released `compressed`; its payload is the row index's total. The two are
+  // equal whenever both exist (Build sizes `compressed` from `coffsets`), so
+  // this reports the same number either way.
+  const uint64_t payload_fsst =
+      b.coffsets.empty() ? b.compressed.size() : b.coffsets[b.num_rows];
   const lb_footprint_component components[] = {
-      {"payload_fsst", b.compressed.size()},
+      {"payload_fsst", payload_fsst},
       {"symbol_table", b.symtab.size()},
       {"offsets", (b.num_rows + 1) * sizeof(uint64_t)},
   };

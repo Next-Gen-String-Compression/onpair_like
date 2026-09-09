@@ -25,12 +25,17 @@ FetchContent_Declare(fsst_fork
     GIT_REPOSITORY https://github.com/calin2110/fsst.git
     GIT_TAG        1755328b61f4e48ab7f53b315bbb20e8130059f2
     SOURCE_SUBDIR  __lb_no_configure__)
+# Pinned to the fork branch behind upstream PR
+# https://github.com/calin2110/FSST-LIKE-Matching/pull/1: upstream main
+# (b1eb3ab9) plus two commits fixing the escape look-back of the kernels
+# (row-start under-read and the 255-run parity, DESIGN.md §17.7). Move the pin
+# back to calin2110 once that PR is merged.
 # PATCH_COMMAND: two small source deviations from the pin — see
 # fsst_like_src_patches.cmake (LLVM 14 compat + a cosmetic codegen-kernel
 # warning fix); a no-op for anything neither patch touches.
 FetchContent_Declare(fsst_like_src
-    GIT_REPOSITORY https://github.com/calin2110/FSST-LIKE-Matching.git
-    GIT_TAG        b1eb3ab9c63ea0199a381b92371a3154190b4406
+    GIT_REPOSITORY https://github.com/Hedi-Chehaidar/FSST-LIKE-Matching.git
+    GIT_TAG        09d89812da16703bc8b0bd10842581f11b1927e3
     PATCH_COMMAND  ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/fsst_like_src_patches.cmake
     SOURCE_SUBDIR  __lb_no_configure__)
 FetchContent_MakeAvailable(fmt_ext fsst_fork fsst_like_src)
