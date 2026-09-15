@@ -6,10 +6,10 @@ Data and figures for the kernel section of the substring-search preprint
 | step | command | output |
 | --- | --- | --- |
 | stage one, stage two sweeps | `paper/gen-kernel-data.sh` | `paper/data/{matcher,resolver}_<arch>_<date>.csv` |
-| stage one sweep of the FSST port | `paper/gen-kernel-data-fsst.sh` | `paper/data/matcher_fsst_<arch>_<date>.csv` |
+| stage one and two sweeps of the FSST port | `paper/gen-kernel-data-fsst.sh` | `paper/data/{matcher,resolver}_fsst_<arch>_<date>.csv` |
 | walk on/off end to end | `paper/gen-e2e-data.sh` | a run in `results/bench.duckdb` |
 | figures | `uv run paper/plot_matcher.py`, `plot_resolver.py`, `plot_verify.py --run <name>` | `assets/kernel-{matcher,resolver,verify-rows,verify-e2e}.pdf` in the preprint |
-| FSST figures | `uv run paper/plot_matcher.py --encoding fsst` | `assets/kernel-matcher-fsst/` in the preprint |
+| FSST figures | `uv run paper/plot_matcher.py --encoding fsst`, `plot_resolver.py --data paper/data/resolver_fsst_<arch>_<date>.csv --name kernel-resolver-fsst` | `assets/kernel-matcher-fsst/`, `assets/kernel-resolver-fsst.pdf` in the preprint |
 | micro-benchmark | `./target/release/bench run paper/specs/micro.toml -o results/paper/micro-<date>`, then `uv run paper/plot_micro.py --run micro-<date>` | `assets/micro-{needle,rowgroup}.pdf` |
 
 The plot scripts read every CSV in `data/` unless given `--data`, and write
