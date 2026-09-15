@@ -19,8 +19,9 @@
 // The walk is exact, so there is no verify phase to time apart from the scan:
 // instrumented mode reports setup_ns (planning), scan_ns (the scan with the
 // walk inline) and prefilter_candidates (rows the mask named, before the walk).
-// The kernels are NEON on aarch64 and AVX-512BW on x86-64; the candidate
-// declares whichever it was built with and the harness gates on the host.
+// The kernels are NEON on aarch64 and AVX-512BW or AVX2 on x86-64, chosen by
+// -march=native at build time; the candidate declares the set it was built
+// with and the harness gates on the host.
 
 #include "lb_candidate.h"
 
@@ -43,22 +44,6 @@ namespace {
 
 namespace pf = fsst::search::prefilter;
 
-// The walk as stage two's check, counting the rows it was asked about. Only
-// instantiated in instrumented mode; timing mode runs the plain WalkCheck.
-struct CountingWalk {
-  pf::scan::WalkCheck inner;
-  mutable uint64_t rows = 0;
-  mutable size_t last_row = SIZE_MAX;
-
-  bool passes(size_t hit, size_t row_start, size_t row_end) const {
-    if (row_start != last_row) {
-      last_row = row_start;
-      ++rows;
-    }
-    return inner.passes(hit, row_start, row_end);
-  }
-};
-
 class FsstPrefilter final : public lb::Matcher {
  public:
   bool build(const uint8_t* bytes, const uint64_t* offsets, uint64_t n, char* eb,
@@ -74,7 +59,10 @@ class FsstPrefilter final : public lb::Matcher {
     }
     fsst_destroy(b_.enc);
     b_.enc = nullptr;
-    dict_ = pf::Dictionary::from(decoder.symbol, decoder.len, pf::symbol_count(b_.symtab.data()));
+    // `symbol` is `unsigned long long`, which is `uint64_t` on macOS but not on
+    // LP64, where the two are distinct types of the same width.
+    dict_ = pf::Dictionary::from(reinterpret_cast<const uint64_t*>(decoder.symbol), decoder.len,
+                                 pf::symbol_count(b_.symtab.data()));
 
     // The scan indexes one contiguous code stream with 32-bit row offsets, so
     // the u64 compressed-row offsets are narrowed once here and released.
@@ -121,7 +109,7 @@ class FsstPrefilter final : public lb::Matcher {
       const auto t_scan = timed ? clk::now() : clk::time_point{};
       rows_.clear();
       if (timed) {
-        CountingWalk check{{a.walk, dict_, codes}};
+        pf::scan::CountingWalkCheck check{{a.walk, dict_, codes}};
         pf::scan::execute(a.cover, codes, len, coff32_.data(), coff32_.size(), a.covered_frequency,
                           a.total_frequency, check, rows_);
         candidates += check.rows;
@@ -180,19 +168,21 @@ const uint32_t kOps = LB_OP_BIT(LB_CONTAINS) | LB_OP_BIT(LB_CONTAINS_ANY);
 
 #if defined(__ARM_NEON)
 const char* const kCpuFeatures = "neon";
-#else
+#elif defined(__AVX512BW__)
 const char* const kCpuFeatures = "avx512f,avx512bw";
+#else
+const char* const kCpuFeatures = "avx2";
 #endif
 
 const lb_strategy kPlainStrats[] = {{"fsst-prefilter", kOps}};
 const lb_candidate kPlainVtable = {
-    LB_ABI_VERSION, "fsst_prefilter", "0.3.0+abb24db", kCpuFeatures,
+    LB_ABI_VERSION, "fsst_prefilter", "0.3.0+1db200f", kCpuFeatures,
     kPlainStrats, 1, build_plain, lb::adapter_footprint, lb::adapter_run,
     nullptr, nullptr, lb::adapter_destroy};
 
 const lb_strategy kDictStrats[] = {{"dict+fsst-prefilter", kOps}};
 const lb_candidate kDictVtable = {
-    LB_ABI_VERSION, "dict_fsst_prefilter", "0.3.0+abb24db", kCpuFeatures,
+    LB_ABI_VERSION, "dict_fsst_prefilter", "0.3.0+1db200f", kCpuFeatures,
     kDictStrats, 1, build_dict, lb::adapter_footprint, lb::adapter_run,
     nullptr, nullptr, lb::adapter_destroy};
 

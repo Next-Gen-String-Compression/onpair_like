@@ -18,20 +18,16 @@ endif()
 FetchContent_Declare(
     fsst_fork
     GIT_REPOSITORY https://github.com/gropaul/fsst.git
-    GIT_TAG        abb24db31b02ef242946f974ead2ce401733578c
+    GIT_TAG        1db200f102f4fc3716afaf0dc9325747a25d3b21
     SOURCE_SUBDIR  __lb_no_configure__
 )
 FetchContent_MakeAvailable(fsst_fork)
 
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-march=native" LB_FSST_MARCH_NATIVE)
-# The prefilter kernels are AVX-512BW on x86-64, compiled in regardless of the
-# build host; the candidate declares avx512f,avx512bw and the harness gates.
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
-    set(LB_FSST_ISA_FLAGS -mavx512f -mavx512bw)
-else()
-    set(LB_FSST_ISA_FLAGS "")
-endif()
+# The prefilter kernels are NEON, AVX-512BW or AVX2 by what -march=native
+# defines on the build host, which is the machine that runs the result; the
+# candidate declares that set in cpu_features.
 
 add_library(fp_objs OBJECT
     fsst_prefilter_candidate.cpp
@@ -48,7 +44,7 @@ target_include_directories(fp_objs PRIVATE
 set_target_properties(fp_objs PROPERTIES
     CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON POSITION_INDEPENDENT_CODE ON)
 target_compile_options(fp_objs PRIVATE
-    -O3 "$<$<BOOL:${LB_FSST_MARCH_NATIVE}>:-march=native>" ${LB_FSST_ISA_FLAGS} -fvisibility=hidden)
+    -O3 "$<$<BOOL:${LB_FSST_MARCH_NATIVE}>:-march=native>" -fvisibility=hidden)
 set_source_files_properties(${fsst_fork_SOURCE_DIR}/fsst_avx512.cpp
     PROPERTIES COMPILE_FLAGS "-O1")
 
