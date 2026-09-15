@@ -19,7 +19,8 @@
 // The walk is exact, so there is no verify phase to time apart from the scan:
 // instrumented mode reports setup_ns (planning), scan_ns (the scan with the
 // walk inline) and prefilter_candidates (rows the mask named, before the walk).
-// NEON only until the AVX2 kernels exist.
+// The kernels are NEON on aarch64 and AVX-512BW on x86-64; the candidate
+// declares whichever it was built with and the harness gates on the host.
 
 #include "lb_candidate.h"
 
@@ -177,15 +178,21 @@ void* build_dict(const lb_chunk_view* view, const char*, char* eb, uint64_t ec) 
 
 const uint32_t kOps = LB_OP_BIT(LB_CONTAINS) | LB_OP_BIT(LB_CONTAINS_ANY);
 
+#if defined(__ARM_NEON)
+const char* const kCpuFeatures = "neon";
+#else
+const char* const kCpuFeatures = "avx512f,avx512bw";
+#endif
+
 const lb_strategy kPlainStrats[] = {{"fsst-prefilter", kOps}};
 const lb_candidate kPlainVtable = {
-    LB_ABI_VERSION, "fsst_prefilter", "0.3.0+e0ec68b", "neon",
+    LB_ABI_VERSION, "fsst_prefilter", "0.3.0+abb24db", kCpuFeatures,
     kPlainStrats, 1, build_plain, lb::adapter_footprint, lb::adapter_run,
     nullptr, nullptr, lb::adapter_destroy};
 
 const lb_strategy kDictStrats[] = {{"dict+fsst-prefilter", kOps}};
 const lb_candidate kDictVtable = {
-    LB_ABI_VERSION, "dict_fsst_prefilter", "0.3.0+e0ec68b", "neon",
+    LB_ABI_VERSION, "dict_fsst_prefilter", "0.3.0+abb24db", kCpuFeatures,
     kDictStrats, 1, build_dict, lb::adapter_footprint, lb::adapter_run,
     nullptr, nullptr, lb::adapter_destroy};
 
