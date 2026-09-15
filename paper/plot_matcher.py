@@ -13,8 +13,9 @@ gen-kernel-data-fsst.sh. The instruction set of a row is read off its
 `machine` column. An instruction set with no rows gets the fitted cost model
 drawn dashed as a placeholder, so the panel is laid out before the sweep
 exists. One encoding is drawn per run: onpair16 (u16 codes, two bytes each)
-into kernel-matcher/, fsst (u8 codes) into kernel-matcher-fsst/, which also
-has the universal nibble bitmap the u16 build dropped.
+into kernel-matcher/, fsst (u8 codes) into kernel-matcher-fsst/, which has the
+universal nibble bitmap the u16 build dropped and no byte table, since the
+bitmap takes every cover the table would.
 """
 
 import argparse
@@ -48,10 +49,10 @@ MODEL = {
     },
     "fsst": {
         "NEON": {"eq_or": (0.0041, 0.0070, 0.0119), "nibble_n_8k": (0.0243, 0.0, 0.0115),
-                 "nibble": (0.0386, 0.0, 0.0), "range": (0.0032, 0.0, 0.0111), "table": (0.208, 0.0, 0.0)},
-        "AVX2": {"eq_or": (0.0124, 0.0052, 0.0104), "range": (0.0065, 0.0, 0.0104), "table": (0.208, 0.0, 0.0)},
+                 "nibble": (0.0386, 0.0, 0.0), "range": (0.0032, 0.0, 0.0111)},
+        "AVX2": {"eq_or": (0.0124, 0.0052, 0.0104), "range": (0.0065, 0.0, 0.0104)},
         "AVX-512": {"eq_or": (0.0086, 0.0041, 0.0078), "nibble_n_8k": (0.0157, 0.0, 0.0075),
-                    "range": (0.0050, 0.0, 0.0075), "table": (0.208, 0.0, 0.0)},
+                    "range": (0.0050, 0.0, 0.0075)},
     },
 }
 MAX_BATCHES = {"onpair16": {"NEON": 3, "AVX2": 2, "AVX-512": 3}, "fsst": {"NEON": 1, "AVX2": 1, "AVX-512": 1}}
