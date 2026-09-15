@@ -57,8 +57,9 @@ pub fn candidates() -> Vec<Candidate> {
     v.push(lb_cand_zstd::vtable());
     #[cfg(feature = "cand-fsst")]
     v.push(lb_cand_fsst::vtable());
-    // FSST's symbol table, planned over by OnPair's min-cut prefilter — distinct
-    // from `fsst` (decode-then-eval) and `fsst_prefilter` (C++ chain matcher).
+    // FSST's symbol table, planned over by OnPair's Rust min-cut prefilter — distinct
+    // from `fsst` (decode-then-eval) and `fsst_prefilter` (the C++ port of that
+    // planner and walk inside the gropaul/fsst fork).
     #[cfg(feature = "cand-fsst-rs")]
     v.push(lb_cand_fsst_rs::vtable());
     #[cfg(feature = "cand-fsst-like-tum")]

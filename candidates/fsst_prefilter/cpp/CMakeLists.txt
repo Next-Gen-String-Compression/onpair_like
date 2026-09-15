@@ -1,55 +1,48 @@
-# Author-owned build for fsst_prefilter + dict_fsst_prefilter: cwida/fsst
-# upstream (the `fsst` candidate's fork) + the Matcher core + the vendored flat
-# SIMD prefilter kernels + the mandatory-chain port. A SECOND/THIRD cwida FSST
-# copy in the harness, so all FSST symbols are localized at link, leaving only
-# the two lb_candidate_* entry points exported (cf.
-# fsst_decode_prefilter/CMakeLists.txt).
+# Author-owned build for fsst_prefilter + dict_fsst_prefilter: the gropaul/fsst
+# fork (branch search/prefilter: whole-string compression, codes written in
+# byte order, and the header-only min-cut prefilter under search/prefilter)
+# plus the Matcher core. A further FSST copy in the harness, so all FSST
+# symbols are localized at link, leaving only the two lb_candidate_* entry
+# points exported (cf. fsst_decode_prefilter/CMakeLists.txt).
+#
+# The fork is fetched pinned. To develop against a local checkout instead:
+#   FSST_SOURCE_DIR=/path/to/fsst cargo build --release
 cmake_minimum_required(VERSION 3.21)
 project(lb_fsst_prefilter CXX)
 
-# The prefilter kernels are LINKED, not re-included: their public `contains`
-# entry points are externally linked on purpose, so a consumer gets the codegen
-# they were tuned and disassembled with. Both width registries are compiled
-# because the candidate picks 2- or 4-byte codes per query; every include in
-# that project is spelled from its src/, hence the single -I.
-set(PREFILTER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../common/prefilter/vendor/fsst_prefilter)
-if(NOT EXISTS ${PREFILTER_DIR}/src/contains/kernel.hpp)
-    message(FATAL_ERROR
-        "vendored prefilter kernels missing — run: git submodule update --init "
-        "candidates/common/prefilter/vendor/fsst_prefilter")
-endif()
-
 include(FetchContent)
+if(DEFINED ENV{FSST_SOURCE_DIR})
+    set(FETCHCONTENT_SOURCE_DIR_FSST_FORK "$ENV{FSST_SOURCE_DIR}")
+    message(STATUS "lb_fsst_prefilter: using local FSST checkout $ENV{FSST_SOURCE_DIR}")
+endif()
 FetchContent_Declare(
-    fsst_upstream
-    GIT_REPOSITORY https://github.com/cwida/fsst.git
-    GIT_TAG        e638d4cf8c26129d73c242a4127b42b975de5b63
+    fsst_fork
+    GIT_REPOSITORY https://github.com/gropaul/fsst.git
+    GIT_TAG        e0ec68b91b4763f529e7b4f1bed5f3c618d0ad82
     SOURCE_SUBDIR  __lb_no_configure__
 )
-FetchContent_MakeAvailable(fsst_upstream)
+FetchContent_MakeAvailable(fsst_fork)
 
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-march=native" LB_FSST_MARCH_NATIVE)
 
 add_library(fp_objs OBJECT
     fsst_prefilter_candidate.cpp
-    ${PREFILTER_DIR}/src/contains/kernels/candidates/candidates_u16.cpp
-    ${PREFILTER_DIR}/src/contains/kernels/candidates/candidates_u32.cpp
-    ${fsst_upstream_SOURCE_DIR}/libfsst.cpp
-    ${fsst_upstream_SOURCE_DIR}/fsst_avx512.cpp
+    ${fsst_fork_SOURCE_DIR}/libfsst.cpp
+    ${fsst_fork_SOURCE_DIR}/fsst_avx512.cpp
 )
 target_include_directories(fp_objs PRIVATE
-    ${fsst_upstream_SOURCE_DIR}
+    ${fsst_fork_SOURCE_DIR}
+    ${fsst_fork_SOURCE_DIR}/search/prefilter
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../contract
     ${CMAKE_CURRENT_SOURCE_DIR}/../../common/fsst_common
     ${CMAKE_CURRENT_SOURCE_DIR}/../../common/matcher
-    ${PREFILTER_DIR}/src
 )
 set_target_properties(fp_objs PROPERTIES
     CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON POSITION_INDEPENDENT_CODE ON)
 target_compile_options(fp_objs PRIVATE
     -O3 "$<$<BOOL:${LB_FSST_MARCH_NATIVE}>:-march=native>" -fvisibility=hidden)
-set_source_files_properties(${fsst_upstream_SOURCE_DIR}/fsst_avx512.cpp
+set_source_files_properties(${fsst_fork_SOURCE_DIR}/fsst_avx512.cpp
     PROPERTIES COMPILE_FLAGS "-O1")
 
 set(COMBINED ${CMAKE_CURRENT_BINARY_DIR}/lb_fsst_prefilter_combined${CMAKE_CXX_OUTPUT_EXTENSION})

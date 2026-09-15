@@ -11,9 +11,9 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/CMakeLists.txt");
     println!("cargo:rerun-if-changed=cpp/localize.sh");
     println!("cargo:rerun-if-changed=../common/fsst_common/fsst_build.hpp");
-    println!("cargo:rerun-if-changed=../common/fsst_common/fsst_mandatory_chain.hpp");
     println!("cargo:rerun-if-changed=../common/matcher/matcher.hpp");
     println!("cargo:rerun-if-changed=../common/matcher/dict_matcher.hpp");
-    println!("cargo:rerun-if-changed=../common/prefilter/vendor/fsst_prefilter/src/contains");
     println!("cargo:rerun-if-changed=../../contract/lb_candidate.h");
+    // Local-checkout override for prefilter development (see cpp/CMakeLists.txt).
+    println!("cargo:rerun-if-env-changed=FSST_SOURCE_DIR");
 }
