@@ -1,0 +1,11 @@
+{
+  "format_version": 1,
+  "id": "wildcards",
+  "description": "Adversarial LIKE-semantics fixture (contract/SEMANTICS.md): every query separates two readings of a pattern that a buggy matcher would conflate — '_' as one byte vs zero/two, escaped vs wildcard metacharacters, anchored vs unanchored gaps, ordered multi-gap, and byte-vs-codepoint on multibyte data. Paired literal/pattern queries (contains.abc, multigap.literal, prefix.ab, suffix.c) must bless to identical truth: that is the lowering equivalence, checked by data rather than by proof.",
+  "dataset": {
+    "id": "wildcards",
+    "checksum": "xxh3:14d4119b50ef270d"
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-09-16T19:27:44Z"
+}

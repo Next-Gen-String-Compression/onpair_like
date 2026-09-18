@@ -1,0 +1,43 @@
+# Wildcard-semantics fixture run: the adversarial LIKE corpus over the tiny
+# `wildcards` dataset (39 hand-chosen rows). Seconds, not minutes — this is
+# the spec you run after touching anything that parses or matches a pattern.
+#
+#   cargo run --release --bin bench -- run specs/wildcards.toml -o /tmp/wildcards
+#
+# What a passing run means: every candidate that CLAIMS a query answered it
+# exactly as the oracle does. What it does not mean: that anything answered
+# the `like` queries — until a matcher declares LB_LIKE (PR 2, see
+# TODO_like_workload.md §15) those cells are `unsupported`, which is the
+# honest state and is reported separately from `ok` in the run summary.
+#
+# gate_canary is included on purpose: its `wrong` strategy must still fail the
+# gate here exactly as it does on the smoke fixture. A correctness fixture
+# that cannot fail is not a fixture.
+
+[[datasets]]
+path = "../datasets/wildcards"
+
+[[suites]]
+path = "../suites/wildcards"
+
+[[candidates]]
+name = "uncompressed_memmem"
+
+[[candidates]]
+name = "uncompressed"
+
+[[candidates]]
+name = "onpair"
+
+[[candidates]]
+name = "fsst_like_tum"
+
+[[scanners]]
+name = "memmem"
+
+[measure]
+# 39 rows: chunking is about the ragged-tail path, not about throughput.
+chunk_rows = [0, 64]
+warmup = 1
+min_iters = 3
+min_millis = 0
