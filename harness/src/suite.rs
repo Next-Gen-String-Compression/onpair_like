@@ -109,17 +109,21 @@ pub struct Suite {
 
 fn validate_arity(op: u32, n: usize) -> std::result::Result<(), String> {
     let ok = match op {
-        lb_abi::LB_PREFIX | lb_abi::LB_SUFFIX | lb_abi::LB_CONTAINS => n == 1,
+        // `like`'s single "needle" is the pattern itself.
+        lb_abi::LB_PREFIX | lb_abi::LB_SUFFIX | lb_abi::LB_CONTAINS | lb_abi::LB_LIKE => n == 1,
         lb_abi::LB_MULTI_CONTAINS | lb_abi::LB_CONTAINS_ANY => n >= 1,
         _ => false,
     };
     if ok {
         Ok(())
     } else {
+        let arity = match op {
+            lb_abi::LB_MULTI_CONTAINS | lb_abi::LB_CONTAINS_ANY => ">= 1",
+            _ => "exactly 1",
+        };
         Err(format!(
-            "op {} takes {} needle(s), got {n}",
+            "op {} takes {arity} needle(s), got {n}",
             lb_abi::op_name(op),
-            if op <= lb_abi::LB_CONTAINS { "exactly 1" } else { ">= 1" }
         ))
     }
 }
@@ -144,6 +148,12 @@ fn parse_queries(dir: &Path) -> Result<Vec<PreparedQuery>> {
             .map(|n| n.decode())
             .collect::<Result<_>>()?;
         validate_arity(op, needles.len()).map_err(|e| format!("{}: {e}", record.id))?;
+        if op == lb_abi::LB_LIKE {
+            // An invalid pattern is a suite bug, caught once at load, so
+            // every matcher downstream may assume a well-formed pattern.
+            oracle::validate_like_pattern(&needles[0])
+                .map_err(|e| format!("{}: invalid LIKE pattern: {e}", record.id))?;
+        }
         if !seen.insert(record.id.clone()) {
             return Err(format!("duplicate query id {:?}", record.id).into());
         }
@@ -311,20 +321,49 @@ pub fn bless(dir: &Path, ds: &PreparedDataset, force: bool) -> Result<BlessOutco
 /// weak-region analysis joins against — never hand-written claims.
 fn derived_metadata(q: &PreparedQuery, bm: &Bitmap, ds: &PreparedDataset) -> serde_json::Value {
     let needle_lens: Vec<u64> = q.needles.iter().map(|n| n.len() as u64).collect();
-    // Rarity of the needle's rarest byte, measured against this dataset.
+    let needles: Vec<&[u8]> = q.needles.iter().map(|n| n.as_slice()).collect();
+
+    // Every query gets its canonical LIKE pattern and shape, whatever op it
+    // is stored under, so analysis can group by pattern shape across the
+    // lowered and the un-lowerable alike. `contains_any` is a disjunction of
+    // patterns, not one pattern, so it has none.
+    let pattern = crate::like::render(q.op, &needles);
+    let facts = pattern.as_deref().map(crate::like::facts);
+
+    // Rarity of the rarest byte a matcher must actually compare, measured
+    // against this dataset — metacharacters are not compared, so a pattern's
+    // literal runs are the population, not its raw bytes.
     let payload = ds.manifest.payload_bytes.max(1);
-    let rarest = q
-        .needles
+    let literal_bytes: Vec<u8> = match &facts {
+        Some(f) => f.literal_runs.concat(),
+        None => q.needles.concat(),
+    };
+    let rarest = literal_bytes
         .iter()
-        .flat_map(|n| n.iter())
         .map(|&b| ds.manifest.byte_freq[b as usize])
         .min()
         .map(|c| c as f64 / payload as f64);
+
+    let match_count = bm.count();
+    let selectivity = match_count as f64 / ds.num_rows() as f64;
+    let literal_len_total = facts
+        .as_ref()
+        .map(|f| f.literal_len_total)
+        .unwrap_or_else(|| needle_lens.iter().sum());
+
     serde_json::json!({
-        "selectivity": bm.count() as f64 / ds.num_rows() as f64,
-        "match_count": bm.count(),
+        "selectivity": selectivity,
+        "match_count": match_count,
         "needle_lens": needle_lens,
         "needle_len_total": needle_lens.iter().sum::<u64>(),
         "rarest_byte_freq": rarest,
+        // LIKE-shape facts (ABI v8). `pattern` is null only for contains_any.
+        "pattern": pattern.as_deref().map(String::from_utf8_lossy),
+        "pattern_class": facts.as_ref().map(|f| f.class.name()),
+        "percent_count": facts.as_ref().map(|f| f.percent_count),
+        "underscore_count": facts.as_ref().map(|f| f.underscore_count),
+        "literal_len_total": literal_len_total,
+        "selectivity_bucket": crate::like::selectivity_bucket(match_count, selectivity),
+        "length_bucket": crate::like::length_bucket(literal_len_total),
     })
 }

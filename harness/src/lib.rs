@@ -7,6 +7,7 @@ pub mod chunks;
 pub mod cpu;
 pub mod dataset;
 pub mod gen;
+pub mod like;
 pub mod oracle;
 pub mod registry;
 pub mod results;
