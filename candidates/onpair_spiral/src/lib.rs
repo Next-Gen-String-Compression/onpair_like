@@ -452,6 +452,7 @@ static VTABLE: LbCandidate = LbCandidate {
     destroy: Some(destroy),
     query_facts: Some(query_facts),
     export_artifact: Some(export_artifact),
+    supports_query: None,
 };
 
 static DECODE_VTABLE: LbCandidate = LbCandidate {
@@ -469,6 +470,7 @@ static DECODE_VTABLE: LbCandidate = LbCandidate {
     destroy: Some(destroy_decode),
     query_facts: None,
     export_artifact: None,
+    supports_query: None,
 };
 
 pub fn vtable() -> &'static LbCandidate {

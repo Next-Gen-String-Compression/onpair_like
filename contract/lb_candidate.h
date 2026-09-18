@@ -17,7 +17,7 @@
 extern "C" {
 #endif
 
-#define LB_ABI_VERSION 7u
+#define LB_ABI_VERSION 8u
 
 /* Guaranteed writable headroom past the decoded payload in every decode()
  * output buffer (see lb_candidate.decode). Lets fixed-stride over-copying
@@ -53,12 +53,22 @@ enum {
   LB_CONTAINS       = 2, /* needle occurs anywhere            LIKE '%n%'  */
   LB_MULTI_CONTAINS = 3, /* needles in order, non-overlapping LIKE '%a%b%'*/
   LB_CONTAINS_ANY   = 4, /* any needle occurs                 OR of LIKEs */
-  LB_OP_COUNT       = 5
+  /* General SQL LIKE pattern (ABI v8). Exactly one "needle", holding the
+   * raw pattern bytes: '%' = zero or more bytes, '_' = exactly one byte,
+   * '\' escapes any of '%', '_', '\'. Byte semantics throughout — '_'
+   * matches one BYTE, not one codepoint (SEMANTICS.md).                  */
+  LB_LIKE           = 5,
+  LB_OP_COUNT       = 6
 };
 
 /* Bit for op `o` in a supported_ops bitmask. */
 #define LB_OP_BIT(o) (1u << (o))
-#define LB_ALL_OPS   ((1u << LB_OP_COUNT) - 1u)
+/* The five literal ops — deliberately NOT LB_LIKE. Every module that
+ * declared LB_ALL_OPS before ABI v8 meant exactly these five, and widening
+ * the macro would have silently claimed wildcard support for all of them.
+ * A module that really handles patterns declares LB_OP_BIT(LB_LIKE). */
+#define LB_ALL_OPS           ((1u << LB_LIKE) - 1u)
+#define LB_ALL_OPS_WITH_LIKE ((1u << LB_OP_COUNT) - 1u)
 
 typedef struct lb_query {
   uint32_t        op;           /* one of the LB_* op codes            */
@@ -214,6 +224,21 @@ typedef struct lb_candidate {
    * buffer of that capacity, into which the candidate writes the artifact.
    * Return 0 on success; NULL means unsupported. */
   int  (*export_artifact)(void* self, lb_artifact* out);
+
+  /* Optional (NULL if absent): per-query capability probe (ABI v8), the
+   * candidate-side twin of lb_scanner.supports_query. Called after
+   * supported_ops passes and before any measurement; returning 0 marks the
+   * cell Unsupported — a *declared capability gap*, reported distinctly from
+   * an error and never counted as a correctness pass. Same contract as the
+   * scanner probe: pure predicate, no allocation, no side effects, and it
+   * must agree with run().
+   *
+   * This is what lets a strategy accept most LB_LIKE patterns while
+   * declining a shape it cannot answer — a prefilter whose mandatory-literal
+   * runs are too short to prune, say. Declining is always correct; answering
+   * a pattern by quietly matching something else never is.               */
+  int  (*supports_query)(void* self, uint32_t strategy_index,
+                         const lb_query* q);
 } lb_candidate;
 /* A candidate must offer at least one of: run (with strategies), view,
  * decode. */

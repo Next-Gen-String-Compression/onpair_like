@@ -2,12 +2,14 @@
 
 Companion to `lb_candidate.h`. Everything here is binding on candidates,
 scanners, and the harness oracle alike; the oracle's fixture tests encode
-this document. ABI version: 5 (v2 added the `LB_DECODE_PAD` guarantee on
+this document. ABI version: 8 (v2 added the `LB_DECODE_PAD` guarantee on
 `decode()` output buffers; v3 added `lb_run_stats.setup_ns` — self-timed
 per-query setup such as automaton compilation, instrumented mode only; v4
 added the optional `lb_scanner.supports_query` per-query capability probe;
 v5 added `lb_run_stats.eval_domain` / `eval_domain_matches` — the reduced
-evaluation domain of a dictionary front-end, see rule 10).
+evaluation domain of a dictionary front-end, see rule 10; v6 added
+`lb_query_facts`; v7 added `export_artifact`; v8 added the `LB_LIKE`
+operation and the candidate-side `supports_query` probe).
 
 ## Data model
 
@@ -30,6 +32,7 @@ any candidate sees the query.
 | `LB_CONTAINS` | 1 | `n` occurs at some position in the row |
 | `LB_MULTI_CONTAINS` | ≥ 1 | needles occur **in order, non-overlapping**: scanning left to right, needle *k*'s match begins at or after the end of needle *k−1*'s match (equivalently: greedy leftmost matching with the search position advancing past each match) |
 | `LB_CONTAINS_ANY` | ≥ 1 | at least one needle occurs in the row |
+| `LB_LIKE` | 1 | the row matches the SQL LIKE **pattern** held in the single needle (see below) |
 
 ### Edge cases (normative)
 
@@ -45,6 +48,65 @@ any candidate sees the query.
   its earliest possible match. (For these patterns — `%a%b%c%` — greedy
   leftmost succeeds iff any assignment succeeds, so this is equivalent to
   SQL LIKE and merely pins down the reference algorithm.)
+
+## `LB_LIKE` — general patterns (ABI v8)
+
+The single needle holds the **raw pattern bytes**. The whole row must match
+the whole pattern: LIKE is anchored at both ends, and an unanchored search is
+written `%…%`.
+
+| token | matches |
+|---|---|
+| `%` | zero or more arbitrary bytes |
+| `_` | **exactly one** arbitrary byte — never zero, never two |
+| `\%`, `\_`, `\\` | one literal `%`, `_`, `\` |
+| any other byte | itself |
+
+### Bytes, not characters (normative)
+
+`_` consumes **one byte**. On UTF-8 data it can therefore land inside a
+multi-byte sequence, and `%L_ve%` does not match `Lóve` (`ó` is two bytes).
+This follows from the data model — rows are byte strings and there is no
+decoding step anywhere in the benchmark — and it matches the engines under
+test, which operate on compressed bytes. A candidate that decodes UTF-8 to
+make `_` mean "one codepoint" is **wrong** under this contract and its gate
+will fail.
+
+### Edge cases (normative)
+
+- The **empty pattern** matches only the empty row (nothing else can match
+  zero bytes). `%` matches every row, including the empty one. `_` matches
+  exactly the one-byte rows.
+- A **trailing lone `\`** (a backslash with nothing to escape) makes the
+  pattern **invalid**: suites are rejected at load, and no candidate ever
+  sees one.
+- `\` before any byte other than `%`, `_`, `\` is likewise invalid, rather
+  than silently meaning a literal backslash — the two readings differ and
+  guessing is worse than rejecting.
+- Consecutive `%` collapse (`%%a%` ≡ `%a%`); `_%` and `%_` both mean "at
+  least one byte here", in either order.
+
+### Equivalence with the literal ops (normative)
+
+These rewrites are exact, and the harness relies on them: a suite stores a
+pattern under the **narrowest** op that expresses it, so the existing literal
+ops keep competing on the patterns they can answer.
+
+| pattern (`lit` contains no metacharacter) | equivalent op |
+|---|---|
+| `lit%` | `LB_PREFIX` with `lit` |
+| `%lit` | `LB_SUFFIX` with `lit` |
+| `%lit%` | `LB_CONTAINS` with `lit` |
+| `%a%b%…%z%` | `LB_MULTI_CONTAINS` with `[a, b, …, z]` |
+
+The last line is why `LB_MULTI_CONTAINS` is specified as ordered and
+non-overlapping. Anchored gaps (`a%b`, `%a%b`, `a%b%`) have **no** literal-op
+equivalent and stay `LB_LIKE`, as does every pattern containing `_`.
+
+A candidate must never answer an `LB_LIKE` query by evaluating something
+else: `%ab_c%` is not `contains("ab_c")`, not `contains("abc")`, and not
+`contains("ab") AND contains("c")`. A strategy that cannot answer a pattern
+declines it through `supports_query` and the cell is recorded `Unsupported`.
 
 ## Result bitmap
 

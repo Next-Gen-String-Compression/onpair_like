@@ -48,6 +48,7 @@ pub fn vtable_decode() -> &'static LbCandidate {
             destroy: base.destroy,
             query_facts: None,
             export_artifact: None,
+            supports_query: None,
         })
     });
     &s.0
