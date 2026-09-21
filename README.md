@@ -33,6 +33,14 @@ per gated query cell) + `manifest.json` (environment, versions, checksums,
 spec hash). Every run also loads itself into `results/bench.duckdb`, the
 queryable index over all runs — see [analysis/db/README.md](analysis/db/README.md).
 
+## Generating query workloads
+
+See [shared needle generation](harness/src/gen/README.md). The existing sampled
+generator remains the default; `bench gen --method suffix-array` adds balanced
+byte-length/selectivity buckets over complete columns.
+[Matcher selection preparation](experiments/matcher_selection/README.md)
+provides dataset recipes, verified suites and numbered coverage plots.
+
 ## Dashboard
 
 ```sh

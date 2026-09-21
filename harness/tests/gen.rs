@@ -254,3 +254,30 @@ chunk_rows = [0, 64]
     assert_eq!(queries.len(), n_queries * 2, "every query at both chunkings");
     assert!(queries.iter().all(|r| r["status"] == "ok"));
 }
+
+#[test]
+fn suffix_array_suite_survives_independent_bless_and_verification() {
+    use lb_harness::gen::{BalancedRequest, IndexLimits, SubstringIndex};
+    let tmp = tempfile::tempdir().unwrap();
+    let ds_dir = ingest_fixture(tmp.path());
+    let ds = PreparedDataset::load(&ds_dir, true).unwrap();
+    let index = SubstringIndex::new(ds.payload(), ds.offsets_u64(), IndexLimits::default()).unwrap();
+    let request = BalancedRequest::new(ds.num_rows(), 19);
+    let generated = index.generate(&request).unwrap();
+    assert!(!generated.needles.is_empty());
+    assert!(generated.needles.iter().any(|n| n.matching_rows == 0));
+    assert!(generated.needles.iter().any(|n| n.bytes.len() >= 129));
+    let out = tmp.path().join("sa-suite");
+    gen::write_balanced_suite(&generated, &ds, &out, "sa-fixture", false).unwrap();
+    assert!(gen::write_balanced_suite(&generated, &ds, &out, "sa-fixture", false).is_err());
+    suite::bless(&out, &ds, false).unwrap();
+    gen::verify_balanced_suite(&out, &ds).unwrap();
+    // The independent check also detects corrupted claims, even when the
+    // stored oracle truth itself is still valid.
+    let path = out.join("queries.jsonl");
+    let mut records = read_lines(&path);
+    records[0]["meta"]["sa_lcp"]["matching_rows"] = (ds.num_rows() + 1).into();
+    let text: String = records.iter().map(|r| format!("{}\n", serde_json::to_string(r).unwrap())).collect();
+    std::fs::write(path, text).unwrap();
+    assert!(gen::verify_balanced_suite(&out, &ds).is_err());
+}
