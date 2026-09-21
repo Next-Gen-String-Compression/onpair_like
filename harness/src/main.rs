@@ -55,13 +55,31 @@ enum Cmd {
         /// Output suite directory (suite.json + queries.jsonl + gen-report.json).
         #[arg(long, short)]
         out: PathBuf,
-        /// Determinism root: same dataset + seed + profile + ops => byte-identical suite.
+        /// Same dataset, generator configuration and seed produce identical needles.
         #[arg(long)]
         seed: u64,
+        /// sampled supports all operations; suffix-array generates balanced CONTAINS needles.
+        #[arg(long, default_value = "sampled", value_parser = ["sampled", "suffix-array"])]
+        method: String,
+        /// Unique needles per length/selectivity cell (suffix-array only).
+        #[arg(long, default_value_t = 20)]
+        per_cell: usize,
+        /// Maximum needle length in bytes (suffix-array only).
+        #[arg(long, default_value_t = 256)]
+        max_needle_len: usize,
+        /// Mutation attempts per zero-match cell (suffix-array only).
+        #[arg(long, default_value_t = 4000)]
+        negative_attempts: usize,
+        /// Reuse dataset-bound SA/LCP arrays across seeds and quotas.
+        #[arg(long)]
+        index_cache: Option<PathBuf>,
+        /// SA workspace admission budget, excluding the loaded dataset.
+        #[arg(long, default_value_t = 4096)]
+        index_memory_mib: u64,
         /// full | quick (quick: reduced grid for iteration).
         #[arg(long, default_value = "full")]
         profile: String,
-        /// Comma-separated op filter, e.g. "contains,prefix" (default: all five).
+        /// Comma-separated op filter (sampled: all five; suffix-array: contains).
         #[arg(long)]
         ops: Option<String>,
         /// Suite id (default: the out directory's basename).
@@ -150,7 +168,8 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
             );
             Ok(ExitCode::SUCCESS)
         }
-        Cmd::Gen { dataset: ds_dir, out, seed, profile, ops, id, force } => {
+        Cmd::Gen { dataset: ds_dir, out, seed, method, per_cell, max_needle_len,
+            negative_attempts, index_cache, index_memory_mib, profile, ops, id, force } => {
             let ds = PreparedDataset::load(&ds_dir, true)?;
             let ops = ops
                 .map(|s| {
@@ -170,6 +189,35 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
                     .to_string_lossy()
                     .into_owned(),
             };
+            if method == "suffix-array" {
+                use lb_harness::gen::{BalancedRequest, IndexLimits, LengthBucket, SubstringIndex};
+                if ops.as_ref().is_some_and(|ops| ops.as_slice() != [lb_abi::LB_CONTAINS]) {
+                    return Err("suffix-array generation supports only --ops contains".into());
+                }
+                if profile != "full" { return Err("--profile applies to sampled generation; use --per-cell for suffix-array".into()); }
+                if out.join(suite::QUERIES_FILE).exists() && !force { return Err("suite exists; pass --force to replace it".into()); }
+                let limits = IndexLimits { max_needle_len,
+                    memory_budget_bytes: index_memory_mib.checked_mul(1 << 20).ok_or("memory budget overflow")? };
+                eprintln!("indexing {} rows, {} bytes (SA + LCP)", ds.num_rows(), ds.raw_bytes());
+                let index = match index_cache {
+                    Some(path) => SubstringIndex::cached(ds.payload(), ds.offsets_u64(), limits, &path)?,
+                    None => SubstringIndex::new(ds.payload(), ds.offsets_u64(), limits)?,
+                };
+                let mut request = BalancedRequest::new(ds.num_rows(), seed);
+                request.per_cell = per_cell;
+                request.negative_attempts = negative_attempts;
+                request.lengths.retain(|b| b.min <= max_needle_len);
+                for bucket in &mut request.lengths { bucket.max = bucket.max.min(max_needle_len); }
+                if max_needle_len > 256 { request.lengths.push(LengthBucket { min: 257, max: max_needle_len }); }
+                eprintln!("selecting up to {per_cell} unique needles per cell");
+                let generated = index.generate(&request)?;
+                lb_harness::gen::write_balanced_suite(&generated, &ds, &out, &suite_id, force)?;
+                let filled = generated.cells.iter().filter(|c| c.status == "filled").count();
+                println!("generated {} unique queries; {filled}/{} cells filled; coverage: {}",
+                    generated.needles.len(), generated.cells.len(), out.join("gen-report.json").display());
+                println!("next: bench bless --suite {} --dataset {}", out.display(), ds_dir.display());
+                return Ok(ExitCode::SUCCESS);
+            }
             let params = lb_harness::gen::GenParams {
                 seed,
                 profile: lb_harness::gen::Profile::parse(&profile)?,
@@ -198,6 +246,11 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
         Cmd::Bless { suite: suite_dir, dataset: ds_dir, force } => {
             let ds = PreparedDataset::load(&ds_dir, true)?;
             let outcome = suite::bless(&suite_dir, &ds, force)?;
+            let blessed = Suite::load_for_run(&suite_dir, &ds)?;
+            if blessed.manifest.provenance.as_ref().is_some_and(|p| p["generator"] == lb_harness::gen::SUBSTRING_GENERATOR_VERSION) {
+                lb_harness::gen::verify_balanced_suite(&suite_dir, &ds)?;
+                println!("verified SA row counts, bucket assignments, uniqueness and mutation witnesses");
+            }
             println!(
                 "blessed {} ({} newly blessed, {} verified against existing truth)",
                 suite_dir.display(),

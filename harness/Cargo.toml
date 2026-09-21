@@ -111,6 +111,7 @@ base64 = "0.22.1"
 humantime = "2.4.0"
 core_affinity = "0.8.3"
 clap = { version = "4.6.1", features = ["derive"] }
+libsais-rs = "=0.2.2"
 
 [dev-dependencies]
 tempfile = "3"

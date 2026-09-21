@@ -48,7 +48,7 @@ datasets:
     kind: tar-tsv-field      # every .tsv member, field 1, strip, skip empty
     params: { field: 1 }
     expected_checksum: "xxh3:ef411cc5c265637e"
-    approx: { rows: 1010000, payload_bytes: 36000000 }
+    approx: { rows: 1010916, payload_bytes: 35901783 }
     notes: Short natural-language search queries — the honest short-row case.
 
   - id: msmarco-url
@@ -76,7 +76,7 @@ datasets:
     kind: jsonl-field        # json per line, .title.strip(), skip empty
     params: { field: title }
     expected_checksum: "xxh3:3a0b57c7356a57a6"
-    approx: { rows: 4450000, payload_bytes: 240000000 }
+    approx: { rows: 4448181, payload_bytes: 231304376 }
     notes: Book titles, natural language, U/N=0.87, L_avg 52 B.
 
   - id: dbpedia-abstract
@@ -89,7 +89,7 @@ datasets:
     kind: ttl-en-literal     # N-Triples object between '"' and '"@en', raw escaped form
     params: { limit: 1000000 }
     expected_checksum: "xxh3:09644aa73fc3e4b1"
-    approx: { rows: 1000000, payload_bytes: 340000000 }
+    approx: { rows: 1000000, payload_bytes: 337454075 }
     notes: Long text (L_avg ~338 B), 99.8% distinct — the long-row showcase.
 
   - id: tpch-pname-sf10
@@ -102,7 +102,7 @@ datasets:
     kind: tpch-duckdb
     params: { sf: 10, table: part, column: p_name }
     expected_checksum: "xxh3:ea4860e177003f58"
-    approx: { rows: 2000000, payload_bytes: 50000000 }
+    approx: { rows: 2000000, payload_bytes: 65495664 }
     notes: Synthetic-vocabulary part names, U/N=1.0 — the DB anchor.
 
   - id: tpch-ccomment-sf10
@@ -115,7 +115,7 @@ datasets:
     kind: tpch-duckdb
     params: { sf: 10, table: customer, column: c_comment }
     expected_checksum: "xxh3:af8cd73ba0811038"
-    approx: { rows: 1500000, payload_bytes: 120000000 }
+    approx: { rows: 1500000, payload_bytes: 108724798 }
     notes: Grammar-generated comment text, U/N=0.94.
 
   # ---- non-default extras (fetch with --dataset <id>) --------------------
@@ -123,29 +123,28 @@ datasets:
   - id: dblp-title
     default: false
     source:
-      # Dated release (immutable), unlike the rolling dblp.xml.gz the
-      # compression paper fetched — pin once, verify forever.
-      url: https://dblp.org/xml/release/dblp-2025-12-01.xml.gz
-      sha256: recorded-at-prepare
-      license: ODC-BY 1.0
-      download_bytes: 800000000
+      # Archived monthly release: https://doi.org/10.4230/dblp.xml.2025-12-01
+      url: https://drops.dagstuhl.de/storage/artifacts/dblp/xml/2025/dblp-2025-12-01.xml.gz
+      sha256: 31db48913627f14b32c64b5c3769ae544e99a1221713b67840ff71c44be64ab9
+      license: CC0-1.0
+      download_bytes: 1017708454
     kind: dblp-xml
     params: { element: title }
-    expected_checksum: recorded-at-prepare
-    approx: { rows: 7000000, payload_bytes: 400000000 }
+    expected_checksum: "xxh3:998345fd3f6e958e"
+    approx: { rows: 12166021, payload_bytes: 687588456 }
     notes: Publication titles; U/N≈0.65 (duplicated republications).
 
   - id: dblp-author
     default: false
     source:
-      url: https://dblp.org/xml/release/dblp-2025-12-01.xml.gz
-      sha256: recorded-at-prepare
-      license: ODC-BY 1.0
-      download_bytes: 800000000
+      url: https://drops.dagstuhl.de/storage/artifacts/dblp/xml/2025/dblp-2025-12-01.xml.gz
+      sha256: 31db48913627f14b32c64b5c3769ae544e99a1221713b67840ff71c44be64ab9
+      license: CC0-1.0
+      download_bytes: 1017708454
     kind: dblp-xml
     params: { element: author }
-    expected_checksum: recorded-at-prepare
-    approx: { rows: 7000000, payload_bytes: 240000000 }
+    expected_checksum: "xxh3:73199b12f5c94c66"
+    approx: { rows: 31805022, payload_bytes: 450471429 }
     notes: Author names — short, low alphabet diversity, heavy repetition.
 
   - id: tpch-lcomment-sf10
@@ -170,6 +169,6 @@ datasets:
       download_bytes: 0
     kind: tpch-duckdb
     params: { sf: 10, table: customer, column: c_address }
-    expected_checksum: recorded-at-prepare
-    approx: { rows: 1500000, payload_bytes: 38000000 }
+    expected_checksum: "xxh3:59aba237e90e0a5d"
+    approx: { rows: 1500000, payload_bytes: 37501213 }
     notes: Random-character addresses — the low-redundancy adversary.
