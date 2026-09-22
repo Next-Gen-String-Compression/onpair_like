@@ -1,6 +1,8 @@
 # TODO: LIKE workload expansion — `_` wildcards, ClickBench/IMDb/TPC-H columns, adapted TUM corpus
 
-**Status:** SPEC + PLAN. No code written yet. Branch `feat/like-workload-expansion`.
+**Status:** Phases A–G implemented on `feat/like-workload-expansion` (rebased onto main after
+its suffix-array generator landed; gen2 is built on it). A committed; B–G pending commit.
+PR 2 (§15) not started.
 **Audience:** the agent (or human) who implements this. Read this file, then
 `DESIGN.md` §5 (suite format), §8 (gating), §14 (generator), §15 (dataset
 reproducibility), §17 (FSST family), and `contract/SEMANTICS.md`, before
@@ -255,7 +257,7 @@ target/release/bench run specs/gate-canary.toml -o /tmp/can  # must exit nonzero
     --dataset imdb-primary-title-1m --dataset imdb-primary-name-1m
 
 # suites
-target/release/bench gen --generator gen2 --seed 42 \
+target/release/bench gen --method like --seed 42 \
     --dataset datasets/clickbench-referer-1m --out suites/clickbench-referer-1m-gen2-s42
 target/release/bench bless --suite suites/clickbench-referer-1m-gen2-s42 \
     --dataset datasets/clickbench-referer-1m
@@ -294,10 +296,10 @@ harness/src/suite.rs                 MOD  arity for `like`; pattern validation (
                                           trailing backslash); derived.* additions
 harness/src/runner.rs                MOD  Strat::Candidate per-query probe; cells_unsupported
 harness/src/registry.rs              MOD  ABI v8 validation
-harness/src/gen2.rs                  NEW  pattern-class grid, held-out mining pool,
-                                          ultra-rare band, lowering
+harness/src/gen/like.rs              NEW  `--method like`: pattern classes, held-out mining
+                                          pool on main's SubstringIndex, exact probing, lowering
 harness/src/tum_import.rs            NEW  patterns.json -> suite (+ provenance)
-harness/src/main.rs                  MOD  --generator flag, `tum-import` subcommand
+harness/src/main.rs                  MOD  `--method like` (main's flag convention), `tum-import`
 harness/tests/like_semantics.rs      NEW  T-LIKE-*, T-EQ, T-CAP (see §7)
 harness/tests/gen2.rs                NEW  determinism, bucket coverage, truth protection
 scanners/like/                       NEW  `like` + `like-hay` LIKE evaluator scanner
@@ -577,92 +579,92 @@ working; each is one atomic conventional commit (`feat:` / `test:` / `docs:`),
 made **only when instructed**.
 
 ### Phase A — LIKE semantics core *(no datasets, no candidates)*
-- [ ] A1 `contract/SEMANTICS.md`: LIKE section — `%`, `_`, `\` escape, **byte**
+- [x] A1 `contract/SEMANTICS.md`: LIKE section — `%`, `_`, `\` escape, **byte**
       semantics, edge cases (empty pattern, `_` on empty row, `%` only,
       trailing lone `\` invalid), and the D2 lowering-equivalence claim.
       *Verify:* review. *Files:* 1.
-- [ ] A2 `contract/lb_candidate.h` + `abi/src/lib.rs`: `LB_LIKE`,
+- [x] A2 `contract/lb_candidate.h` + `abi/src/lib.rs`: `LB_LIKE`,
       `LB_OP_COUNT=6`, `LB_ABI_VERSION=8`, `op_name`/`op_from_name`.
       *Verify:* `cargo build --release`. *Files:* 2.
-- [ ] A3 **RED then GREEN**: `oracle::like_matches` + twin + fixtures
+- [x] A3 **RED then GREEN**: `oracle::like_matches` + twin + fixtures
       (T-LIKE-1..4) + T-EQ. *Verify:* `cargo test --release -p lb-harness`.
       *Files:* 1.
-- [ ] A4 `suite.rs`: arity + pattern validation for `like`; reject trailing
+- [x] A4 `suite.rs`: arity + pattern validation for `like`; reject trailing
       lone `\`; `derived` additions. *Verify:* unit tests. *Files:* 1.
-- [ ] A5 `datasets/fixtures/wildcards.csv` + `suites/wildcards` +
+- [x] A5 `datasets/fixtures/wildcards.csv` + `suites/wildcards` +
       `specs/wildcards.toml`, blessed. *Verify:* T-FIX. *Files:* 4.
 
 ### Phase B — capability plumbing + the LIKE baseline
-- [ ] B1 ABI v8 `LbCandidate.supports_query`; `registry.rs` validation;
+- [x] B1 ABI v8 `LbCandidate.supports_query`; `registry.rs` validation;
       `runner.rs` `Strat::Candidate` arm. *Verify:* T-CAP. *Files:* 4.
-- [ ] B2 `cells_unsupported` split in `RunSummary` + CLI summary line.
+- [x] B2 `cells_unsupported` split in `RunSummary` + CLI summary line.
       *Verify:* T-CAP. *Files:* 2.
-- [ ] B3 `scanners/like` (`like`, `like-hay`). *Verify:* gate passes on
+- [x] B3 `scanners/like` (`like`, `like-hay`). *Verify:* gate passes on
       `specs/wildcards.toml`. *Files:* 3 + workspace `Cargo.toml`.
-- [ ] B4 `gate_canary`: a `like-declines` strategy (declares `LB_LIKE`, returns
+- [x] B4 `gate_canary`: a `like-declines` strategy (declares `LB_LIKE`, returns
       0 from `supports_query` for `_`) and a `like-lowers` strategy (declares
       `LB_LIKE`, evaluates `%ab_c%` as `contains("abc")`). The first must be
       counted `Unsupported`, the second must fail the gate. *Verify:* T-CAP.
       *Files:* 1.
-- [ ] B5 Regression gate: T-REG-1/2/3. *Verify:* smoke + canary + `git status`.
+- [x] B5 Regression gate: T-REG-1/2/3. *Verify:* smoke + canary + `git status`.
 
 ### Phase C — datasets
-- [ ] C1 `sources.yaml`: the 11 entries in §9 (7 default, 4 non-default).
-- [ ] C2 `prepare.py`: `imdb-tsv-field`, `imdb-list-block`; non-empty filter for
+- [x] C1 `sources.yaml`: the 11 entries in §9 (7 default, 4 non-default).
+- [x] C2 `prepare.py`: `imdb-tsv-field`, `imdb-list-block`; non-empty filter for
       the parquet path where the entry asks for it.
-- [ ] C3 Materialise the zero-download ones (ClickBench ×2, TPC-H ×3) and pin
+- [x] C3 Materialise the zero-download ones (ClickBench ×2, TPC-H ×3) and pin
       canonical checksums. *Verify:* `prepare.py` re-run is a no-op.
-- [ ] C4 Materialise IMDb (4 columns); record snapshot dates + sha256.
-- [ ] C5 `datasets/README.md`: measured profiles (§9 table), why each column was
+- [x] C4 Materialise IMDb (4 columns); record snapshot dates + sha256.
+- [x] C5 `datasets/README.md`: measured profiles (§9 table), why each column was
       chosen and each rejected, IMDb non-commercial terms, TPC-H dbgen pinning
       (DuckDB `tpch` extension version + SF).
 
 ### Phase D — adapted TUM corpus
-- [ ] D1 Copy the pinned `patterns.json` into `suites/tum_like/`; record repo +
+- [x] D1 Copy the pinned `patterns.json` into `suites/tum_like/`; record repo +
       full commit sha.
-- [ ] D2 `bench tum-import`: parse → lower per D2 → emit one suite per
+- [x] D2 `bench tum-import`: parse → lower per D2 → emit one suite per
       (dataset, column) with full `meta.tum`. *Verify:* T-TUM.
-- [ ] D3 Import TPC-H (78) + IMDb (239); bless; record achieved selectivity and
+- [x] D3 Import TPC-H (78) + IMDb (239); bless; record achieved selectivity and
       how many patterns land in each bucket per column.
-- [ ] D4 Document the StackOverflow/PublicBI gap and every difference from an
+- [x] D4 Document the StackOverflow/PublicBI gap and every difference from an
       exact reproduction.
 
 ### Phase E — `gen2`
-- [ ] E1 `gen2.rs`: pattern-class grid, held-out mining pool, `BandKind::Count`
+- [x] E1 `gen2.rs`: pattern-class grid, held-out mining pool, `BandKind::Count`
       ultra-rare band, underscore mutation with fresh probing, D2 lowering.
-- [ ] E2 `--generator` CLI flag; `gen1` path untouched. *Verify:* gen1 suites
+- [x] E2 `--generator` CLI flag; `gen1` path untouched. *Verify:* gen1 suites
       regenerate byte-identically (T-GEN2-1 applied to gen1 too).
-- [ ] E3 `harness/tests/gen2.rs` (T-GEN2-1..3).
-- [ ] E4 Generate + bless the 12 gen2 suites; `reproduce.sh` gains a gen2 stage.
+- [x] E3 `harness/tests/gen2.rs` (T-GEN2-1..3).
+- [x] E4 Generate + bless the 12 gen2 suites; `reproduce.sh` gains a gen2 stage.
 
 ### Phase F — specs, analysis, docs
-- [ ] F1 The four specs in §11.
-- [ ] F2 `analysis/db/schema.sql` + `load.py`: pattern/class/wildcard/bucket
+- [x] F1 The four specs in §11.
+- [x] F2 `analysis/db/schema.sql` + `load.py`: pattern/class/wildcard/bucket
       columns; `analysis/report.py` groups by selectivity bucket and never
       reports a grand mean alone.
-- [ ] F3 `DESIGN.md` §18: fold this design in; update §14's scope-decision-1
+- [x] F3 `DESIGN.md` §18: fold this design in; update §14's scope-decision-1
       note to "done".
-- [ ] F4 Final report (§13).
+- [ ] F4 Final report (§13) — in the PR description.
 
 ### Phase G — Benchmark Explorer 3000™ (the figures)
-- [ ] G1 `bench_viz.py`: add `like` to `SUBSTRING_OPS` (:109) and every other
+- [x] G1 `bench_viz.py`: add `like` to `SUBSTRING_OPS` (:109) and every other
       op-enumerating site; carry `pattern`, `pattern_class`, `percent_count`,
       `underscore_count`, `selectivity_bucket`, `length_bucket` into the
       embedded point record (:156-205); show the pattern text in the detail
       panel beside Needle (:906). *Verify:* T-VIZ-1.
-- [ ] G2 Stop dropping non-`ok` rows at :117. Keep `unsupported` cells as a
+- [x] G2 Stop dropping non-`ok` rows at :117. Keep `unsupported` cells as a
       per-series coverage count — the series legend reads
       `fsst_prefilter — 0/142 supported` instead of the series vanishing.
       Gate-failed and errored cells stay excluded from the plot but are counted
       too. *Verify:* T-VIZ-1.
-- [ ] G3 Template + `app.js`: **Pattern class** and **Underscore count**
+- [x] G3 Template + `app.js`: **Pattern class** and **Underscore count**
       selectors beside Operation; a *Suite bucket* option in the Aggregate
       control that groups by `selectivity_bucket` instead of equal-width bins.
       *Verify:* T-VIZ-2.
-- [ ] G4 `tools/bench-viz/figures.sh`: regenerate the paper figures from
+- [x] G4 `tools/bench-viz/figures.sh`: regenerate the paper figures from
       `results/paper/like-cross-dataset` and `results/paper/tum-like-adapted`
       in one command; document them in `tools/bench-viz/README.md`.
-- [ ] G5 The headline figure: throughput (GB/s) against selectivity, one line
+- [ ] G5 (needs a real run) The headline figure: throughput (GB/s) against selectivity, one line
       per strategy, faceted by pattern class, with the coverage line stating
       which strategies declined which classes. Exported PNG + the HTML explorer
       checked into neither (both are `results/`-shaped artifacts) but
