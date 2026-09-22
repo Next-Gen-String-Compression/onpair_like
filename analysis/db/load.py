@@ -192,7 +192,10 @@ def load_queries(con, suite_entry, dataset_id) -> int:
     for line in path.read_text().splitlines():
         record = json.loads(line)
         derived = record["derived"]
+        meta = record.get("meta") or {}
         text, binary = needle_text(record["needles"])
+        # Suites blessed before ABI v8 carry no LIKE facts; a NULL there is
+        # "not stamped", never a claim about the pattern.
         rows.append(
             (
                 f"{suite}|{record['id']}",
@@ -206,23 +209,37 @@ def load_queries(con, suite_entry, dataset_id) -> int:
                 len(record["needles"]),
                 derived["selectivity"],
                 derived["match_count"],
+                derived.get("pattern"),
+                derived.get("pattern_class"),
+                derived.get("percent_count"),
+                derived.get("underscore_count"),
+                derived.get("literal_len_total"),
+                derived.get("selectivity_bucket") or "unknown",
+                derived.get("length_bucket") or "unknown",
+                meta.get("source"),
             )
         )
     con.execute("CREATE OR REPLACE TEMP TABLE _q AS SELECT * FROM query LIMIT 0")
     con.executemany(
         """INSERT INTO _q (query_key, suite, query_id, dataset_id, op, needle,
                            needle_is_binary, needle_len, num_needles,
-                           selectivity, match_count)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           selectivity, match_count,
+                           pattern, pattern_class, percent_count, underscore_count,
+                           literal_len_total, selectivity_bucket, length_bucket, source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         rows,
     )
     inserted = con.execute(
         """INSERT INTO query (query_key, suite, query_id, dataset_id, op, needle,
                               needle_is_binary, needle_len, num_needles,
-                              selectivity, match_count)
+                              selectivity, match_count,
+                              pattern, pattern_class, percent_count, underscore_count,
+                              literal_len_total, selectivity_bucket, length_bucket, source)
            SELECT _q.query_key, suite, query_id, dataset_id, op, needle,
                   needle_is_binary, needle_len, num_needles,
-                  selectivity, match_count
+                  selectivity, match_count,
+                  pattern, pattern_class, percent_count, underscore_count,
+                  literal_len_total, selectivity_bucket, length_bucket, source
            FROM _q
            WHERE NOT EXISTS (SELECT 1 FROM query q WHERE q.query_key = _q.query_key)
            RETURNING 1"""

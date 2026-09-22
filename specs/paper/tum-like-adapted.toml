@@ -1,0 +1,71 @@
+# The adapted TUM LIKE workload (suites/tum_like/PROVENANCE.md): the DaMoN'26
+# FSST-LIKE benchmark's patterns for TPC-H and IMDb, blessed against OUR
+# columns — an adaptation, not a reproduction. Underscore groups 0 / 1 / >=2
+# are in meta.tum.underscore_group; group by it.
+#
+#   cargo run --release --bin bench -- run specs/paper/tum-like-adapted.toml \
+#       -o results/paper/tum-like-adapted
+#
+# The `_`=0 group mostly lowers to the literal ops, where fsst_like_tum already
+# competes; the anchored-gap and underscore patterns are `op = like`, which in
+# this PR only the `like` scanner answers (uncompressed direct, and decode over
+# fsst). fsst_like_tum declines them here and picks them up in the
+# wildcard-execution PR, against the baseline this run establishes.
+strategies = ["memmem", "like", "interp", "dict+interp", "decode"]
+
+[[datasets]]
+path = "../../datasets/tpch-ptype-sf10"
+[[datasets]]
+path = "../../datasets/tpch-pname-sf10"
+[[datasets]]
+path = "../../datasets/tpch-ocomment-sf1"
+[[datasets]]
+path = "../../datasets/tpch-scomment-sf10"
+[[datasets]]
+path = "../../datasets/imdb-primary-title-1m"
+[[datasets]]
+path = "../../datasets/imdb-primary-name-1m"
+[[datasets]]
+path = "../../datasets/imdb-plot-frozen-651k"
+[[datasets]]
+path = "../../datasets/imdb-quotes-frozen-1m"
+
+[[suites]]
+path = "../../suites/tum_like/tpch-ptype-sf10"
+[[suites]]
+path = "../../suites/tum_like/tpch-pname-sf10"
+[[suites]]
+path = "../../suites/tum_like/tpch-ocomment-sf1"
+[[suites]]
+path = "../../suites/tum_like/tpch-scomment-sf10"
+[[suites]]
+path = "../../suites/tum_like/imdb-films-as-primary-title"
+[[suites]]
+path = "../../suites/tum_like/imdb-actors-as-primary-name"
+[[suites]]
+path = "../../suites/tum_like/imdb-plot-frozen"
+[[suites]]
+path = "../../suites/tum_like/imdb-quotes-frozen"
+
+[[candidates]]
+name = "uncompressed"
+[[candidates]]
+name = "uncompressed_memmem"
+[[candidates]]
+name = "fsst"
+[[candidates]]
+name = "fsst_like_tum"
+[[candidates]]
+name = "dict_fsst_like_tum"
+
+[[scanners]]
+name = "memmem"
+[[scanners]]
+name = "like"
+
+[measure]
+chunk_rows = [0]
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true
