@@ -38,8 +38,9 @@ queryable index over all runs — see [analysis/db/README.md](analysis/db/README
 See [shared needle generation](harness/src/gen/README.md). The existing sampled
 generator remains the default; `bench gen --method suffix-array` adds balanced
 byte-length/selectivity buckets over complete columns.
-[Matcher selection preparation](experiments/matcher_selection/README.md)
-provides dataset recipes, verified suites and numbered coverage plots.
+[Matcher selection](experiments/matcher_selection/README.md) provides dataset
+recipes, verified suites, numbered coverage plots and fixed-cover matcher
+benchmarks using a documented OnPair revision.
 
 ## Dashboard
 
