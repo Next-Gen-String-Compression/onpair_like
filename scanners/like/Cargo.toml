@@ -1,0 +1,10 @@
+[package]
+name = "lb-scan-like"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "LIKE-benchmark scanner: SQL LIKE pattern evaluation over plaintext rows"
+
+[dependencies]
+lb-abi = { workspace = true }
+memchr.workspace = true

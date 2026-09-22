@@ -32,8 +32,25 @@ name = "onpair"
 [[candidates]]
 name = "fsst_like_tum"
 
+# Decode-only codecs: they own no ops, so the scanners below are what answers
+# for them. One LIKE scanner therefore gives the whole codec roster a wildcard
+# baseline at no per-candidate cost.
+[[candidates]]
+name = "fsst"
+
+[[candidates]]
+name = "lz4"
+
 [[scanners]]
 name = "memmem"
+
+# The LIKE evaluator: the uncompressed baseline for `like` and, through the
+# harness-composed `decode` strategy, the baseline for every codec above. It
+# declares LB_LIKE only — the literal ops already have kernels tuned for them,
+# and a second slower path through those cells would add a row to every table
+# without adding a fact to it.
+[[scanners]]
+name = "like"
 
 [measure]
 # 39 rows: chunking is about the ragged-tail path, not about throughput.

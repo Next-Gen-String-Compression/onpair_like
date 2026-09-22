@@ -22,7 +22,13 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Default)]
 pub struct WorkerSummary {
+    /// Cells that produced a measurement *and* passed the gate.
     pub cells_ok: u64,
+    /// Cells a module declined — by op mask or by its per-query probe. Counted
+    /// apart from `cells_ok` on purpose: a declared capability gap is not a
+    /// correctness result, and a run where half the corpus was skipped must
+    /// not read the same as one where it was answered.
+    pub cells_unsupported: u64,
     pub gate_failures: u64,
     pub errors: u64,
 }
@@ -60,12 +66,18 @@ impl Strat<'_> {
         };
         mask & lb_abi::op_bit(op) != 0
     }
-    /// Per-query capability probe (ABI v4). Candidate strategies are gated by
-    /// their op mask only; scanner strategies may additionally decline a
-    /// specific query (e.g. needle too long for a bit-parallel word).
-    fn supports_query(&self, query: &lb_abi::LbQuery) -> bool {
+    /// Per-query capability probe: scanners since ABI v4, candidates since
+    /// v8. Either may decline one specific query — a needle too long for a
+    /// bit-parallel word, a LIKE pattern an engine's parser rejects — and a
+    /// declined cell is Unsupported, never an error and never a pass.
+    ///
+    /// Every chunk's handle must accept: a strategy that can answer part of a
+    /// column has not answered the query.
+    fn supports_query(&self, handles: &[BuiltChunk], query: &lb_abi::LbQuery) -> bool {
         match self {
-            Strat::Candidate { .. } => true,
+            Strat::Candidate { index, .. } => {
+                handles.iter().all(|h| h.supports_query(*index, query))
+            }
             Strat::Direct(s) | Strat::Decode(s) => s.supports_query(query),
         }
     }
@@ -503,7 +515,8 @@ pub fn run_worker(
                     };
                     out.write(&row)?;
                     match status {
-                        Status::Ok | Status::Unsupported => summary.cells_ok += 1,
+                        Status::Ok => summary.cells_ok += 1,
+                        Status::Unsupported => summary.cells_unsupported += 1,
                         Status::GateFailed => {
                             summary.gate_failures += 1;
                             if fail_fast {
@@ -702,9 +715,9 @@ fn run_cell(
         agg
     };
     // Op-mask gate first, then the optional per-query capability probe: a
-    // scanner that declares this specific query out of its envelope makes
+    // module that declares this specific query out of its envelope makes
     // the cell Unsupported, not Error.
-    if !strat.supports(query.op) || !strat.supports_query(&qffi.query) {
+    if !strat.supports(query.op) || !strat.supports_query(handles, &qffi.query) {
         return Ok(mk_row(Status::Unsupported, None, None, None, None, None));
     }
 

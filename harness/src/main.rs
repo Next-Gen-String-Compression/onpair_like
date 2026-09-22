@@ -374,6 +374,16 @@ fn run_worker_process(
         )?
     };
     writer.finish()?;
+    // Report the declined cells even on a clean run: a module that answered
+    // nothing and a module that answered everything both exit 0, and only
+    // this line tells them apart at a glance.
+    if summary.cells_unsupported > 0 {
+        eprintln!(
+            "worker {candidate}#{config_idx} on dataset #{dataset_idx}: \
+             {} cell(s) measured, {} declined as unsupported",
+            summary.cells_ok, summary.cells_unsupported
+        );
+    }
     if summary.gate_failures > 0 {
         eprintln!(
             "worker {candidate}#{config_idx} on dataset #{dataset_idx}: {} gate failure(s)",

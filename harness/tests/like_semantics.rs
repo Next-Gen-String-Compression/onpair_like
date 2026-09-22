@@ -140,3 +140,102 @@ fn invalid_patterns_are_rejected_at_load_not_matched() {
         "unexpected error: {msg}"
     );
 }
+
+/// T-CAP — the capability gate, end to end (TODO_like_workload.md §7).
+///
+/// Two failure modes must be impossible, and the gate canary's ABI-v8
+/// strategies demonstrate both on the wildcard fixture:
+///
+/// - `like-declines` answers only `%literal%` and declines everything else
+///   through `supports_query`. Declined cells must be `unsupported`, carry no
+///   latency, and land in `cells_unsupported` rather than `cells_ok` — a
+///   declared capability gap is not a correctness result.
+/// - `like-lowers` declares the same op and cheats exactly as the contract
+///   forbids, dropping metacharacters so `%ab_c%` becomes `contains("abc")`.
+///   The gate must catch it.
+#[test]
+fn a_declined_pattern_is_skipped_and_a_lowered_one_is_caught() {
+    use lb_harness::results::Writer;
+    use lb_harness::runner;
+    use lb_harness::spec::LoadedSpec;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path();
+
+    // Point a spec at the tracked fixture: already blessed, so this exercises
+    // the real suite rather than a copy.
+    let spec = format!(
+        "[[datasets]]\npath = \"{}\"\n\n[[suites]]\npath = \"{}\"\n\n\
+         [[candidates]]\nname = \"gate_canary\"\n\n\
+         [measure]\nwarmup = 1\nmin_iters = 2\nmin_millis = 0\nchunk_rows = [0]\n",
+        repo_root().join("datasets/wildcards").display(),
+        repo_root().join("suites/wildcards").display(),
+    );
+    let spec_path = dir.join("spec.toml");
+    std::fs::write(&spec_path, spec).unwrap();
+    let loaded = LoadedSpec::load(&spec_path).unwrap();
+
+    let out_path = dir.join("rows.jsonl");
+    let mut writer = Writer::create(&out_path).unwrap();
+    let summary = runner::run_worker(&loaded, "gate_canary", 0, 0, &mut writer, false).unwrap();
+    writer.finish().unwrap();
+
+    let rows: Vec<serde_json::Value> = std::fs::read_to_string(&out_path)
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let cells = |strategy: &str, status: &str| -> Vec<&serde_json::Value> {
+        rows.iter()
+            .filter(|r| {
+                r["kind"] == "query" && r["strategy"] == strategy && r["status"] == status
+            })
+            .collect()
+    };
+
+    // Declining, not answering: every underscore and anchored-gap pattern is
+    // skipped, and nothing it skipped produced a number.
+    let declined = cells("like-declines", "unsupported");
+    assert!(
+        declined.len() > 20,
+        "expected the declining strategy to skip most of the corpus, got {}",
+        declined.len()
+    );
+    for r in &declined {
+        assert!(r["latency"].is_null(), "a declined cell must have no latency");
+        assert!(r["gate"].is_null(), "a declined cell was never gated");
+    }
+    assert!(
+        cells("like-declines", "gate_failed").is_empty(),
+        "declining correctly must not fail a gate"
+    );
+    assert!(
+        !cells("like-declines", "ok").is_empty(),
+        "the strategy must still answer the patterns it accepted"
+    );
+
+    // Cheating, and caught. Note it is accidentally right on some patterns —
+    // stripping '%' from `%abc%` gives the right answer — which is exactly
+    // why a canary exercised only on `%abc%` would prove nothing.
+    let caught = cells("like-lowers", "gate_failed");
+    assert!(
+        caught.len() > 10,
+        "silently lowering a pattern must fail the gate, got {} failures",
+        caught.len()
+    );
+
+    // A skip is not a pass: the two land in different counters.
+    assert_eq!(
+        summary.cells_unsupported as usize,
+        rows.iter()
+            .filter(|r| r["kind"] == "query" && r["status"] == "unsupported")
+            .count()
+    );
+    assert_eq!(
+        summary.cells_ok as usize,
+        rows.iter()
+            .filter(|r| r["kind"] == "query" && r["status"] == "ok")
+            .count()
+    );
+    assert!(summary.gate_failures >= caught.len() as u64);
+}

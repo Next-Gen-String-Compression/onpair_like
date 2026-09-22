@@ -35,6 +35,7 @@ default = [
     "cand-llm-token-tum",
     "cand-llm-token-prefilter",
     "scan-memmem",
+    "scan-like",
     "scan-prefilter",
     "scan-cpp-std-find",
     "scan-classics",
@@ -63,6 +64,7 @@ cand-fsst-like-utn = ["dep:lb-cand-fsst-like-utn"]
 cand-llm-token-tum = ["dep:lb-cand-llm-token-tum"]
 cand-llm-token-prefilter = ["dep:lb-cand-llm-token-prefilter"]
 scan-memmem = ["dep:lb-scan-memmem"]
+scan-like = ["dep:lb-scan-like"]
 scan-prefilter = ["dep:lb-scan-prefilter"]
 scan-cpp-std-find = ["dep:lb-scan-cpp-std-find"]
 scan-classics = ["dep:lb-scan-classics"]
@@ -93,6 +95,7 @@ lb-cand-fsst-like-utn = { path = "../candidates/fsst_like_utn", optional = true 
 lb-cand-llm-token-tum = { path = "../candidates/llm_token_tum", optional = true }
 lb-cand-llm-token-prefilter = { path = "../candidates/llm_token_prefilter", optional = true }
 lb-scan-memmem = { path = "../scanners/memmem", optional = true }
+lb-scan-like = { path = "../scanners/like", optional = true }
 lb-scan-prefilter = { path = "../scanners/prefilter", optional = true }
 lb-scan-cpp-std-find = { path = "../scanners/cpp_std_find", optional = true }
 lb-scan-classics = { path = "../scanners/classics", optional = true }

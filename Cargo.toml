@@ -26,6 +26,7 @@ members = [
     "candidates/llm_token_tum",
     "candidates/llm_token_prefilter",
     "scanners/memmem",
+    "scanners/like",
     "scanners/prefilter",
     "scanners/cpp_std_find",
     "scanners/classics",

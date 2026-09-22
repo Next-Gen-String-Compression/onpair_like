@@ -83,6 +83,8 @@ pub fn scanners() -> Vec<Scanner> {
         v.push(lb_scan_memmem::vtable());
         v.push(lb_scan_memmem::vtable_hay());
     }
+    #[cfg(feature = "scan-like")]
+    v.push(lb_scan_like::vtable());
     #[cfg(feature = "scan-prefilter")]
     v.push(lb_scan_prefilter::vtable());
     #[cfg(feature = "scan-cpp-std-find")]
@@ -309,6 +311,22 @@ impl BuiltChunk {
         // live local for the duration of the call.
         let rc = unsafe { probe(self.handle, strategy_index, query, &mut out) };
         (rc == 0).then_some(out)
+    }
+
+    /// Will `strategy_index` handle this exact query (ABI v8)? A candidate
+    /// that declares no probe is taken at the word of its op mask.
+    ///
+    /// Declining is a *capability gap*, not an error: the cell is recorded
+    /// Unsupported. It exists so a strategy can accept most LIKE patterns
+    /// while refusing a shape it cannot answer — refusing is always correct,
+    /// answering a pattern by quietly matching something else never is.
+    pub fn supports_query(&self, strategy_index: u32, query: &LbQuery) -> bool {
+        match self.vt.supports_query {
+            None => true,
+            // SAFETY: `handle` came from this vtable's `build`, and `query`
+            // outlives the call.
+            Some(f) => unsafe { f(self.handle, strategy_index, query) != 0 },
+        }
     }
 
     /// Copy this chunk's optional artifact during the post-run replay phase.
