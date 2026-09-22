@@ -1,0 +1,42 @@
+# Development loop for the LIKE work: two columns, the whole roster's cheap
+# strategies, whole-column chunking only. Minutes, not hours. Not paper-grade.
+#
+#   cargo run --release --bin bench -- run specs/like-quick.toml -o results/like-quick
+strategies = ["memmem", "like", "interp", "decode", "compressed", "prefilter", "fsst-prefilter"]
+
+[[datasets]]
+path = "../datasets/tpch-ptype-sf10"
+[[datasets]]
+path = "../datasets/clickbench-referer-1m"
+
+[[suites]]
+path = "../suites/tum_like/tpch-ptype-sf10"
+[[suites]]
+path = "../suites/clickbench-referer-1m-gen2-s42"
+
+[[candidates]]
+name = "uncompressed"
+[[candidates]]
+name = "uncompressed_memmem"
+[[candidates]]
+name = "uncompressed_prefilter"
+[[candidates]]
+name = "onpair"
+[[candidates]]
+name = "fsst"
+[[candidates]]
+name = "fsst_prefilter"
+[[candidates]]
+name = "fsst_like_tum"
+
+[[scanners]]
+name = "memmem"
+[[scanners]]
+name = "like"
+
+[measure]
+chunk_rows = [0]
+warmup = 1
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

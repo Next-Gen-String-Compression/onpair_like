@@ -208,12 +208,94 @@ def rows_dblp_xml(raw: Path, params: dict):
     yield from rows
 
 
+def rows_imdb_tsv_field(raw: Path, params: dict):
+    """datasets.imdbws.com TSV: a header line names the fields, `\\N` is
+    null. Yields the named field in file order, dropping nulls and empties,
+    up to `limit` rows."""
+    name = params["field"]
+    limit = int(params.get("limit", 0)) or None
+    n = 0
+    with gzip.open(str(raw), mode="rt", encoding="utf-8", newline="") as f:
+        header = next(f).rstrip("\r\n").split("\t")
+        idx = header.index(name)
+        for line in f:
+            parts = line.rstrip("\r\n").split("\t")
+            if len(parts) <= idx:
+                continue
+            row = parts[idx]
+            if row == "\\N" or not row:
+                continue
+            yield row
+            n += 1
+            if limit and n >= limit:
+                return
+
+
+def rows_imdb_list_block(raw: Path, params: dict):
+    """The 2017 frozen IMDb list files (Latin-1), streamed, one row per block.
+
+    plot:   every run of consecutive `PL: ` lines is one summary; lines are
+            joined with a single space. `MV:`/`BY:` and separators end a run.
+    quotes: every spoken line is one row. A line begins a quote when it is
+            not indented; the leading `Speaker: ` is removed; the following
+            two-space-indented lines are its continuation and are joined with
+            a space. `# ` title lines and blank lines end a quote.
+    Both decode Latin-1 and re-encode as UTF-8, so the canonical column is
+    valid UTF-8 like every other dataset here. The choice of granularity is
+    documented in sources.yaml as an adaptation of the TUM workload.
+    """
+    block = params["block"]
+    limit = int(params.get("limit", 0)) or None
+    n = 0
+    buf: list[str] = []
+    # The files open with a copyright preamble; nothing before the first
+    # entry header (`MV:` for plot, `# ` for quotes) is data.
+    started = False
+
+    def flush():
+        text = " ".join(part.strip() for part in buf).strip()
+        buf.clear()
+        return text or None
+
+    with gzip.open(str(raw), mode="rt", encoding="latin-1", newline="") as f:
+        for line in f:
+            line = line.rstrip("\r\n")
+            if not started:
+                started = line.startswith("MV: " if block == "plot" else "# ")
+                if not started:
+                    continue
+            if block == "plot":
+                if line.startswith("PL: "):
+                    buf.append(line[4:])
+                    continue
+                emit = flush() if buf else None
+            else:  # quotes
+                if line.startswith("  ") and buf:
+                    buf.append(line)
+                    continue
+                emit = flush() if buf else None
+                if line and not line.startswith("#") and not line.startswith("-"):
+                    speaker, sep, rest = line.partition(": ")
+                    buf.append(rest if sep else line)
+            if emit:
+                yield emit
+                n += 1
+                if limit and n >= limit:
+                    return
+        if buf:
+            emit = flush()
+            if emit:
+                yield emit
+
+
 EXTRACTORS = {
     "tar-tsv-field": rows_tar_tsv_field,
     "gzip-tsv-field": rows_gzip_tsv_field,
     "jsonl-field": rows_jsonl_field,
     "ttl-en-literal": rows_ttl_en_literal,
     "dblp-xml": rows_dblp_xml,
+    "imdb-tsv-field": rows_imdb_tsv_field,
+    "imdb-list-block": rows_imdb_list_block,
 }
 
 
@@ -240,6 +322,45 @@ def write_parquet(rows, out: Path) -> int:
             writer.write_table(pa.table({PARQUET_COLUMN: pa.array(batch, pa.large_string())}))
             n += len(batch)
     return n
+
+
+def find_or_download(url: str, name: str, raw_dir: Path, expected_sha256: str | None) -> Path:
+    """Locate a raw file already fetched under datasets/raw/, else download it.
+
+    Only a file whose sha256 matches the pin is reused; without a pin the
+    search is skipped, because "same filename" is not evidence of same bytes.
+    """
+    own = raw_dir / name
+    if own.exists():
+        download(url, own, expected_sha256)  # verifies the pin, no refetch
+        return own
+    if expected_sha256:
+        for candidate in sorted(RAW_DIR.glob(f"*/{name}")):
+            if sha256_of(candidate) == expected_sha256:
+                log(f"  raw present under {candidate.parent.name}/ — reusing it")
+                return candidate
+    download(url, own, expected_sha256)
+    return own
+
+
+def write_nonempty_column(source: Path, column: str, out: Path) -> int:
+    """Copy one parquet column to `out` as PARQUET_COLUMN, dropping nulls and
+    empty strings and preserving file order. Returns the row count kept."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    reader = pq.ParquetFile(str(source))
+    schema = pa.schema([(PARQUET_COLUMN, pa.large_string())])
+    out.parent.mkdir(parents=True, exist_ok=True)
+    kept = 0
+    with pq.ParquetWriter(str(out), schema, compression="zstd") as writer:
+        for batch in reader.iter_batches(batch_size=BATCH_ROWS, columns=[column]):
+            values = [v for v in batch.column(0).to_pylist() if v]
+            if not values:
+                continue
+            writer.write_table(pa.table({PARQUET_COLUMN: pa.array(values, pa.large_string())}))
+            kept += len(values)
+    return kept
 
 
 def tpch_to_parquet(params: dict, out: Path, db_dir: Path) -> None:
@@ -331,11 +452,28 @@ def prepare_entry(entry: dict, update_checksums: bool) -> dict:
         column = PARQUET_COLUMN
     elif kind == "parquet":
         url = entry["source"]["url"]
-        parquet = raw_dir / url.rsplit("/", 1)[1]
-        got_sha = download(url, parquet, _pinned_sha(entry))
+        name = url.rsplit("/", 1)[1]
+        # Several entries extract different columns from the SAME pinned file
+        # (the ClickBench partition holds URL, Referer and Title). Reuse a
+        # copy another entry already fetched and verified rather than storing
+        # the same 120 MB once per column.
+        parquet = find_or_download(url, name, raw_dir, _pinned_sha(entry))
+        got_sha = sha256_of(parquet)
         if update_checksums and not _pinned_sha(entry):
             writeback.setdefault(ds_id, {})["sha256"] = got_sha
         column = entry["params"]["column"]
+        if (entry.get("params") or {}).get("drop_empty"):
+            # `bench ingest` drops nulls, not empty strings — and an empty
+            # string is a legal row. A column that is mostly empty (ClickBench
+            # SearchPhrase is 93% empty) would otherwise be benchmarked
+            # largely on rows no pattern can match, so entries that want the
+            # populated column say so explicitly and filter here.
+            filtered = raw_dir / f"{column}.nonempty.parquet"
+            if not filtered.exists():
+                log(f"  filtering empty rows out of {column} -> {filtered.name}")
+                n = write_nonempty_column(parquet, column, filtered)
+                log(f"  kept {n} non-empty rows")
+            parquet, column = filtered, PARQUET_COLUMN
     else:
         url = entry["source"]["url"]
         raw = raw_dir / url.rsplit("/", 1)[1]

@@ -118,7 +118,220 @@ datasets:
     approx: { rows: 1500000, payload_bytes: 108724798 }
     notes: Grammar-generated comment text, U/N=0.94.
 
+  # ---- ClickBench extras: the same pinned hits_0.parquet, other columns ----
+  # No extra download — prepare.py reads the file already fetched for
+  # clickbench-url-1m. Column choices are justified from measured
+  # distributions in datasets/README.md, not from the column names.
+
+  - id: clickbench-referer-1m
+    default: true
+    source:
+      url: https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_0.parquet
+      sha256: fa134fe101e68324e0de851146fda69624f5cbb707d387141d1c2a88a219a16d
+      license: ClickBench (Yandex Metrica sample, published for benchmarking)
+      download_bytes: 122446530
+    kind: parquet
+    params: { column: Referer, drop_empty: true }
+    expected_checksum: "xxh3:6c59bfcf611d8bb9"
+    approx: { rows: 921000, payload_bytes: 79600000 }
+    notes: >
+      Referrer URLs, 92.1% non-empty, L_avg 86 B, U/N 0.25. URL-shaped like
+      the URL column but a different host mix and a different prefix
+      distribution — the second URL column, not a copy of the first.
+
+  - id: clickbench-title-1m
+    default: true
+    source:
+      url: https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_0.parquet
+      sha256: fa134fe101e68324e0de851146fda69624f5cbb707d387141d1c2a88a219a16d
+      license: ClickBench (Yandex Metrica sample, published for benchmarking)
+      download_bytes: 122446530
+    kind: parquet
+    params: { column: Title, drop_empty: true }
+    expected_checksum: "xxh3:74daa0d3cb66ffdb"
+    approx: { rows: 936000, payload_bytes: 138400000 }
+    notes: >
+      Page titles: 93.6% non-empty, L_avg 148 B, and U/N 0.079 — the only
+      long natural-language column in the roster with heavy duplication,
+      which is a dictionary front-end's best case and unlike anything the
+      URL columns exercise.
+
+  # ---- TPC-H extras: the same local SF10 DuckDB, other columns -----------
+  # Also no download: prepare.py generates SF10 once (already present) and
+  # copies a column out of it. These are the LIKE-targeted columns the TUM
+  # DaMoN'26 benchmark uses.
+
+  - id: tpch-ptype-sf10
+    default: true
+    source:
+      url: "duckdb-extension:tpch"
+      sha256: n/a
+      license: TPC (academic/benchmark use)
+      download_bytes: 0
+    kind: tpch-duckdb
+    params: { sf: 10, table: part, column: p_type }
+    expected_checksum: "xxh3:f969f8bc7b093f83"
+    approx: { rows: 2000000, payload_bytes: 41200000 }
+    notes: >
+      ~150 distinct values across 2M rows (U/N 0.0001) — the extreme
+      low-cardinality LIKE target, and the column behind TPC-H Q2/Q14/Q16.
+
+  - id: tpch-scomment-sf10
+    default: true
+    source:
+      url: "duckdb-extension:tpch"
+      sha256: n/a
+      license: TPC (academic/benchmark use)
+      download_bytes: 0
+    kind: tpch-duckdb
+    params: { sf: 10, table: supplier, column: s_comment }
+    expected_checksum: "xxh3:306741a5d5c088fe"
+    approx: { rows: 100000, payload_bytes: 6200000 }
+    notes: >
+      The Q16 "Customer%Complaints" column. Only 100k rows at SF10 (supplier
+      scales as 10k x SF), so per-query timing noise is larger here than on
+      the million-row columns — it is in the roster for pattern fidelity to
+      the TUM workload, not for its throughput numbers.
+
+  - id: tpch-ocomment-sf1
+    default: true
+    source:
+      url: "duckdb-extension:tpch"
+      sha256: n/a
+      license: TPC (academic/benchmark use)
+      download_bytes: 0
+    kind: tpch-duckdb
+    params: { sf: 1, table: orders, column: o_comment }
+    expected_checksum: "xxh3:36e025374cd3dcc8"
+    approx: { rows: 1500000, payload_bytes: 72700000 }
+    notes: >
+      The Q13 "%special%requests%" column. SF1 deliberately: at SF10 it is
+      15M rows / 727 MB, which would dominate every sweep it appears in.
+      The scale factor is in the id because a silently sampled "sf10" would
+      be a different dataset wearing the same name.
+
+  # ---- IMDb ---------------------------------------------------------------
+  # Two sources with two very different reproducibility stories, kept apart
+  # on purpose:
+  #
+  # datasets.imdbws.com is a ROLLING snapshot regenerated daily (the
+  # Last-Modified header moves every 24h), so a permanent sha256 pin is
+  # impossible there. Those entries record the sha256 and snapshot date of
+  # whatever prepare.py fetched, and pin the canonical xxh3 of the extracted
+  # column — which is what binds a suite to its data. A later snapshot then
+  # fails LOUDLY at suite load (checksum mismatch) instead of quietly
+  # producing incomparable numbers.
+  #
+  # ftp.fu-berlin.de/pub/misc/movies/database/frozendata/ is the 2017-12-22
+  # freeze of the old IMDb list files, unchanged since, and the corpus the
+  # DaMoN'26 FSST-LIKE paper used for its plot/quotes columns. Fully pinnable.
+  #
+  # Both are for non-commercial / personal use only under IMDb's terms
+  # (https://www.imdb.com/interfaces/, https://help.imdb.com/article/
+  # imdb/general-information/can-i-use-imdb-data-in-my-software/G5JTRESSHJBBHTGX);
+  # the benchmark uses them for research, not for redistribution — the
+  # materialised columns are never committed.
+
+  - id: imdb-primary-title-1m
+    default: true
+    source:
+      url: https://datasets.imdbws.com/title.basics.tsv.gz
+      sha256: 45f5b941a66e67d5e3a3d31c55f34b93fced3eaa271a53301a5975da0f3d02d9
+      snapshot_date: 2026-09-21   # Last-Modified of the copy prepare.py fetched
+      license: IMDb non-commercial datasets (personal / non-commercial use only)
+      download_bytes: 227078754
+    kind: imdb-tsv-field     # header line, field by NAME, drop \N + empties
+    params: { field: primaryTitle, limit: 1000000 }
+    expected_checksum: "xxh3:1aae5f417bc2e3c7"
+    approx: { rows: 1000000, payload_bytes: 18754183 }
+    notes: >
+      First 1M non-empty primary titles in file order (tconst order, i.e.
+      oldest first). Short proper-noun text; the stand-in for the TUM
+      paper's "films" column.
+
+  - id: imdb-primary-name-1m
+    default: true
+    source:
+      url: https://datasets.imdbws.com/name.basics.tsv.gz
+      sha256: b2bf6e001ae22ed6b13d3b34975b0e04dfbe678a5b221997c1bb67e3db5737fc
+      snapshot_date: 2026-09-21   # Last-Modified of the copy prepare.py fetched
+      license: IMDb non-commercial datasets (personal / non-commercial use only)
+      download_bytes: 309802356
+    kind: imdb-tsv-field
+    params: { field: primaryName, limit: 1000000 }
+    expected_checksum: "xxh3:265c96b2d4b6b479"
+    approx: { rows: 1000000, payload_bytes: 13642950 }
+    notes: >
+      First 1M person names in nconst order. Very short rows, a tiny alphabet
+      per row, heavy repetition of first names — the stand-in for the TUM
+      paper's "actors" column.
+
+  - id: imdb-plot-frozen-651k
+    default: true
+    source:
+      url: https://ftp.fu-berlin.de/pub/misc/movies/database/frozendata/plot.list.gz
+      sha256: c36c004a4cf6f6a39e730e0013d69cdd2afa5a3577db2ca0fb33ccd210dc3d5f
+      license: IMDb list files, 2017-12-22 freeze (personal / non-commercial use only)
+      download_bytes: 159742723
+    kind: imdb-list-block    # one row per PL: summary block, Latin-1 -> UTF-8
+    params: { block: plot, limit: 1000000 }
+    expected_checksum: "xxh3:c4949d4bedbc3451"
+    approx: { rows: 650918, payload_bytes: 362345596 }
+    notes: >
+      Plot summaries: one row per summary (the consecutive PL: lines of one
+      block, joined by a space). The 2017 file holds 650,918 summaries, so
+      the row count is in the id rather than rounded up. Long natural-language
+      prose (L_avg ~557 B); the column the TUM paper's "plot" patterns were
+      mined from.
+
+  - id: imdb-quotes-frozen-1m
+    default: true
+    source:
+      url: https://ftp.fu-berlin.de/pub/misc/movies/database/frozendata/quotes.list.gz
+      sha256: bba02c2c283eb091cd49036ed2b96ec2b64131595e0483515b54a244016e7264
+      license: IMDb list files, 2017-12-22 freeze (personal / non-commercial use only)
+      download_bytes: 87000000
+    kind: imdb-list-block
+    params: { block: quotes, limit: 1000000 }
+    expected_checksum: "xxh3:1619b98680946bca"
+    approx: { rows: 1000000, payload_bytes: 68130702 }
+    notes: >
+      Movie quotes: one row per spoken line, the leading "Speaker: " removed
+      and two-space continuation lines joined. That granularity was inferred
+      from the shape of the upstream TUM patterns (most are head-anchored on
+      the first spoken word, e.g. "I don't know %"); it is an adaptation,
+      and some upstream patterns will land at selectivity zero because of it.
+
   # ---- non-default extras (fetch with --dataset <id>) --------------------
+  - id: tpch-ocomment-sf10
+    default: false
+    source:
+      url: "duckdb-extension:tpch"
+      sha256: n/a
+      license: TPC (academic/benchmark use)
+      download_bytes: 0
+    kind: tpch-duckdb
+    params: { sf: 10, table: orders, column: o_comment }
+    expected_checksum: recorded-at-prepare
+    approx: { rows: 15000000, payload_bytes: 727400000 }
+    notes: 727 MB — the full-scale Q13 column, for main-memory-scale runs only.
+
+  - id: clickbench-searchphrase-69k
+    default: false
+    source:
+      url: https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_0.parquet
+      sha256: fa134fe101e68324e0de851146fda69624f5cbb707d387141d1c2a88a219a16d
+      license: ClickBench (Yandex Metrica sample, published for benchmarking)
+      download_bytes: 122446530
+    kind: parquet
+    params: { column: SearchPhrase, drop_empty: true }
+    expected_checksum: recorded-at-prepare
+    approx: { rows: 69000, payload_bytes: 3500000 }
+    notes: >
+      Short search phrases, but only 6.9% of the partition's rows are
+      non-empty — 69k rows, not a million. The row count is in the id
+      rather than the notes so no spec can accidentally treat it as a
+      million-row column.
 
   - id: dblp-title
     default: false

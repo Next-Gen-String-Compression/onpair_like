@@ -8,7 +8,7 @@
 
 use core::ffi::c_char;
 
-pub const LB_ABI_VERSION: u32 = 7;
+pub const LB_ABI_VERSION: u32 = 8;
 
 /// Guaranteed writable headroom past the decoded payload in `decode()`
 /// output buffers (mirrors `LB_DECODE_PAD`; SEMANTICS.md rule 8).
@@ -21,13 +21,22 @@ pub const LB_SUFFIX: u32 = 1;
 pub const LB_CONTAINS: u32 = 2;
 pub const LB_MULTI_CONTAINS: u32 = 3;
 pub const LB_CONTAINS_ANY: u32 = 4;
-pub const LB_OP_COUNT: u32 = 5;
+/// General SQL LIKE pattern (ABI v8): exactly one "needle" holding the raw
+/// pattern bytes. `%` = zero or more bytes, `_` = exactly one byte, `\`
+/// escapes any of `%`, `_`, `\`. Byte semantics — `_` matches one **byte**,
+/// not one codepoint (`contract/SEMANTICS.md`).
+pub const LB_LIKE: u32 = 5;
+pub const LB_OP_COUNT: u32 = 6;
 
 #[inline]
 pub const fn op_bit(op: u32) -> u32 {
     1u32 << op
 }
-pub const LB_ALL_OPS: u32 = (1u32 << LB_OP_COUNT) - 1;
+/// The five literal ops — deliberately **not** `LB_LIKE`. Every module that
+/// declared `LB_ALL_OPS` before ABI v8 meant exactly these five; widening the
+/// constant would have silently claimed wildcard support for all of them.
+pub const LB_ALL_OPS: u32 = (1u32 << LB_LIKE) - 1;
+pub const LB_ALL_OPS_WITH_LIKE: u32 = (1u32 << LB_OP_COUNT) - 1;
 
 pub fn op_name(op: u32) -> &'static str {
     match op {
@@ -36,6 +45,7 @@ pub fn op_name(op: u32) -> &'static str {
         LB_CONTAINS => "contains",
         LB_MULTI_CONTAINS => "multi_contains",
         LB_CONTAINS_ANY => "contains_any",
+        LB_LIKE => "like",
         _ => "unknown",
     }
 }
@@ -47,6 +57,7 @@ pub fn op_from_name(name: &str) -> Option<u32> {
         "contains" => LB_CONTAINS,
         "multi_contains" => LB_MULTI_CONTAINS,
         "contains_any" => LB_CONTAINS_ANY,
+        "like" => LB_LIKE,
         _ => return None,
     })
 }
@@ -289,6 +300,16 @@ pub struct LbArtifact {
 pub type ExportArtifactFn =
     unsafe extern "C" fn(this: *mut core::ffi::c_void, out: *mut LbArtifact) -> i32;
 
+/// Optional per-query capability probe for a candidate strategy (ABI v8) —
+/// the candidate-side twin of [`SupportsQueryFn`]. Returns nonzero if the
+/// strategy will handle this exact query, 0 to declare a capability gap
+/// (the cell becomes `Unsupported`, never an error and never a pass).
+pub type CandidateSupportsQueryFn = unsafe extern "C" fn(
+    this: *mut core::ffi::c_void,
+    strategy_index: u32,
+    query: *const LbQuery,
+) -> i32;
+
 #[repr(C)]
 pub struct LbCandidate {
     pub abi_version: u32,
@@ -307,6 +328,8 @@ pub struct LbCandidate {
     pub query_facts: Option<QueryFactsFn>,
     /// ABI v7; invoked only in the post-run deterministic replay phase.
     pub export_artifact: Option<ExportArtifactFn>,
+    /// ABI v8; `None` from candidates whose op mask is the whole answer.
+    pub supports_query: Option<CandidateSupportsQueryFn>,
 }
 
 // -------------------------------------------------------------- scanner

@@ -53,6 +53,8 @@
         <label id="source-field"><span>Run</span><select id="source-select"></select></label>
         <label><span>Dataset</span><select id="dataset-select"></select></label>
         <label id="op-field"><span>Operation</span><select id="op-select"></select></label>
+        <label id="class-field"><span>Pattern class</span><select id="class-select"></select></label>
+        <label id="underscore-field"><span>Underscores</span><select id="underscore-select"></select></label>
         <label id="chunk-field"><span>Chunk rows</span><select id="chunk-select"></select></label>
         <label><span>X measure</span><select id="x-metric">
           <option value="selectivity">Selectivity</option>
@@ -64,6 +66,7 @@
         </select></label>
         <label><span>Aggregate</span><select id="bin-count">
           <option value="exact">Exact x values</option>
+          <option value="bucket">Suite bucket</option>
           <option value="8">8 bins</option>
           <option value="12" selected>12 bins</option>
           <option value="16">16 bins</option>
@@ -286,6 +289,7 @@
   <script id="bench-viz-defaults" type="application/json">__BENCH_VIZ_DEFAULTS__</script>
   <script id="bench-viz-analysis" type="application/json">__BENCH_VIZ_ANALYSIS__</script>
   <script id="bench-viz-mincut-graphs" type="application/json">__BENCH_VIZ_MINCUT_GRAPHS__</script>
+  <script id="bench-viz-coverage" type="application/json">__BENCH_VIZ_COVERAGE__</script>
   <script>__BENCH_VIZ_JS__</script>
   <script>__BENCH_VIZ_PREFILTER_JS__</script>
 </body>

@@ -73,7 +73,7 @@ class BenchVizTests(unittest.TestCase):
                 "\n".join(json.dumps(row) for row in rows) + "\n",
                 encoding="utf-8",
             )
-            points, builds, ignored = bench_viz.load_results([run])
+            points, builds, ignored, _coverage = bench_viz.load_results([run])
         self.assertEqual(len(points), 1)
         self.assertEqual(points[0]["source"], "demo")
         # Anchored matches are not this tool's subject, and are reported rather
@@ -628,3 +628,78 @@ class MarkupTests(unittest.TestCase):
                        "__BENCH_VIZ_JS__",
                        "__BENCH_VIZ_PREFILTER_JS__"):
             self.assertIn(marker, self.TEMPLATE)
+
+
+class LikeShapeAndCoverageTests(unittest.TestCase):
+    """T-VIZ-1 (TODO_like_workload.md §7): a `like` row normalizes with its
+    stamped shape facts, and a declined cell becomes a coverage record rather
+    than a silent drop."""
+
+    def test_like_row_carries_pattern_shape_and_buckets(self):
+        row = query_row(
+            op="like",
+            query_id="g2.underscore_1.L4-7.1e-3.000",
+            derived={
+                "selectivity": 0.001, "match_count": 1000, "needle_len_total": 8,
+                "pattern": "%spec_al%", "pattern_class": "contains",
+                "percent_count": 2, "underscore_count": 1, "literal_len_total": 6,
+                "selectivity_bucket": "1e-3", "length_bucket": "L4-7",
+            },
+        )
+        point = bench_viz.normalize_query(row, "run")
+        self.assertIsNotNone(point)
+        self.assertEqual(point["op"], "like")
+        self.assertEqual(point["pattern"], "%spec_al%")
+        self.assertEqual(point["pattern_class"], "contains")
+        self.assertEqual(point["underscore_count"], 1)
+        self.assertEqual(point["literal_len"], 6)  # metacharacters excluded
+        self.assertEqual(point["selectivity_bucket"], "1e-3")
+        self.assertEqual(point["length_bucket"], "L4-7")
+
+    def test_every_like_row_is_kept_whatever_its_anchoring(self):
+        # The anchored-gap shapes are the ones no literal op expresses; the
+        # Pattern class facet separates them from the unanchored ones, so the
+        # loader keeps them all rather than pooling a decision into the load.
+        for cls in ("contains", "multi_gap", "prefix", "anchored_gap_both", None):
+            self.assertTrue(bench_viz.is_substring_search(
+                {"kind": "query", "op": "like", "pattern_class": cls}), cls)
+        # the literal ops keep their old classification
+        self.assertTrue(bench_viz.is_substring_search({"kind": "query", "op": "contains"}))
+        self.assertFalse(bench_viz.is_substring_search({"kind": "query", "op": "prefix"}))
+
+    def test_declined_cells_become_coverage_not_points(self):
+        declined = query_row(
+            status="unsupported", op="like", strategy="compressed", scanner=None,
+            latency=None, ns_per_row=None, gbps_raw=None,
+            derived={"selectivity": 0.001, "match_count": 1000, "needle_len_total": 5,
+                     "pattern_class": "contains", "underscore_count": 1,
+                     "selectivity_bucket": "1e-3"},
+        )
+        self.assertIsNone(bench_viz.normalize_query(declined, "run"))
+        record = bench_viz.normalize_coverage(declined, "run")
+        self.assertIsNotNone(record)
+        self.assertEqual(record["status"], "unsupported")
+        self.assertEqual(record["strategy"], "compressed")
+        self.assertEqual(record["pattern_class"], "contains")
+        self.assertEqual(record["underscore_count"], 1)
+        # a measured row is never mistaken for coverage
+        self.assertIsNone(bench_viz.normalize_coverage(query_row(), "run"))
+
+    def test_load_results_keeps_declined_cells_as_coverage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "run"
+            run.mkdir()
+            rows = [
+                query_row(query_id="a"),
+                query_row(query_id="b", status="unsupported", op="like",
+                          strategy="compressed", scanner=None, latency=None,
+                          derived={"selectivity": 0.0, "match_count": 0,
+                                   "needle_len_total": 3, "pattern_class": "contains",
+                                   "underscore_count": 1, "selectivity_bucket": "zero"}),
+            ]
+            (run / "results.jsonl").write_text(
+                "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+            points, builds, ignored, coverage = bench_viz.load_results([run])
+        self.assertEqual([p["query_id"] for p in points], ["a"])
+        self.assertEqual([c["query_id"] for c in coverage], ["b"])
+        self.assertEqual(coverage[0]["status"], "unsupported")

@@ -1752,3 +1752,86 @@ suppressing the separator makes it miss a row on `suffix.e` (1 of 23 cells,
 against 6 of 23 for `fsst_like_tum`). `harness/tests/fsst_like_tum_guard.rs`
 covers both candidates and asserts each one actually switched separators on, so
 the corpus cannot silently stop exercising the hazard.
+
+---
+
+## 18. LIKE workload: wildcards, new columns, the adapted TUM corpus (2026-09)
+
+The full design and its two-PR split are in `TODO_like_workload.md`; this
+section records what landed and the decisions that bind later work. It
+un-defers §14 scope decision 1 (the macro track from published benchmarks).
+
+### 18.1 `LB_LIKE` and byte semantics (ABI v8)
+
+A sixth op, `like`, carries a whole SQL LIKE pattern in its single needle:
+`%` is zero or more bytes, `_` **exactly one byte**, `\` escapes `%`, `_`,
+`\`. Byte semantics follow from the data model (§4) — nothing decodes UTF-8
+anywhere — and match the engines under test. `contract/SEMANTICS.md` is
+normative: `%L_ve%` does not match `Lóve`. `LB_ALL_OPS` deliberately stays
+the five literal ops so no existing module silently claims wildcard support.
+
+ABI v8 also adds `lb_candidate.supports_query`, the candidate-side twin of
+the v4 scanner probe. Declining is a capability gap, recorded `Unsupported`,
+counted apart from `cells_ok` in the run summary, and never a pass. The gate
+canary carries two strategies that pin both halves: `like-declines` refuses
+what it cannot answer and must fail no gate; `like-lowers` evaluates `%ab_c%`
+as `contains("abc")` and must be caught.
+
+### 18.2 Lowering, and why it is a tested claim
+
+A pattern is stored under the **narrowest equivalent op**: `lit%` → prefix,
+`%lit` → suffix, `%lit%` → contains, `%a%b%…%` → multi_contains; anchored
+gaps and anything with `_` stay `like`. Two-thirds of the corpus therefore
+runs on the whole existing roster and joins existing result tables directly.
+The equivalence is a correctness claim — truth is computed from the lowered
+form — so `harness/src/like.rs` proves it on 3 000 random patterns × 12 rows
+(`lowering_is_semantically_exact`), and the wildcard fixture writes four
+predicates twice (literal op and pattern) that must bless identically.
+`bless` stamps every query's canonical `pattern`, `pattern_class`, wildcard
+counts, `literal_len_total`, `selectivity_bucket` and `length_bucket` into
+`derived`, so analysis facets by shape across the lowering boundary.
+
+### 18.3 Oracle and baseline
+
+`oracle::row_matches_like` is a naive backtracking scan, allocation-free,
+checked against an independent DP twin. The plaintext baseline is the
+`like` scanner (`scanners/like`): segment split on `%`, SIMD search of each
+segment's longest literal run, exact verification of the holes — and,
+through the harness-composed `decode` strategy, it gives every decode-only
+codec a LIKE number at no per-candidate cost. It shares no code with the
+oracle and is gated like any other scanner.
+
+### 18.4 Corpus
+
+- **`gen2`** (`bench gen --method like`, `harness/src/gen/like.rs`): mines
+  literals with the §14-successor suffix-array generator over a **held-out
+  pool** (`xxh3(row) % 8 == 0`), synthesizes ten pattern classes from them,
+  probes every candidate **exactly** against the full column, and fills
+  class × literal-length × measured-selectivity cells; every cell is reported
+  filled / partial / empty. A `_` mutation is re-probed, never inheriting
+  its parent's count, and only replaces an ASCII byte.
+- **Adapted TUM corpus** (`bench tum-import`, `suites/tum_like/`): the
+  DaMoN'26 `benchmark/patterns.json` at
+  `calin2110/FSST-LIKE-Matching@b1eb3ab9…` (sha256 pinned in
+  `PROVENANCE.md`), 317 of 462 patterns (TPC-H + IMDb), blessed against
+  *our* columns with full upstream coordinates in `meta.tum`. Adapted, not
+  reproduced.
+- **Columns**: nine new (`datasets/README.md` has the measured profiles and
+  the rejections). IMDb's rolling files record sha256 + snapshot date; the
+  frozen 2017 list files are fully pinned.
+
+### 18.5 Reporting
+
+Results carry `selectivity_bucket` and the shape facts into the DuckDB
+`query` table, and Benchmark Explorer 3000 facets by pattern class and
+underscore count, aggregates by suite bucket, and shows declined cells as
+per-series coverage (`N/M answered`) rather than dropping the series.
+
+### 18.6 What is deliberately not here
+
+No matcher learns `_` in this PR. Every compressed-domain strategy reports
+`Unsupported` on the wildcard classes; the plot measures that gap. Closing it
+— `fsst_like_tum` first (upstream already has `UnderscorePattern`), then the
+prefilter family via literal-run covers plus exact verification, then OnPair
+via prune-then-decode-verify — is `feat/like-wildcard-execution`
+(`TODO_like_workload.md` §15), against the baseline this PR publishes.

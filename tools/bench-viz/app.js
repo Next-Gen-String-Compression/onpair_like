@@ -3,6 +3,13 @@
 
   const DATA = JSON.parse(document.getElementById("bench-viz-data").textContent);
   const DEFAULTS = JSON.parse(document.getElementById("bench-viz-defaults").textContent);
+  // Cells a module declined (`unsupported`) or failed. Never plotted; they
+  // exist so a series' legend chip can say "0 of 142 answered" instead of the
+  // series silently not being there. Absent on viewers built before ABI v8.
+  const COVERAGE = (() => {
+    const node = document.getElementById("bench-viz-coverage");
+    return node ? JSON.parse(node.textContent) : [];
+  })();
   // Column shape, the fitted cost model, and the run's own noise floor, all
   // computed by the builder so the statistics are unit tested in Python rather
   // than only here. Absent on viewers built before the prefilter section.
@@ -42,10 +49,15 @@
   ];
   const UNPLOTTED = "#aab3bb";
   const DASHES = ["", "8 4", "2 3", "11 4 2 4", "5 3 1.5 3"];
-  const OP_ORDER = ["contains", "prefix", "suffix", "multi_contains", "contains_any"];
+  const OP_ORDER = ["contains", "prefix", "suffix", "multi_contains", "contains_any", "like"];
+  const CLASS_ORDER = ["contains", "prefix", "suffix", "multi_gap", "anchored_gap_head",
+    "anchored_gap_tail", "anchored_gap_both", "exact"];
+  const BUCKET_ORDER = ["zero", "ultra_rare", "1e-5", "1e-4", "1e-3", "1e-2", "1e-1", "broad"];
+  const ANY = "(any)";
 
   const refs = Object.fromEntries([
-    "source-select", "dataset-select", "op-select", "op-field", "chunk-select", "x-metric",
+    "source-select", "dataset-select", "op-select", "op-field", "class-select", "class-field",
+    "underscore-select", "underscore-field", "chunk-select", "x-metric",
     "y-metric", "bin-count", "focus-label", "focus-min", "focus-max", "focus-reset",
     "focus-error", "ylimit-label", "ylimit-min", "ylimit-max", "ylimit-reset",
     "source-field", "chunk-field", "show-points", "show-band", "edit-labels",
@@ -60,6 +72,11 @@
     source: null,
     dataset: null,
     op: null,
+    // LIKE-shape facets (ABI v8). With one LIKE corpus stored across five
+    // ops, Operation alone cannot ask "how do the underscore patterns do";
+    // these can. ANY leaves the facet open.
+    patternClass: ANY,
+    underscores: ANY,
     chunk: null,
     xMetric: "selectivity",
     yMetric: "gbps",
@@ -272,7 +289,17 @@
     const desiredOp = initial && ops.includes("contains") ? "contains" : state.op;
     state.op = setOptions(refs["op-select"], ops, desiredOp);
 
-    const opRows = datasetRows.filter(row => row.op === state.op);
+    const opRowsAll = datasetRows.filter(row => row.op === state.op);
+    const classes = unique(opRowsAll.map(row => row.pattern_class).filter(Boolean));
+    classes.sort((a, b) => CLASS_ORDER.indexOf(a) - CLASS_ORDER.indexOf(b));
+    state.patternClass = setOptions(refs["class-select"], [ANY, ...classes], state.patternClass);
+    const classRows = state.patternClass === ANY
+      ? opRowsAll : opRowsAll.filter(row => row.pattern_class === state.patternClass);
+    const underscores = unique(classRows.map(row => underscoreBand(row)).filter(Boolean));
+    underscores.sort();
+    state.underscores = setOptions(refs["underscore-select"], [ANY, ...underscores], state.underscores);
+    const opRows = state.underscores === ANY
+      ? classRows : classRows.filter(row => underscoreBand(row) === state.underscores);
     const chunks = unique(opRows.map(row => row.chunk_rows)).sort((a, b) => a - b);
     state.chunk = Number(setOptions(
       refs["chunk-select"], chunks, state.chunk,
@@ -282,8 +309,23 @@
     // A control offering one option is not a control. Most runs measure one
     // operation over the whole column, and most builds load a single run.
     refs["op-field"].hidden = ops.length < 2;
+    refs["class-field"].hidden = classes.length < 2;
+    refs["underscore-field"].hidden = underscores.length < 2;
     refs["chunk-field"].hidden = chunks.length < 2;
     refs["source-field"].hidden = sources.length < 2;
+  }
+
+  // "0", "1", "2+" — the grouping the TUM corpus uses, applied to every row
+  // that carries the stamped count; rows without it (older suites) get none.
+  function underscoreBand(row) {
+    const n = row.underscore_count;
+    if (!finite(n)) return null;
+    return n === 0 ? "0" : n === 1 ? "1" : "2+";
+  }
+
+  function inFacets(row) {
+    return (state.patternClass === ANY || row.pattern_class === state.patternClass) &&
+      (state.underscores === ANY || underscoreBand(row) === state.underscores);
   }
 
   function contextRows() {
@@ -291,8 +333,23 @@
       row.source === state.source &&
       row.dataset === state.dataset &&
       row.op === state.op &&
-      row.chunk_rows === state.chunk
+      row.chunk_rows === state.chunk &&
+      inFacets(row)
     );
+  }
+
+  // Declined cells in the same context, per series: what the legend reports.
+  function coverageFor() {
+    const declined = new Map();
+    COVERAGE.forEach(row => {
+      if (row.source !== state.source || row.dataset !== state.dataset ||
+          row.op !== state.op || row.chunk_rows !== state.chunk || !inFacets(row)) return;
+      const key = seriesKey(row);
+      if (!declined.has(key)) declined.set(key, {unsupported: 0, failed: 0});
+      const entry = declined.get(key);
+      if (row.status === "unsupported") entry.unsupported += 1; else entry.failed += 1;
+    });
+    return declined;
   }
 
   function activeRange() {
@@ -329,15 +386,33 @@
   function catalogs(rows) {
     const bySeries = new Map();
     const byDecode = new Map();
+    const answered = new Map();
     rows.forEach(row => {
       if (finite(xValue(row)) && finite(yValue(row))) {
         const meta = seriesMeta(row);
         if (!bySeries.has(meta.id)) bySeries.set(meta.id, meta);
+        answered.set(meta.id, (answered.get(meta.id) || 0) + 1);
       }
       if (finite(decodeValue(row))) {
         const meta = decodeMeta(row);
         if (!byDecode.has(meta.id)) byDecode.set(meta.id, meta);
       }
+    });
+    // A series that declined every query in this context still gets a chip —
+    // greyed, unplottable — because "answered 0 of 142" is the finding. Only
+    // for `like`, though: on a literal op a series that answered nothing simply
+    // never declared that op (the `like` scanner under contains, say), and a
+    // row of 0/129 chips there is noise, not information.
+    const declined = coverageFor();
+    if (state.op === "like") {
+      COVERAGE.forEach(row => {
+        const key = seriesKey(row);
+        if (declined.has(key) && !bySeries.has(key)) bySeries.set(key, seriesMeta(row));
+      });
+    }
+    bySeries.forEach((meta, id) => {
+      const d = declined.get(id) || {unsupported: 0, failed: 0};
+      meta.coverage = {answered: answered.get(id) || 0, unsupported: d.unsupported, failed: d.failed};
     });
     const labelSort = (a, b) => a.label.localeCompare(b.label, undefined, {numeric: true});
     return {
@@ -398,6 +473,18 @@
     label.textContent = meta.label;
     button.appendChild(label);
 
+    if (!decode && meta.coverage) {
+      const {answered, unsupported, failed} = meta.coverage;
+      const total = answered + unsupported + failed;
+      const note = document.createElement("span");
+      note.className = "chip-coverage";
+      note.textContent = unsupported || failed
+        ? ` ${answered}/${total} answered` : ` ${answered}/${total}`;
+      note.title = `${answered} measured, ${unsupported} declined as unsupported` +
+        (failed ? `, ${failed} failed the gate or errored` : "");
+      button.appendChild(note);
+    }
+
     button.addEventListener("click", () => {
       if (visibleSet.has(meta.id)) visibleSet.delete(meta.id);
       else visibleSet.add(meta.id);
@@ -452,7 +539,17 @@
   function binPoints(points) {
     if (!points.length) return [];
     const groups = new Map();
-    if (state.bins === "exact") {
+    if (state.bins === "bucket") {
+      // The suite's own strata: a true partition, so rare and broad queries
+      // never share a median. Placed at the bucket's geometric centre on a
+      // log axis; rows blessed before the buckets existed fall back to exact.
+      points.forEach(point => {
+        const bucket = point.row.selectivity_bucket;
+        const key = bucket ? `bucket:${bucket}` : String(point.x);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(point);
+      });
+    } else if (state.bins === "exact") {
       points.forEach(point => {
         const key = String(point.x);
         if (!groups.has(key)) groups.set(key, []);
@@ -537,6 +634,17 @@
           ticks.push(10 ** exponent);
         }
         if (!ticks.some(value => value === 10 ** last)) ticks.push(10 ** last);
+        // Throughput on one column rarely spans more than a decade or two,
+        // and "1 and 10 GB/s" is not an axis. Within three decades, label the
+        // 2 and 5 of each one as well; the decade lines stay the anchors.
+        if (last - first <= 3) {
+          for (let exponent = first; exponent <= last; exponent++) {
+            for (const mantissa of [2, 5]) {
+              const value = mantissa * 10 ** exponent;
+              if (value >= minPositive / 1.5 && value <= maxPositive * 1.5) ticks.push(value);
+            }
+          }
+        }
         if (bounds.min !== null) ticks.push(bounds.min);
         if (bounds.max !== null) ticks.push(bounds.max);
         return {map, ticks: unique(ticks).sort((a, b) => a - b), kind: "log", hasZero};
@@ -604,6 +712,9 @@
 
     const extras = [];
     if (state.op && state.op !== "contains") extras.push(state.op);
+    if (state.patternClass !== ANY) extras.push(`${state.patternClass} patterns`);
+    if (state.underscores !== ANY) extras.push(`${state.underscores} underscore${state.underscores === "1" ? "" : "s"}`);
+    if (state.bins === "bucket") extras.push("by selectivity bucket");
     if (state.chunk) extras.push(`chunks of ${state.chunk.toLocaleString()} rows`);
     const range = activeRange();
     if (range && (range.min !== null || range.max !== null)) {
@@ -1692,6 +1803,16 @@
     });
     refs["op-select"].addEventListener("change", () => {
       state.op = refs["op-select"].value;
+      state.patternClass = ANY; state.underscores = ANY; state.chunk = null;
+      populateFilters(false); rebuild();
+    });
+    refs["class-select"].addEventListener("change", () => {
+      state.patternClass = refs["class-select"].value;
+      state.underscores = ANY; state.chunk = null;
+      populateFilters(false); rebuild();
+    });
+    refs["underscore-select"].addEventListener("change", () => {
+      state.underscores = refs["underscore-select"].value;
       state.chunk = null;
       populateFilters(false); rebuild();
     });
@@ -1711,7 +1832,8 @@
       rebuild();
     });
     refs["bin-count"].addEventListener("change", () => {
-      state.bins = refs["bin-count"].value === "exact" ? "exact" : Number(refs["bin-count"].value);
+      const chosen = refs["bin-count"].value;
+      state.bins = chosen === "exact" || chosen === "bucket" ? chosen : Number(chosen);
       renderPlot();
     });
     refs["show-points"].addEventListener("change", () => {

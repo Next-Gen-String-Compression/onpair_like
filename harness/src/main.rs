@@ -58,8 +58,10 @@ enum Cmd {
         /// Same dataset, generator configuration and seed produce identical needles.
         #[arg(long)]
         seed: u64,
-        /// sampled supports all operations; suffix-array generates balanced CONTAINS needles.
-        #[arg(long, default_value = "sampled", value_parser = ["sampled", "suffix-array"])]
+        /// sampled supports all operations; suffix-array generates balanced CONTAINS
+        /// needles; like synthesizes every LIKE pattern class (prefix, suffix, contains,
+        /// multi-gap, anchored gaps, `_` holes, mixed) from a held-out literal pool.
+        #[arg(long, default_value = "sampled", value_parser = ["sampled", "suffix-array", "like"])]
         method: String,
         /// Unique needles per length/selectivity cell (suffix-array only).
         #[arg(long, default_value_t = 20)]
@@ -70,6 +72,13 @@ enum Cmd {
         /// Mutation attempts per zero-match cell (suffix-array only).
         #[arg(long, default_value_t = 4000)]
         negative_attempts: usize,
+        /// Held-out mining pool: literals come only from rows with
+        /// xxh3(index) % modulus == 0; truth still uses every row (like only).
+        #[arg(long, default_value_t = 8)]
+        mining_modulus: u64,
+        /// Exact full-column probes each pattern class may spend (like only).
+        #[arg(long, default_value_t = 240)]
+        probe_budget: usize,
         /// Reuse dataset-bound SA/LCP arrays across seeds and quotas.
         #[arg(long)]
         index_cache: Option<PathBuf>,
@@ -131,6 +140,35 @@ enum Cmd {
         #[arg(long, hide = true)]
         worker_artifacts_only: bool,
     },
+    /// Import one (dataset, table[, column]) of the upstream DaMoN'26
+    /// FSST-LIKE pattern corpus as an unblessed, adapted suite
+    /// (suites/tum_like/PROVENANCE.md).
+    TumImport {
+        /// The pinned upstream benchmark/patterns.json copy.
+        #[arg(long, default_value = "suites/tum_like/patterns.json")]
+        patterns: PathBuf,
+        /// Upstream top-level dataset key: TPCH | IMDB | StackOverflow | PublicBI.
+        #[arg(long)]
+        upstream: String,
+        /// Upstream table, e.g. part, orders, films, actors, plot, quotes.
+        #[arg(long)]
+        table: String,
+        /// Upstream column (TPC-H only), e.g. p_type.
+        #[arg(long)]
+        column: Option<String>,
+        /// OUR dataset the suite is bound to (its id is read from the manifest).
+        #[arg(long)]
+        dataset: PathBuf,
+        /// Output suite directory.
+        #[arg(long)]
+        out: PathBuf,
+        /// Suite id (default: the out directory's basename).
+        #[arg(long)]
+        id: Option<String>,
+        /// Overwrite an existing suite (discards blessed truth).
+        #[arg(long)]
+        force: bool,
+    },
     /// List registered candidates and scanners with their capabilities.
     List,
 }
@@ -169,7 +207,8 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
             Ok(ExitCode::SUCCESS)
         }
         Cmd::Gen { dataset: ds_dir, out, seed, method, per_cell, max_needle_len,
-            negative_attempts, index_cache, index_memory_mib, profile, ops, id, force } => {
+            negative_attempts, mining_modulus, probe_budget, index_cache, index_memory_mib,
+            profile, ops, id, force } => {
             let ds = PreparedDataset::load(&ds_dir, true)?;
             let ops = ops
                 .map(|s| {
@@ -189,6 +228,45 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
                     .to_string_lossy()
                     .into_owned(),
             };
+            if method == "like" {
+                use lb_harness::gen::{generate_like, write_like_suite, LikeRequest};
+                if ops.is_some() {
+                    return Err("--ops does not apply to like generation: every pattern class is \
+                                emitted and stored under its narrowest op".into());
+                }
+                if profile != "full" {
+                    return Err("--profile applies to sampled generation; use --per-cell and \
+                                --probe-budget for like".into());
+                }
+                if out.join(suite::QUERIES_FILE).exists() && !force {
+                    return Err("suite exists; pass --force to replace it".into());
+                }
+                let mut request = LikeRequest::new(seed);
+                request.per_cell = per_cell;
+                request.mining_modulus = mining_modulus;
+                request.probe_budget_per_class = probe_budget;
+                request.max_literal_len = max_needle_len.min(128);
+                eprintln!(
+                    "mining literals from rows with xxh3(index) % {} == 0, then probing every \
+                     synthesized pattern exactly against all {} rows",
+                    request.mining_modulus,
+                    ds.num_rows()
+                );
+                let generated = generate_like(&ds, &request)?;
+                write_like_suite(&generated, &ds, &out, &suite_id, force)?;
+                let filled = generated.cells.iter().filter(|c| c.status == "filled").count();
+                let partial = generated.cells.iter().filter(|c| c.status == "partial").count();
+                println!(
+                    "generated {} patterns; {filled}/{} cells filled, {partial} partial; {} exact \
+                     probes; coverage: {}",
+                    generated.queries.len(),
+                    generated.cells.len(),
+                    generated.exact_probes,
+                    out.join("gen-report.json").display()
+                );
+                println!("next: bench bless --suite {} --dataset {}", out.display(), ds_dir.display());
+                return Ok(ExitCode::SUCCESS);
+            }
             if method == "suffix-array" {
                 use lb_harness::gen::{BalancedRequest, IndexLimits, LengthBucket, SubstringIndex};
                 if ops.as_ref().is_some_and(|ops| ops.as_slice() != [lb_abi::LB_CONTAINS]) {
@@ -286,6 +364,31 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
             }
             Ok(ExitCode::SUCCESS)
         }
+        Cmd::TumImport { patterns, upstream, table, column, dataset: ds_dir, out, id, force } => {
+            use lb_harness::tum_import::{self, ImportRequest, Provenance};
+            let ds = PreparedDataset::load(&ds_dir, true)?;
+            let suite_id = id.unwrap_or_else(|| {
+                out.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
+            });
+            let req = ImportRequest {
+                patterns_json: &patterns,
+                upstream_dataset: upstream,
+                table,
+                column,
+                suite_id,
+                provenance: Provenance::pinned(),
+            };
+            let outcome = tum_import::import(&req, &ds, &out, force)?;
+            let split: Vec<String> = outcome.by_op.iter().map(|(op, n)| format!("{op}={n}")).collect();
+            println!(
+                "imported {} patterns into {} (stored as {}); truth not yet computed",
+                outcome.queries,
+                out.display(),
+                split.join(", ")
+            );
+            println!("next: bench bless --suite {} --dataset {}", out.display(), ds_dir.display());
+            Ok(ExitCode::SUCCESS)
+        }
         Cmd::Run { spec, out, fail_fast, worker_candidate, worker_config, worker_dataset,
                    worker_artifacts_only } => {
             let loaded = LoadedSpec::load(&spec)?;
@@ -374,6 +477,16 @@ fn run_worker_process(
         )?
     };
     writer.finish()?;
+    // Report the declined cells even on a clean run: a module that answered
+    // nothing and a module that answered everything both exit 0, and only
+    // this line tells them apart at a glance.
+    if summary.cells_unsupported > 0 {
+        eprintln!(
+            "worker {candidate}#{config_idx} on dataset #{dataset_idx}: \
+             {} cell(s) measured, {} declined as unsupported",
+            summary.cells_ok, summary.cells_unsupported
+        );
+    }
     if summary.gate_failures > 0 {
         eprintln!(
             "worker {candidate}#{config_idx} on dataset #{dataset_idx}: {} gate failure(s)",

@@ -984,6 +984,7 @@ dependencies = [
  "lb-scan-composed",
  "lb-scan-cpp-std-find",
  "lb-scan-libc",
+ "lb-scan-like",
  "lb-scan-memmem",
  "lb-scan-multi",
  "lb-scan-prefilter",
@@ -1025,6 +1026,14 @@ name = "lb-scan-libc"
 version = "0.1.0"
 dependencies = [
  "lb-abi",
+]
+
+[[package]]
+name = "lb-scan-like"
+version = "0.1.0"
+dependencies = [
+ "lb-abi",
+ "memchr",
 ]
 
 [[package]]

@@ -192,7 +192,10 @@ def load_queries(con, suite_entry, dataset_id) -> int:
     for line in path.read_text().splitlines():
         record = json.loads(line)
         derived = record["derived"]
+        meta = record.get("meta") or {}
         text, binary = needle_text(record["needles"])
+        # Suites blessed before ABI v8 carry no LIKE facts; a NULL there is
+        # "not stamped", never a claim about the pattern.
         rows.append(
             (
                 f"{suite}|{record['id']}",
@@ -206,23 +209,37 @@ def load_queries(con, suite_entry, dataset_id) -> int:
                 len(record["needles"]),
                 derived["selectivity"],
                 derived["match_count"],
+                derived.get("pattern"),
+                derived.get("pattern_class"),
+                derived.get("percent_count"),
+                derived.get("underscore_count"),
+                derived.get("literal_len_total"),
+                derived.get("selectivity_bucket") or "unknown",
+                derived.get("length_bucket") or "unknown",
+                meta.get("source"),
             )
         )
     con.execute("CREATE OR REPLACE TEMP TABLE _q AS SELECT * FROM query LIMIT 0")
     con.executemany(
         """INSERT INTO _q (query_key, suite, query_id, dataset_id, op, needle,
                            needle_is_binary, needle_len, num_needles,
-                           selectivity, match_count)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           selectivity, match_count,
+                           pattern, pattern_class, percent_count, underscore_count,
+                           literal_len_total, selectivity_bucket, length_bucket, source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         rows,
     )
     inserted = con.execute(
         """INSERT INTO query (query_key, suite, query_id, dataset_id, op, needle,
                               needle_is_binary, needle_len, num_needles,
-                              selectivity, match_count)
+                              selectivity, match_count,
+                              pattern, pattern_class, percent_count, underscore_count,
+                              literal_len_total, selectivity_bucket, length_bucket, source)
            SELECT _q.query_key, suite, query_id, dataset_id, op, needle,
                   needle_is_binary, needle_len, num_needles,
-                  selectivity, match_count
+                  selectivity, match_count,
+                  pattern, pattern_class, percent_count, underscore_count,
+                  literal_len_total, selectivity_bucket, length_bucket, source
            FROM _q
            WHERE NOT EXISTS (SELECT 1 FROM query q WHERE q.query_key = _q.query_key)
            RETURNING 1"""
@@ -499,6 +516,36 @@ def load_run(con, run_dir: Path) -> str:
     )
 
 
+# Columns added to `query` after the first databases were built. schema.sql's
+# CREATE TABLE IF NOT EXISTS leaves an existing table as it was, so a DB from
+# before ABI v8 needs the columns added in place — additively, NULL for rows
+# loaded earlier, exactly like a suite blessed before the facts existed.
+QUERY_MIGRATIONS = [
+    ("pattern", "VARCHAR"),
+    ("pattern_class", "VARCHAR"),
+    ("percent_count", "INTEGER"),
+    ("underscore_count", "INTEGER"),
+    ("literal_len_total", "INTEGER"),
+    ("selectivity_bucket", "VARCHAR"),
+    ("length_bucket", "VARCHAR"),
+    ("source", "VARCHAR"),
+]
+
+
+def migrate(con) -> None:
+    """Bring a database created under an older schema.sql up to date.
+
+    DuckDB cannot ADD COLUMN with a constraint, so the bucket columns are
+    added plain and back-filled to 'unknown', which is what schema.sql's
+    DEFAULT gives a fresh database."""
+    have = {row[1] for row in con.execute("PRAGMA table_info('query')").fetchall()}
+    for column, decl in QUERY_MIGRATIONS:
+        if column not in have:
+            con.execute(f"ALTER TABLE query ADD COLUMN {column} {decl}")
+            if column.endswith("_bucket"):
+                con.execute(f"UPDATE query SET {column} = 'unknown' WHERE {column} IS NULL")
+
+
 def main(argv):
     if not argv:
         raise SystemExit(__doc__)
@@ -508,6 +555,7 @@ def main(argv):
         dirs = [Path(a).resolve() for a in argv]
     con = duckdb.connect(DB_PATH)
     con.execute(SCHEMA_PATH.read_text())
+    migrate(con)
     for run_dir in dirs:
         print(load_run(con, run_dir))
     con.close()

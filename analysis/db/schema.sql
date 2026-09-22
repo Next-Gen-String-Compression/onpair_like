@@ -135,7 +135,20 @@ CREATE TABLE IF NOT EXISTS query (
     num_needles      INTEGER NOT NULL,
     -- blessed truth from the oracle, the x-axis of the headline figure
     selectivity      DOUBLE NOT NULL,
-    match_count      BIGINT NOT NULL
+    match_count      BIGINT NOT NULL,
+    -- LIKE-shape facts stamped by `bench bless` (ABI v8, derived.*). Present for
+    -- every op except contains_any, which is a disjunction of patterns rather
+    -- than one pattern. A query stored as `contains` and one stored as `like`
+    -- both carry their canonical pattern here, so grouping by pattern_class
+    -- crosses the lowering boundary.
+    pattern            VARCHAR,                -- canonical LIKE text, e.g. %ab_c%
+    pattern_class      VARCHAR,                -- exact|prefix|suffix|contains|multi_gap|anchored_gap_{head,tail,both}
+    percent_count      INTEGER,
+    underscore_count   INTEGER,
+    literal_len_total  INTEGER,                -- bytes a matcher compares; metacharacters excluded
+    selectivity_bucket VARCHAR NOT NULL DEFAULT 'unknown',  -- zero|ultra_rare|1e-5|1e-4|1e-3|1e-2|1e-1|broad
+    length_bucket      VARCHAR NOT NULL DEFAULT 'unknown',  -- L0|L1-3|L4-7|L8-16|L17-32|L33-64|L65+
+    source             VARCHAR                 -- generated|TUM|curated (meta.source), NULL for older suites
 );
 
 -- ------------------------------------------------------------------ result

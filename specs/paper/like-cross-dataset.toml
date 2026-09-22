@@ -1,0 +1,124 @@
+# The LIKE-shape sweep across ClickBench + IMDb + TPC-H: OnPair against the
+# baselines on the gen2 suites (TODO_like_workload.md §11). Every pattern class
+# — prefix, suffix, contains, multi-gap, anchored gaps, `_` holes, mixed — over
+# nine columns of very different shape, stratified by literal length and
+# MEASURED selectivity (`derived.selectivity_bucket`; report by bucket, never
+# by a grand mean).
+#
+#   cargo run --release --bin bench -- run specs/paper/like-cross-dataset.toml \
+#       -o results/paper/like-cross-dataset
+#
+# Two-thirds of the corpus is stored under a literal op (the lowering rules in
+# contract/SEMANTICS.md), so the whole roster competes there. The anchored-gap
+# and underscore classes are `op = like`: in this PR only the `like` scanner —
+# uncompressed `direct`, and `decode` for every codec — can answer them, and
+# every compressed-domain strategy reports `unsupported`. That gap is the
+# number the wildcard-execution PR improves on; the spec is reused there
+# unchanged.
+#
+# The fsst_like_tum `cpp*`/`llvm*` backends recompile a kernel per query per
+# chunk (see clickbench-url-1m-contains.toml) and are excluded here the same
+# way. Root keys sit above the first [[table]] — TOML binds them to the last
+# table otherwise (harness/src/spec.rs).
+strategies = [
+  "memmem", "like",
+  "prefilter", "dict+prefilter",
+  "interp", "dict+interp",
+  "decode", "decode+prefilter", "dict+decode+prefilter",
+  "fsst-prefilter", "dict+fsst-prefilter",
+  "compressed", "dict+compressed",
+  "pf_kmp", "pf_memmem", "kmp", "dict+pf_kmp",
+]
+
+[[datasets]]
+path = "../../datasets/clickbench-url-1m"
+[[datasets]]
+path = "../../datasets/clickbench-referer-1m"
+[[datasets]]
+path = "../../datasets/clickbench-title-1m"
+[[datasets]]
+path = "../../datasets/imdb-primary-title-1m"
+[[datasets]]
+path = "../../datasets/imdb-primary-name-1m"
+[[datasets]]
+path = "../../datasets/tpch-pname-sf10"
+[[datasets]]
+path = "../../datasets/tpch-ptype-sf10"
+[[datasets]]
+path = "../../datasets/tpch-ccomment-sf10"
+[[datasets]]
+path = "../../datasets/tpch-scomment-sf10"
+
+[[suites]]
+path = "../../suites/clickbench-url-1m-gen2-s42"
+[[suites]]
+path = "../../suites/clickbench-referer-1m-gen2-s42"
+[[suites]]
+path = "../../suites/clickbench-title-1m-gen2-s42"
+[[suites]]
+path = "../../suites/imdb-primary-title-1m-gen2-s42"
+[[suites]]
+path = "../../suites/imdb-primary-name-1m-gen2-s42"
+[[suites]]
+path = "../../suites/tpch-pname-sf10-gen2-s42"
+[[suites]]
+path = "../../suites/tpch-ptype-sf10-gen2-s42"
+[[suites]]
+path = "../../suites/tpch-ccomment-sf10-gen2-s42"
+[[suites]]
+path = "../../suites/tpch-scomment-sf10-gen2-s42"
+
+# Baselines and the Matcher-based pipelines.
+[[candidates]]
+name = "uncompressed"
+[[candidates]]
+name = "uncompressed_memmem"
+[[candidates]]
+name = "uncompressed_prefilter"
+[[candidates]]
+name = "dict_uncompressed_prefilter"
+
+# OnPair: the subject.
+[[candidates]]
+name = "onpair"
+[[candidates]]
+name = "onpair_spiral"
+[[candidates]]
+name = "dict_onpair"
+[[candidates]]
+name = "dict_onpair_spiral"
+
+# The FSST family: decode-then-scan, compressed-domain prefilters, and the
+# TUM compressed-domain LIKE automaton (interp only).
+[[candidates]]
+name = "fsst"
+[[candidates]]
+name = "fsst_prefilter"
+[[candidates]]
+name = "dict_fsst_prefilter"
+[[candidates]]
+name = "fsst_decode_prefilter"
+[[candidates]]
+name = "fsst_like_tum"
+[[candidates]]
+name = "dict_fsst_like_tum"
+
+# General-purpose codecs: decode-then-scan only.
+[[candidates]]
+name = "lz4"
+[[candidates]]
+name = "zstd"
+
+# memmem answers the literal ops; like answers `op = like`. Each declares only
+# what it evaluates, so no cell is measured twice under two names.
+[[scanners]]
+name = "memmem"
+[[scanners]]
+name = "like"
+
+[measure]
+chunk_rows = [0, 122880]  # 0 = whole column; 122880 = 60*2048 rows/chunk
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

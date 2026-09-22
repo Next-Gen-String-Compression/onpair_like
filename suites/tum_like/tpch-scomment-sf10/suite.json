@@ -1,0 +1,31 @@
+{
+  "format_version": 1,
+  "id": "tpch-scomment-sf10",
+  "description": "Adapted TUM LIKE workload: the 17 patterns for upstream TPCH/supplier.s_comment from the DaMoN'26 FSST-LIKE benchmark (https://github.com/calin2110/FSST-LIKE-Matching@b1eb3ab9c63e), stored under the narrowest equivalent op and blessed against OUR column tpch-scomment-sf10 — not an exact reproduction of the paper's data. Underscore groups 0/1/>=2 are kept in meta.tum.",
+  "dataset": {
+    "id": "tpch-scomment-sf10",
+    "checksum": "xxh3:306741a5d5c088fe"
+  },
+  "provenance": {
+    "importer": {
+      "name": "tum-import",
+      "version": "v1"
+    },
+    "lowering": {
+      "contains": 1,
+      "like": 15,
+      "multi_contains": 1
+    },
+    "upstream": {
+      "column": "s_comment",
+      "commit": "b1eb3ab9c63ea0199a381b92371a3154190b4406",
+      "dataset": "TPCH",
+      "file": "benchmark/patterns.json",
+      "repo": "https://github.com/calin2110/FSST-LIKE-Matching",
+      "sha256": "62b8ba01ac90d39ecd2199ae3727a94623886110752fce6632e83a370194b6d1",
+      "table": "supplier"
+    }
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-09-22T09:10:39Z"
+}

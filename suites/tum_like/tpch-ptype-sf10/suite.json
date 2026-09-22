@@ -1,0 +1,32 @@
+{
+  "format_version": 1,
+  "id": "tpch-ptype-sf10",
+  "description": "Adapted TUM LIKE workload: the 28 patterns for upstream TPCH/part.p_type from the DaMoN'26 FSST-LIKE benchmark (https://github.com/calin2110/FSST-LIKE-Matching@b1eb3ab9c63e), stored under the narrowest equivalent op and blessed against OUR column tpch-ptype-sf10 — not an exact reproduction of the paper's data. Underscore groups 0/1/>=2 are kept in meta.tum.",
+  "dataset": {
+    "id": "tpch-ptype-sf10",
+    "checksum": "xxh3:f969f8bc7b093f83"
+  },
+  "provenance": {
+    "importer": {
+      "name": "tum-import",
+      "version": "v1"
+    },
+    "lowering": {
+      "contains": 3,
+      "like": 20,
+      "prefix": 3,
+      "suffix": 2
+    },
+    "upstream": {
+      "column": "p_type",
+      "commit": "b1eb3ab9c63ea0199a381b92371a3154190b4406",
+      "dataset": "TPCH",
+      "file": "benchmark/patterns.json",
+      "repo": "https://github.com/calin2110/FSST-LIKE-Matching",
+      "sha256": "62b8ba01ac90d39ecd2199ae3727a94623886110752fce6632e83a370194b6d1",
+      "table": "part"
+    }
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-09-22T09:10:37Z"
+}
