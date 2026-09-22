@@ -6,6 +6,7 @@
 //! the independent oracle remains the authority for benchmark truth.
 
 mod balanced;
+mod like;
 mod sampled;
 mod substrings;
 mod suites;
@@ -13,6 +14,10 @@ mod suites;
 pub use balanced::{
     BalancedRequest, CellReport, GeneratedNeedle, GeneratedNeedles, LengthBucket, RowBucket,
     SUBSTRING_GENERATOR_VERSION,
+};
+pub use like::{
+    generate_like, write_like_suite, GeneratedLike, LikeCell, LikeQuery, LikeRequest,
+    CLASSES as LIKE_CLASSES, LIKE_GENERATOR_VERSION,
 };
 pub use sampled::*;
 pub use substrings::{IndexLimits, SubstringIndex};

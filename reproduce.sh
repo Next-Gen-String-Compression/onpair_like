@@ -8,8 +8,10 @@
 #   build      cargo build --release + full test suite            (~3 min)
 #   datasets   fetch + extract + ingest the default roster        (hours;
 #              ~12 GB of downloads — see `datasets/prepare.py --list`)
-#   suites     deterministic query generation: `bench gen --seed 42`
-#              + `bench bless` for every materialised dataset     (~5 min each)
+#   suites     deterministic query generation: `bench gen --seed 42` (gen1,
+#              the literal-op sweep) and `--method like` (gen2, the LIKE-shape
+#              sweep) + `bench bless` for every materialised dataset, plus a
+#              binding check of the imported TUM suites            (~10 min each)
 #   run        every spec in specs/paper/ -> results/paper/<name> (~10 min each)
 #   all        everything above, in order
 #
@@ -50,23 +52,39 @@ stage_datasets() {
   "$PY" datasets/prepare.py --all
 }
 
+# One suite family: verify it if present (bless verifies stored truth),
+# otherwise generate + bless. $1 = dataset dir, $2 = suite dir, $3.. = gen args.
+suite_or_verify() {
+  local bench=target/release/bench dir=$1 suite=$2; shift 2
+  if [ -f "$suite/queries.jsonl" ]; then
+    echo "=== $(basename "$dir"): $(basename "$suite") exists, verifying binding ==="
+    "$bench" check --suite "$suite" --dataset "$dir"
+  else
+    echo "=== $(basename "$dir"): generating $(basename "$suite") (seed $SEED) + blessing ==="
+    "$bench" gen --dataset "$dir" --out "$suite" --seed "$SEED" "$@"
+    "$bench" bless --suite "$suite" --dataset "$dir"
+  fi
+}
+
 stage_suites() {
-  local bench=target/release/bench
   for manifest in datasets/*/manifest.json; do
-    local dir id suite
+    local dir id
     dir=$(dirname "$manifest")
     id=$(basename "$dir")
-    case "$id" in mini|fixtures) continue ;; esac  # dev fixtures, not paper data
-    suite="suites/${id}-gen1-s${SEED}"
-    if [ -f "$suite/queries.jsonl" ]; then
-      # Deterministic regeneration check is free; bless verifies stored truth.
-      echo "=== $id: suite exists, verifying binding ==="
-      "$bench" check --suite "$suite" --dataset "$dir"
-    else
-      echo "=== $id: generating (seed $SEED) + blessing ==="
-      "$bench" gen --dataset "$dir" --out "$suite" --seed "$SEED"
-      "$bench" bless --suite "$suite" --dataset "$dir"
-    fi
+    case "$id" in mini|fixtures|wildcards) continue ;; esac  # dev fixtures, not paper data
+    # gen1: the sampled literal-op sweep (DESIGN.md §14).
+    suite_or_verify "$dir" "suites/${id}-gen1-s${SEED}"
+    # gen2: the LIKE-shape sweep — every pattern class, literals mined from a
+    # held-out row split, stratified by measured selectivity (DESIGN.md §18).
+    suite_or_verify "$dir" "suites/${id}-gen2-s${SEED}" --method like
+  done
+  # The adapted TUM corpus is imported, not generated: suites/tum_like/PROVENANCE.md.
+  local bench=target/release/bench
+  for suite in suites/tum_like/*/; do
+    [ -f "$suite/queries.jsonl" ] || continue
+    local ds
+    ds=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['dataset']['id'])" "$suite/suite.json")
+    [ -f "datasets/$ds/manifest.json" ] && "$bench" check --suite "$suite" --dataset "datasets/$ds"
   done
 }
 

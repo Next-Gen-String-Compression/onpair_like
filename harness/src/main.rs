@@ -58,8 +58,10 @@ enum Cmd {
         /// Same dataset, generator configuration and seed produce identical needles.
         #[arg(long)]
         seed: u64,
-        /// sampled supports all operations; suffix-array generates balanced CONTAINS needles.
-        #[arg(long, default_value = "sampled", value_parser = ["sampled", "suffix-array"])]
+        /// sampled supports all operations; suffix-array generates balanced CONTAINS
+        /// needles; like synthesizes every LIKE pattern class (prefix, suffix, contains,
+        /// multi-gap, anchored gaps, `_` holes, mixed) from a held-out literal pool.
+        #[arg(long, default_value = "sampled", value_parser = ["sampled", "suffix-array", "like"])]
         method: String,
         /// Unique needles per length/selectivity cell (suffix-array only).
         #[arg(long, default_value_t = 20)]
@@ -70,6 +72,13 @@ enum Cmd {
         /// Mutation attempts per zero-match cell (suffix-array only).
         #[arg(long, default_value_t = 4000)]
         negative_attempts: usize,
+        /// Held-out mining pool: literals come only from rows with
+        /// xxh3(index) % modulus == 0; truth still uses every row (like only).
+        #[arg(long, default_value_t = 8)]
+        mining_modulus: u64,
+        /// Exact full-column probes each pattern class may spend (like only).
+        #[arg(long, default_value_t = 240)]
+        probe_budget: usize,
         /// Reuse dataset-bound SA/LCP arrays across seeds and quotas.
         #[arg(long)]
         index_cache: Option<PathBuf>,
@@ -198,7 +207,8 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
             Ok(ExitCode::SUCCESS)
         }
         Cmd::Gen { dataset: ds_dir, out, seed, method, per_cell, max_needle_len,
-            negative_attempts, index_cache, index_memory_mib, profile, ops, id, force } => {
+            negative_attempts, mining_modulus, probe_budget, index_cache, index_memory_mib,
+            profile, ops, id, force } => {
             let ds = PreparedDataset::load(&ds_dir, true)?;
             let ops = ops
                 .map(|s| {
@@ -218,6 +228,45 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
                     .to_string_lossy()
                     .into_owned(),
             };
+            if method == "like" {
+                use lb_harness::gen::{generate_like, write_like_suite, LikeRequest};
+                if ops.is_some() {
+                    return Err("--ops does not apply to like generation: every pattern class is \
+                                emitted and stored under its narrowest op".into());
+                }
+                if profile != "full" {
+                    return Err("--profile applies to sampled generation; use --per-cell and \
+                                --probe-budget for like".into());
+                }
+                if out.join(suite::QUERIES_FILE).exists() && !force {
+                    return Err("suite exists; pass --force to replace it".into());
+                }
+                let mut request = LikeRequest::new(seed);
+                request.per_cell = per_cell;
+                request.mining_modulus = mining_modulus;
+                request.probe_budget_per_class = probe_budget;
+                request.max_literal_len = max_needle_len.min(128);
+                eprintln!(
+                    "mining literals from rows with xxh3(index) % {} == 0, then probing every \
+                     synthesized pattern exactly against all {} rows",
+                    request.mining_modulus,
+                    ds.num_rows()
+                );
+                let generated = generate_like(&ds, &request)?;
+                write_like_suite(&generated, &ds, &out, &suite_id, force)?;
+                let filled = generated.cells.iter().filter(|c| c.status == "filled").count();
+                let partial = generated.cells.iter().filter(|c| c.status == "partial").count();
+                println!(
+                    "generated {} patterns; {filled}/{} cells filled, {partial} partial; {} exact \
+                     probes; coverage: {}",
+                    generated.queries.len(),
+                    generated.cells.len(),
+                    generated.exact_probes,
+                    out.join("gen-report.json").display()
+                );
+                println!("next: bench bless --suite {} --dataset {}", out.display(), ds_dir.display());
+                return Ok(ExitCode::SUCCESS);
+            }
             if method == "suffix-array" {
                 use lb_harness::gen::{BalancedRequest, IndexLimits, LengthBucket, SubstringIndex};
                 if ops.as_ref().is_some_and(|ops| ops.as_slice() != [lb_abi::LB_CONTAINS]) {
