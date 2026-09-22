@@ -1501,3 +1501,7 @@ label[hidden] {
 .pf-error[hidden] {
   display: none;
 }
+
+/* Per-series coverage in the legend: how many queries in view a series
+   actually answered. Declined cells are the finding, not an absence. */
+.chip-coverage { opacity: 0.65; font-variant-numeric: tabular-nums; margin-left: 0.35em; }

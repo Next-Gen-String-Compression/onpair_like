@@ -106,11 +106,44 @@ def iter_rows(path: Path) -> Iterable[Dict[str, Any]]:
 # ones the analysis panels have anything to say about. Anchored matches (LIKE
 # 'n%', LIKE '%n') are a different question and are left out entirely rather
 # than pooled in and silently diluting every summary.
-SUBSTRING_OPS = frozenset({"contains", "multi_contains", "contains_any"})
+SUBSTRING_OPS = frozenset({"contains", "multi_contains", "contains_any", "like"})
+
+# Cells a module declined (ABI v4 scanner / v8 candidate `supports_query`, or
+# an op outside its mask). They carry no measurement and are never plotted,
+# but they are not nothing: a series that answered 0 of 142 underscore
+# patterns must say so in its legend instead of silently vanishing.
+COVERAGE_STATUSES = frozenset({"unsupported", "gate_failed", "error"})
 
 
 def is_substring_search(row: Dict[str, Any]) -> bool:
-    return row.get("op") in SUBSTRING_OPS
+    if row.get("op") != "like":
+        return row.get("op") in SUBSTRING_OPS
+    # An anchored pattern (abc%, %abc, a%b) is not a substring search; an
+    # unanchored one (%abc%, %a_b%c%) is. Decide from the stamped shape.
+    return (row.get("pattern_class") or "") in {"contains", "multi_gap"}
+
+
+def normalize_coverage(row: Dict[str, Any], source: str) -> Optional[Dict[str, Any]]:
+    """A declined / failed / errored cell, reduced to what the legend needs."""
+    if row.get("kind") != "query" or row.get("status") not in COVERAGE_STATUSES:
+        return None
+    derived = row.get("derived") or {}
+    return {
+        "source": source,
+        "candidate": str(row.get("candidate", "unknown")),
+        "config": str(row.get("config", "{}")),
+        "config_hash": str(row.get("config_hash", "")),
+        "strategy": str(row.get("strategy", "unknown")),
+        "scanner": row.get("scanner"),
+        "dataset": str(row.get("dataset", "unknown")),
+        "chunk_rows": int(row.get("chunk_rows", 0) or 0),
+        "op": str(row.get("op", "unknown")),
+        "query_id": str(row.get("query_id", "")),
+        "status": str(row.get("status")),
+        "pattern_class": derived.get("pattern_class"),
+        "underscore_count": finite_number(derived.get("underscore_count")),
+        "selectivity_bucket": derived.get("selectivity_bucket"),
+    }
 
 
 def normalize_query(row: Dict[str, Any], source: str) -> Optional[Dict[str, Any]]:
@@ -204,6 +237,16 @@ def normalize_query(row: Dict[str, Any], source: str) -> Optional[Dict[str, Any]
         "needle_len": needle_len,
         "needle_lens": needle_lens,
         "match_count": finite_number(derived.get("match_count")),
+        # LIKE-shape facts stamped by `bench bless` (ABI v8). Every op but
+        # contains_any has a canonical pattern, so a corpus stored across five
+        # ops can still be faceted by shape. Absent on suites blessed earlier.
+        "pattern": derived.get("pattern") if isinstance(derived.get("pattern"), str) else None,
+        "pattern_class": derived.get("pattern_class") if isinstance(derived.get("pattern_class"), str) else None,
+        "percent_count": finite_number(derived.get("percent_count")),
+        "underscore_count": finite_number(derived.get("underscore_count")),
+        "literal_len": finite_number(derived.get("literal_len_total")),
+        "selectivity_bucket": derived.get("selectivity_bucket") if isinstance(derived.get("selectivity_bucket"), str) else None,
+        "length_bucket": derived.get("length_bucket") if isinstance(derived.get("length_bucket"), str) else None,
         "rarest_byte_freq": finite_number(derived.get("rarest_byte_freq")),
         "comparison_cost": comparison_cost,
         "covered_fraction": covered_fraction,
@@ -1021,6 +1064,7 @@ def normalize_build(row: Dict[str, Any], source: str) -> Optional[Dict[str, Any]
 def load_results(paths: Sequence[Path]) -> tuple:
     points: List[Dict[str, Any]] = []
     builds: List[Dict[str, Any]] = []
+    coverage: List[Dict[str, Any]] = []
     ignored: Dict[str, int] = {}
     resolved: List[Path] = []
     for requested in paths:
@@ -1035,13 +1079,21 @@ def load_results(paths: Sequence[Path]) -> tuple:
         if not path.is_file():
             raise FileNotFoundError(f"results file not found: {path}")
         for row in iter_rows(path):
-            if row.get("kind") == "query" and not is_substring_search(row):
-                op = str(row.get("op"))
-                ignored[op] = ignored.get(op, 0) + 1
-                continue
+            if row.get("kind") == "query":
+                # The shape facts live in derived on every row, measured or
+                # not; is_substring_search needs them for `like` rows.
+                row.setdefault("pattern_class", (row.get("derived") or {}).get("pattern_class"))
+                if not is_substring_search(row):
+                    op = str(row.get("op"))
+                    ignored[op] = ignored.get(op, 0) + 1
+                    continue
             point = normalize_query(row, label)
             if point is not None:
                 points.append(point)
+                continue
+            declined = normalize_coverage(row, label)
+            if declined is not None:
+                coverage.append(declined)
                 continue
             build = normalize_build(row, label)
             if build is not None:
@@ -1054,7 +1106,7 @@ def load_results(paths: Sequence[Path]) -> tuple:
                 f"(ignored {summarize_ignored(ignored)})"
             )
         raise ValueError(f"no successful query rows found in: {joined}")
-    return points, builds, ignored
+    return points, builds, ignored, coverage
 
 
 def summarize_ignored(ignored: Dict[str, int]) -> str:
@@ -1069,7 +1121,8 @@ def json_for_script(value: Any) -> str:
 
 def build_html(points: Sequence[Dict[str, Any]], defaults: Dict[str, Any],
                analysis: Optional[Dict[str, Any]] = None,
-               mincut_archives: Optional[Dict[str, Any]] = None) -> str:
+               mincut_archives: Optional[Dict[str, Any]] = None,
+               coverage: Optional[Sequence[Dict[str, Any]]] = None) -> str:
     template = (HERE / "template.html").read_text(encoding="utf-8")
     css = (HERE / "app.css").read_text(encoding="utf-8")
     javascript = (HERE / "app.js").read_text(encoding="utf-8")
@@ -1081,6 +1134,8 @@ def build_html(points: Sequence[Dict[str, Any]], defaults: Dict[str, Any],
         "__BENCH_VIZ_ANALYSIS__": json_for_script(analysis or {}),
         "__BENCH_VIZ_MINCUT_GRAPHS__": json_for_script(
             mincut_archives or {"version": 2, "archives": {}}),
+        # Declined / failed cells: never plotted, always counted in the legend.
+        "__BENCH_VIZ_COVERAGE__": json_for_script(list(coverage or [])),
         "__BENCH_VIZ_JS__": javascript,
         "__BENCH_VIZ_PREFILTER_JS__": prefilter_js,
     }
@@ -1182,7 +1237,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
     try:
-        loaded, builds, ignored = load_results(args.results)
+        loaded, builds, ignored, coverage = load_results(args.results)
         if ignored:
             print("bench-viz: ignored "
                   f"{summarize_ignored(ignored)} (not substring search)")
@@ -1229,6 +1284,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             },
             analysis,
             mincut_archives,
+            coverage,
         )
     except (OSError, ValueError) as error:
         print(f"bench-viz: {error}")
@@ -1239,6 +1295,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     fitted = len(analysis.get("models") or {})
     noise = analysis.get("noise")
     detail = f"{len(points)} query rows, {len(builds)} builds, {fitted} fitted series"
+    declined = sum(1 for c in coverage if c["status"] == "unsupported")
+    if declined:
+        detail += f", {declined} cells declined as unsupported"
     if enriched_queries:
         detail += f", {enriched_queries} queries with needles"
     if mincut_queries:
