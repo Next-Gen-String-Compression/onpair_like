@@ -15,3 +15,4 @@ pub mod runner;
 pub mod spec;
 pub mod suite;
 pub mod timing;
+pub mod tum_import;

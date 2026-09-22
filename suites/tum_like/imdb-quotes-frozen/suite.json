@@ -1,0 +1,33 @@
+{
+  "format_version": 1,
+  "id": "imdb-quotes-frozen",
+  "description": "Adapted TUM LIKE workload: the 60 patterns for upstream IMDB/quotes from the DaMoN'26 FSST-LIKE benchmark (https://github.com/calin2110/FSST-LIKE-Matching@b1eb3ab9c63e), stored under the narrowest equivalent op and blessed against OUR column imdb-quotes-frozen-1m — not an exact reproduction of the paper's data. Underscore groups 0/1/>=2 are kept in meta.tum.",
+  "dataset": {
+    "id": "imdb-quotes-frozen-1m",
+    "checksum": "xxh3:1619b98680946bca"
+  },
+  "provenance": {
+    "importer": {
+      "name": "tum-import",
+      "version": "v1"
+    },
+    "lowering": {
+      "contains": 8,
+      "like": 43,
+      "multi_contains": 2,
+      "prefix": 2,
+      "suffix": 5
+    },
+    "upstream": {
+      "column": null,
+      "commit": "b1eb3ab9c63ea0199a381b92371a3154190b4406",
+      "dataset": "IMDB",
+      "file": "benchmark/patterns.json",
+      "repo": "https://github.com/calin2110/FSST-LIKE-Matching",
+      "sha256": "62b8ba01ac90d39ecd2199ae3727a94623886110752fce6632e83a370194b6d1",
+      "table": "quotes"
+    }
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-09-22T09:11:18Z"
+}

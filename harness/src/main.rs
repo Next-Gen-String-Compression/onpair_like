@@ -131,6 +131,35 @@ enum Cmd {
         #[arg(long, hide = true)]
         worker_artifacts_only: bool,
     },
+    /// Import one (dataset, table[, column]) of the upstream DaMoN'26
+    /// FSST-LIKE pattern corpus as an unblessed, adapted suite
+    /// (suites/tum_like/PROVENANCE.md).
+    TumImport {
+        /// The pinned upstream benchmark/patterns.json copy.
+        #[arg(long, default_value = "suites/tum_like/patterns.json")]
+        patterns: PathBuf,
+        /// Upstream top-level dataset key: TPCH | IMDB | StackOverflow | PublicBI.
+        #[arg(long)]
+        upstream: String,
+        /// Upstream table, e.g. part, orders, films, actors, plot, quotes.
+        #[arg(long)]
+        table: String,
+        /// Upstream column (TPC-H only), e.g. p_type.
+        #[arg(long)]
+        column: Option<String>,
+        /// OUR dataset the suite is bound to (its id is read from the manifest).
+        #[arg(long)]
+        dataset: PathBuf,
+        /// Output suite directory.
+        #[arg(long)]
+        out: PathBuf,
+        /// Suite id (default: the out directory's basename).
+        #[arg(long)]
+        id: Option<String>,
+        /// Overwrite an existing suite (discards blessed truth).
+        #[arg(long)]
+        force: bool,
+    },
     /// List registered candidates and scanners with their capabilities.
     List,
 }
@@ -284,6 +313,31 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
                 }
                 println!("ok: all {} truths verified against the oracle", suite.queries.len());
             }
+            Ok(ExitCode::SUCCESS)
+        }
+        Cmd::TumImport { patterns, upstream, table, column, dataset: ds_dir, out, id, force } => {
+            use lb_harness::tum_import::{self, ImportRequest, Provenance};
+            let ds = PreparedDataset::load(&ds_dir, true)?;
+            let suite_id = id.unwrap_or_else(|| {
+                out.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
+            });
+            let req = ImportRequest {
+                patterns_json: &patterns,
+                upstream_dataset: upstream,
+                table,
+                column,
+                suite_id,
+                provenance: Provenance::pinned(),
+            };
+            let outcome = tum_import::import(&req, &ds, &out, force)?;
+            let split: Vec<String> = outcome.by_op.iter().map(|(op, n)| format!("{op}={n}")).collect();
+            println!(
+                "imported {} patterns into {} (stored as {}); truth not yet computed",
+                outcome.queries,
+                out.display(),
+                split.join(", ")
+            );
+            println!("next: bench bless --suite {} --dataset {}", out.display(), ds_dir.display());
             Ok(ExitCode::SUCCESS)
         }
         Cmd::Run { spec, out, fail_fast, worker_candidate, worker_config, worker_dataset,
