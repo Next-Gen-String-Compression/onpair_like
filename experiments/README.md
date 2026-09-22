@@ -8,5 +8,5 @@ generated outputs stay inside the experiment directory and are gitignored.
 - [`optimize_prefilter`](optimize_prefilter/README.md): exact-selectivity query
   generation and benchmarking for the SpiralDB/OnPair prefilter.
 - [`matcher_selection`](matcher_selection/README.md): full-column SA/LCP query
-  preparation, independent verification and coverage reports for comparing
-  matcher policies.
+  preparation, independent verification, coverage reports and fixed-cover
+  matcher benchmarks on the same three datasets as `optimize_prefilter`.

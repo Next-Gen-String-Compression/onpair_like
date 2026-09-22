@@ -1,10 +1,10 @@
-# Matcher selection: reproducible query preparation
+# Matcher selection: query generation and fixed-cover benchmarks
 
 This experiment prepares diverse CONTAINS workloads for comparing matcher
 policies. It uses the [shared SA + LCP generator](../../harness/src/gen/README.md)
 to cover length and selectivity buckets. There are no training/validation/test
-splits. Matcher timing and policy comparison are the next stage; this command
-does not fit coefficients or modify OnPair's planner.
+splits. Preparation and matcher comparison are separate commands; neither fits
+coefficients or modifies OnPair's planner.
 
 ## From a fresh clone
 
@@ -145,7 +145,90 @@ and displays its generated count. Hatching marks zero available positive
 substrings; an orange outline marks an incomplete negative search. Passing
 several roots or suite directories compares them on separate panels.
 
-## Next experiment
+## Compare matchers
+
+After preparation, clone the compatible SpiralDB/OnPair refactor and check out
+the tested revision. Run these commands from the `onpair_like` repository root:
+
+```sh
+git clone --branch refactor/substring-search https://github.com/spiraldb/onpair.git ../onpair-matcher-selection
+git -C ../onpair-matcher-selection checkout --detach c27d39782e63cb521ec4f62ad42016fc7c77dfb4
+
+# Uses the same three datasets as preparation and generation by default.
+.venv/bin/python experiments/matcher_selection/benchmark.py \
+  --onpair ../onpair-matcher-selection \
+  --out results/matcher-selection/first
+```
+
+The commit pin keeps the benchmark reproducible when the branch advances.
+An existing checkout of that revision also works. Use a current stable Rust
+toolchain, as for query generation; the run records the compiler version.
+Add `--dataset clickbench-url-1m` to preparation, generation and benchmarking
+to start with just one dataset.
+
+`--onpair` is explicit: there is no fallback to the old pinned `onpair_spiral`
+candidate. The launcher copies the local Rust source into an ignored build
+directory and adds `adapter.rs` to expose eligible matcher choices. It does not
+edit the OnPair checkout, replace matcher implementations, or change the
+existing benchmark candidates. The snapshot checks production source hashes;
+reusing a manually modified snapshot is an error. A different source revision
+gets a different snapshot. This adapter currently targets the refactored
+`ContainsScan` / `plan` / `scan` layout.
+
+The runner compresses each complete prepared column once with seed 42,
+16 dictionary bits and threshold 0.15, then builds the frequency index. For
+each needle it prepares the production cover once and compares:
+
+- `current`: normal `ContainsScan::scan`, including matcher selection;
+- `table`, `eq_or`, `range`, `nibble_n8`: every eligible matcher forced on that
+  same cover, using the production resolver and exact graph walker.
+
+Vector packing follows the current plan and is held fixed across the forced
+vector matchers. Results record its value; this first experiment isolates
+matcher selection and does not optimize packing or cover selection.
+Each variant must reproduce the independently blessed bitmap before timing.
+Timing includes matcher setup and the complete scan/verification path, with
+a reused output buffer. Compression, cover preparation, correctness checks,
+and serialization are outside the timed region.
+
+Defaults are **5 rounds**, at least **5 ms and 3 iterations** per variant per
+round, with a warm-up immediately before timing. Query order and variant order
+are deterministically shuffled. All queries are included; `--query-limit` is
+an explicit smoke-test option recorded in the manifest. Use a quiet machine
+and repeat runs before drawing conclusions from small differences.
+
+The normal command requires exactly one generated suite for each selected
+dataset. For another seed/quota or existing suites elsewhere, pass explicit
+pairs instead of `--dataset`:
+
+```sh
+.venv/bin/python experiments/matcher_selection/benchmark.py \
+  --onpair ../onpair-matcher-selection \
+  --case path/to/prepared-column path/to/verified-suite \
+  --out results/matcher-selection/another-run
+```
+
+Output directories must be new. Each run records source revisions and hashes,
+the dependency lockfile, compiler and host information, dataset/suite checksums,
+measurement settings, and all per-round timings. Results include:
+
+```text
+manifest.json       provenance and completion status
+Cargo.lock          resolved benchmark dependencies
+matcher-selection-bench  executable frozen for this run
+<dataset>.jsonl     query facts, cover, correctness gate and timings
+measurements.csv    tabular per-query/per-matcher results
+summary.json        policy comparisons, per-bucket summaries and worst cases
+SUMMARY.md          readable latency percentiles and comparisons
+```
+
+`report.py RUN_DIRECTORY` regenerates summaries and rejects incomplete runs.
+It compares the current policy, Table, three exploratory shape rules, and the
+fastest measured eligible matcher per query. The latter is a noise-sensitive
+oracle bound; the shape rules are hypotheses evaluated on these same queries,
+not fitted or validated production replacements. The current policy is unchanged.
+
+## Interpreting the experiment
 
 Balanced needle coverage does not guarantee balanced matcher inputs. Matcher
 comparisons must also record normalized point/range counts, covered-token
