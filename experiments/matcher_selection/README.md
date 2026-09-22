@@ -18,15 +18,13 @@ python3 -m venv .venv
 # Show columns and index requirements without downloading.
 .venv/bin/python experiments/matcher_selection/prepare.py --list
 
-# Reproduce the three-dataset coverage figure.
+# Prepare the same three datasets as optimize_prefilter (the default roster).
 # Download/extract/ingest columns using datasets/sources.yaml.
 # Builds the minimal Rust harness, without unrelated codec dependencies.
-.venv/bin/python experiments/matcher_selection/prepare.py \
-  --dataset clickbench-url-1m --dataset amazon-title --dataset dbpedia-abstract
+.venv/bin/python experiments/matcher_selection/prepare.py
 
 # Generate suites and independently verify every needle against all rows.
-./experiments/matcher_selection/generate.sh \
-  --dataset clickbench-url-1m --dataset amazon-title --dataset dbpedia-abstract
+./experiments/matcher_selection/generate.sh
 
 # Numbered bucket grids in the supplied order, plus PDF and exact counts in CSV.
 .venv/bin/python analysis/needle_coverage.py \
@@ -48,22 +46,21 @@ With the pinned inputs and default generator settings, the three suites contain:
 | Amazon book titles | 4,448,181 | 1,040 | 140 | `xxh3:3a0b57c7356a57a6` |
 | DBpedia abstracts | 1,000,000 | 1,111 | 140 | `xxh3:09644aa73fc3e4b1` |
 
-To start with ClickBench only, select just `--dataset clickbench-url-1m` in
-both preparation and generation. To add the fourth verified workload, include
-`--dataset msmarco-query` in both commands. Omit all `--dataset` arguments to
-prepare the complete ten-column roster; it includes large downloads,
-particularly MS MARCO URLs and Amazon metadata. No datasets are silently
-skipped. Existing downloads and prepared columns are reused by the shared
+Both preparation and generation process exactly these three datasets by default.
+To start with ClickBench only, pass `--dataset clickbench-url-1m` to both
+commands. Existing downloads and prepared columns are reused by the shared
 preparation script.
 
-`config.toml` lists ten columns from Amazon, MS MARCO, TPC-H, DBLP, ClickBench and
-DBpedia. Every ID has a recipe in `datasets/sources.yaml`. ClickBench uses the
-same pinned **1,000,000-row** input as `optimize_prefilter`. The SA indexes every
-row of each prepared column; it has no additional sample or pilot limit.
+`config.toml` uses the same dataset IDs, paths and preparation recipes as
+`optimize_prefilter`: ClickBench URLs (**1,000,000 rows**), Amazon book titles
+and DBpedia abstracts. Query generation uses SA/LCP and length buckets spanning
+1–256 bytes, independently of `optimize_prefilter`'s sampled 1–64-byte queries.
+The SA indexes every row of each prepared column; it has no additional sample
+or pilot limit. Other dataset recipes remain available in
+`datasets/sources.yaml`, but are not selected by this experiment's default config.
 
 Every configured recipe pins its canonical checksum; downloaded sources also
 have SHA-256 pins. The dataset manifest and suite record the canonical identity.
-DBLP uses the archived [December 2025 snapshot](https://doi.org/10.4230/dblp.xml.2025-12-01).
 When adding a recipe with `recorded-at-prepare`, use `datasets/prepare.py
 --dataset <id> --update-checksums` and review the pins before publishing results.
 
@@ -80,23 +77,16 @@ This is a conservative workspace estimate, not a reservation or an OS memory
 cap. The loaded Arrow dataset and extraction tools need additional memory.
 Cached suffix/LCP arrays take about six bytes per encoded symbol on disk.
 
-The largest measured requirement is **10.49 GiB for DBLP titles**. The table
-uses canonical column sizes; MS MARCO URLs retain the existing recipe estimate.
-The 16 GiB setting covers these sizes, with the actual manifests checked before
-generation:
+The largest measured requirement in this three-dataset roster is **5.11 GiB for
+DBpedia abstracts**. The table uses canonical column sizes. The 16 GiB budget
+is an admission limit, not memory allocated for every dataset; the actual
+manifests are checked before generation:
 
 | Dataset | Index admission budget (GiB) |
 |---|---:|
 | ClickBench URLs, 1M rows | 1.40 |
 | Amazon book titles | 3.58 |
 | DBpedia abstracts | 5.11 |
-| MS MARCO queries | 0.61 |
-| MS MARCO URLs (estimated) | 3.24 |
-| TPC-H product names, SF10 | 1.07 |
-| TPC-H customer comments, SF10 | 1.71 |
-| TPC-H customer addresses, SF10 | 0.64 |
-| DBLP titles | 10.49 |
-| DBLP authors | 7.25 |
 
 `prepare.py --list` uses the prepared manifest when available, otherwise the
 recipe's approximate sizes. After preparation, obtain requirements from actual
