@@ -516,6 +516,36 @@ def load_run(con, run_dir: Path) -> str:
     )
 
 
+# Columns added to `query` after the first databases were built. schema.sql's
+# CREATE TABLE IF NOT EXISTS leaves an existing table as it was, so a DB from
+# before ABI v8 needs the columns added in place — additively, NULL for rows
+# loaded earlier, exactly like a suite blessed before the facts existed.
+QUERY_MIGRATIONS = [
+    ("pattern", "VARCHAR"),
+    ("pattern_class", "VARCHAR"),
+    ("percent_count", "INTEGER"),
+    ("underscore_count", "INTEGER"),
+    ("literal_len_total", "INTEGER"),
+    ("selectivity_bucket", "VARCHAR"),
+    ("length_bucket", "VARCHAR"),
+    ("source", "VARCHAR"),
+]
+
+
+def migrate(con) -> None:
+    """Bring a database created under an older schema.sql up to date.
+
+    DuckDB cannot ADD COLUMN with a constraint, so the bucket columns are
+    added plain and back-filled to 'unknown', which is what schema.sql's
+    DEFAULT gives a fresh database."""
+    have = {row[1] for row in con.execute("PRAGMA table_info('query')").fetchall()}
+    for column, decl in QUERY_MIGRATIONS:
+        if column not in have:
+            con.execute(f"ALTER TABLE query ADD COLUMN {column} {decl}")
+            if column.endswith("_bucket"):
+                con.execute(f"UPDATE query SET {column} = 'unknown' WHERE {column} IS NULL")
+
+
 def main(argv):
     if not argv:
         raise SystemExit(__doc__)
@@ -525,6 +555,7 @@ def main(argv):
         dirs = [Path(a).resolve() for a in argv]
     con = duckdb.connect(DB_PATH)
     con.execute(SCHEMA_PATH.read_text())
+    migrate(con)
     for run_dir in dirs:
         print(load_run(con, run_dir))
     con.close()
