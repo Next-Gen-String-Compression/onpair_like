@@ -399,12 +399,17 @@
       }
     });
     // A series that declined every query in this context still gets a chip —
-    // greyed, unplottable — because "answered 0 of 142" is the finding.
+    // greyed, unplottable — because "answered 0 of 142" is the finding. Only
+    // for `like`, though: on a literal op a series that answered nothing simply
+    // never declared that op (the `like` scanner under contains, say), and a
+    // row of 0/129 chips there is noise, not information.
     const declined = coverageFor();
-    COVERAGE.forEach(row => {
-      const key = seriesKey(row);
-      if (declined.has(key) && !bySeries.has(key)) bySeries.set(key, seriesMeta(row));
-    });
+    if (state.op === "like") {
+      COVERAGE.forEach(row => {
+        const key = seriesKey(row);
+        if (declined.has(key) && !bySeries.has(key)) bySeries.set(key, seriesMeta(row));
+      });
+    }
     bySeries.forEach((meta, id) => {
       const d = declined.get(id) || {unsupported: 0, failed: 0};
       meta.coverage = {answered: answered.get(id) || 0, unsupported: d.unsupported, failed: d.failed};
@@ -629,6 +634,17 @@
           ticks.push(10 ** exponent);
         }
         if (!ticks.some(value => value === 10 ** last)) ticks.push(10 ** last);
+        // Throughput on one column rarely spans more than a decade or two,
+        // and "1 and 10 GB/s" is not an axis. Within three decades, label the
+        // 2 and 5 of each one as well; the decade lines stay the anchors.
+        if (last - first <= 3) {
+          for (let exponent = first; exponent <= last; exponent++) {
+            for (const mantissa of [2, 5]) {
+              const value = mantissa * 10 ** exponent;
+              if (value >= minPositive / 1.5 && value <= maxPositive * 1.5) ticks.push(value);
+            }
+          }
+        }
         if (bounds.min !== null) ticks.push(bounds.min);
         if (bounds.max !== null) ticks.push(bounds.max);
         return {map, ticks: unique(ticks).sort((a, b) => a - b), kind: "log", hasZero};

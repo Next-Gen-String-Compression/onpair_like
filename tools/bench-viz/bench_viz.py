@@ -116,11 +116,12 @@ COVERAGE_STATUSES = frozenset({"unsupported", "gate_failed", "error"})
 
 
 def is_substring_search(row: Dict[str, Any]) -> bool:
-    if row.get("op") != "like":
-        return row.get("op") in SUBSTRING_OPS
-    # An anchored pattern (abc%, %abc, a%b) is not a substring search; an
-    # unanchored one (%abc%, %a_b%c%) is. Decide from the stamped shape.
-    return (row.get("pattern_class") or "") in {"contains", "multi_gap"}
+    # Every `like` row is kept: the anchored-gap shapes (a%b, %a%b) are the
+    # ones no literal op expresses and the whole reason the corpus exists,
+    # and the Pattern class facet separates them from the unanchored ones.
+    # The prefilter tab's ratios remain meaningful only for unanchored
+    # patterns; it reads pattern_class itself.
+    return row.get("op") in SUBSTRING_OPS
 
 
 def normalize_coverage(row: Dict[str, Any], source: str) -> Optional[Dict[str, Any]]:

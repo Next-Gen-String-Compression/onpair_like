@@ -19,7 +19,9 @@ build() { # run-dir title out-name [extra args...]
   if [ ! -f "$run/results.jsonl" ]; then
     echo "skip: $run has no results.jsonl (run its spec first)"; return
   fi
-  python3 tools/bench-viz/bench_viz.py "$run" --queries suites \
+  # Suite locations come from the run's manifest.json; --queries is only
+  # needed for a run copied away from its suites.
+  python3 tools/bench-viz/bench_viz.py "$run" \
     --title "$title" --out "$OUT/$name.html" "$@"
   echo "wrote $OUT/$name.html"
 }

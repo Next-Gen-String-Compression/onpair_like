@@ -656,13 +656,13 @@ class LikeShapeAndCoverageTests(unittest.TestCase):
         self.assertEqual(point["selectivity_bucket"], "1e-3")
         self.assertEqual(point["length_bucket"], "L4-7")
 
-    def test_like_rows_are_substring_searches_only_when_unanchored(self):
-        unanchored = {"kind": "query", "op": "like", "pattern_class": "contains"}
-        anchored = {"kind": "query", "op": "like", "pattern_class": "prefix"}
-        gap_both = {"kind": "query", "op": "like", "pattern_class": "anchored_gap_both"}
-        self.assertTrue(bench_viz.is_substring_search(unanchored))
-        self.assertFalse(bench_viz.is_substring_search(anchored))
-        self.assertFalse(bench_viz.is_substring_search(gap_both))
+    def test_every_like_row_is_kept_whatever_its_anchoring(self):
+        # The anchored-gap shapes are the ones no literal op expresses; the
+        # Pattern class facet separates them from the unanchored ones, so the
+        # loader keeps them all rather than pooling a decision into the load.
+        for cls in ("contains", "multi_gap", "prefix", "anchored_gap_both", None):
+            self.assertTrue(bench_viz.is_substring_search(
+                {"kind": "query", "op": "like", "pattern_class": cls}), cls)
         # the literal ops keep their old classification
         self.assertTrue(bench_viz.is_substring_search({"kind": "query", "op": "contains"}))
         self.assertFalse(bench_viz.is_substring_search({"kind": "query", "op": "prefix"}))
