@@ -1,0 +1,4263 @@
+{
+  "cells": [
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "partial"
+    },
+    {
+      "class": "prefix",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "partial"
+    },
+    {
+      "class": "prefix",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "prefix",
+      "filled": 2,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "prefix",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "prefix",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "partial"
+    },
+    {
+      "class": "prefix",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "filled"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 2,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "partial"
+    },
+    {
+      "class": "prefix",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "prefix",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "prefix",
+      "filled": 2,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "prefix",
+      "filled": 2,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "partial"
+    },
+    {
+      "class": "prefix",
+      "filled": 2,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "partial"
+    },
+    {
+      "class": "prefix",
+      "filled": 1,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "partial"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "prefix",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "prefix",
+      "filled": 1,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "prefix",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "prefix",
+      "filled": 2,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "partial"
+    },
+    {
+      "class": "prefix",
+      "filled": 2,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "prefix",
+      "filled": 1,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "partial"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "prefix",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "partial"
+    },
+    {
+      "class": "suffix",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "suffix",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "suffix",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "suffix",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "suffix",
+      "filled": 2,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "partial"
+    },
+    {
+      "class": "suffix",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "partial"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "suffix",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "suffix",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "suffix",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "suffix",
+      "filled": 1,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "partial"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "suffix",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "suffix",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "suffix",
+      "filled": 1,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "suffix",
+      "filled": 1,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "partial"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "suffix",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "suffix",
+      "filled": 1,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "suffix",
+      "filled": 1,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "suffix",
+      "filled": 2,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "partial"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 2,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "suffix",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 2,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "partial"
+    },
+    {
+      "class": "contains",
+      "filled": 2,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "partial"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 2,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "partial"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "contains",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "contains",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "contains",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "contains",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "contains",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "contains",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "partial"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 2,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "partial"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 2,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "partial"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 2,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 1,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "partial"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 1,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "partial"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "multi_gap",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 2,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 1,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 2,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 1,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 2,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 1,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 1,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 1,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 1,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 1,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 1,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 1,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_head",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 1,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 2,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 1,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 1,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 1,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 1,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 1,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 1,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_tail",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 2,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 2,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 2,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "partial"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "anchored_gap_both",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "partial"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "partial"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 2,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 1,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "partial"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 2,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "partial"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 1,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_1",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 2,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "partial"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 2,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L1-3",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 2,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "partial"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 2,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "partial"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 1,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "partial"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "underscore_2plus",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "partial"
+    },
+    {
+      "class": "mixed",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "partial"
+    },
+    {
+      "class": "mixed",
+      "filled": 1,
+      "length_bucket": "L1-3",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "partial"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 2,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "mixed",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "mixed",
+      "filled": 2,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "partial"
+    },
+    {
+      "class": "mixed",
+      "filled": 2,
+      "length_bucket": "L4-7",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "partial"
+    },
+    {
+      "class": "mixed",
+      "filled": 3,
+      "length_bucket": "L4-7",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "filled"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "mixed",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "mixed",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "mixed",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "filled"
+    },
+    {
+      "class": "mixed",
+      "filled": 3,
+      "length_bucket": "L8-16",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "filled"
+    },
+    {
+      "class": "mixed",
+      "filled": 1,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "partial"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L8-16",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "mixed",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "mixed",
+      "filled": 3,
+      "length_bucket": "L17-32",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "filled"
+    },
+    {
+      "class": "mixed",
+      "filled": 1,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L17-32",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "mixed",
+      "filled": 3,
+      "length_bucket": "L33-64",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "mixed",
+      "filled": 1,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "mixed",
+      "filled": 1,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L33-64",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "zero",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "ultra_rare",
+      "status": "filled"
+    },
+    {
+      "class": "mixed",
+      "filled": 3,
+      "length_bucket": "L65+",
+      "requested": 3,
+      "selectivity_bucket": "1e-5",
+      "status": "filled"
+    },
+    {
+      "class": "mixed",
+      "filled": 1,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-4",
+      "status": "partial"
+    },
+    {
+      "class": "mixed",
+      "filled": 2,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-3",
+      "status": "partial"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-2",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "1e-1",
+      "status": "empty"
+    },
+    {
+      "class": "mixed",
+      "filled": 0,
+      "length_bucket": "L65+",
+      "reason": "no_candidates_in_cell_within_probe_budget",
+      "requested": 3,
+      "selectivity_bucket": "broad",
+      "status": "empty"
+    }
+  ],
+  "dataset": {
+    "checksum": "xxh3:09644aa73fc3e4b1",
+    "id": "dbpedia-abstract",
+    "num_rows": 1000000
+  },
+  "exact_probes": 2354,
+  "generator": "like-gen2-v1",
+  "mining_pool": {
+    "literals_mined": 545,
+    "rows": 124956,
+    "rule": "xxh3_64(row_index) % 8 == 0"
+  },
+  "per_class": {
+    "anchored_gap_both": 39,
+    "anchored_gap_head": 38,
+    "anchored_gap_tail": 45,
+    "contains": 117,
+    "mixed": 62,
+    "multi_gap": 60,
+    "prefix": 53,
+    "suffix": 58,
+    "underscore_1": 102,
+    "underscore_2plus": 99
+  },
+  "populated_selectivity_buckets": {
+    "1e-1": [
+      "prefix",
+      "suffix",
+      "contains",
+      "multi_gap",
+      "anchored_gap_head",
+      "anchored_gap_tail",
+      "underscore_1",
+      "underscore_2plus",
+      "mixed"
+    ],
+    "1e-2": [
+      "prefix",
+      "suffix",
+      "contains",
+      "multi_gap",
+      "anchored_gap_head",
+      "anchored_gap_tail",
+      "anchored_gap_both",
+      "underscore_1",
+      "underscore_2plus",
+      "mixed"
+    ],
+    "1e-3": [
+      "prefix",
+      "suffix",
+      "contains",
+      "multi_gap",
+      "anchored_gap_head",
+      "anchored_gap_tail",
+      "anchored_gap_both",
+      "underscore_1",
+      "underscore_2plus",
+      "mixed"
+    ],
+    "1e-4": [
+      "prefix",
+      "suffix",
+      "contains",
+      "multi_gap",
+      "anchored_gap_head",
+      "anchored_gap_tail",
+      "anchored_gap_both",
+      "underscore_1",
+      "underscore_2plus",
+      "mixed"
+    ],
+    "1e-5": [
+      "prefix",
+      "suffix",
+      "contains",
+      "multi_gap",
+      "anchored_gap_head",
+      "anchored_gap_tail",
+      "anchored_gap_both",
+      "underscore_1",
+      "underscore_2plus",
+      "mixed"
+    ],
+    "broad": [
+      "prefix",
+      "suffix",
+      "contains",
+      "multi_gap",
+      "anchored_gap_head",
+      "anchored_gap_both",
+      "underscore_1",
+      "underscore_2plus",
+      "mixed"
+    ],
+    "ultra_rare": [
+      "prefix",
+      "suffix",
+      "contains",
+      "multi_gap",
+      "anchored_gap_head",
+      "anchored_gap_tail",
+      "anchored_gap_both",
+      "underscore_1",
+      "underscore_2plus",
+      "mixed"
+    ],
+    "zero": [
+      "contains",
+      "underscore_1",
+      "underscore_2plus"
+    ]
+  },
+  "queries": 673,
+  "request": {
+    "max_literal_len": 128,
+    "mining_modulus": 8,
+    "per_cell": 3,
+    "pool_per_cell": 12,
+    "probe_budget_per_class": 240,
+    "seed": 42
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "format_version": 1,
+  "id": "tpch-pname-sf10-gen2-s42",
+  "description": "LIKE-shape sweep over tpch-pname-sf10 (2000000 rows): 430 patterns across 10 classes, stratified by literal length x measured selectivity, literals mined from a held-out \"xxh3_64(row_index) % 8 == 0\" of rows and every pattern probed exactly against the full column. Regenerate with `bench gen --method like --seed 42`.",
+  "dataset": {
+    "id": "tpch-pname-sf10",
+    "checksum": "xxh3:ea4860e177003f58"
+  },
+  "provenance": {
+    "classes": [
+      "prefix",
+      "suffix",
+      "contains",
+      "multi_gap",
+      "anchored_gap_head",
+      "anchored_gap_tail",
+      "anchored_gap_both",
+      "underscore_1",
+      "underscore_2plus",
+      "mixed"
+    ],
+    "generator": "like-gen2-v1",
+    "mining_pool": {
+      "literals_mined": 399,
+      "rows": 249860,
+      "rule": "xxh3_64(row_index) % 8 == 0"
+    },
+    "request": {
+      "max_literal_len": 128,
+      "mining_modulus": 8,
+      "per_cell": 3,
+      "pool_per_cell": 12,
+      "probe_budget_per_class": 240,
+      "seed": 42
+    },
+    "seed": 42
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-09-22T09:35:41Z"
+}
