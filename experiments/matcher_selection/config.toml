@@ -1,4 +1,5 @@
-# Paths are relative to this file. Prepare missing inputs with datasets/prepare.py.
+# Same three datasets as optimize_prefilter, using the shared preparation recipes.
+# Paths are relative to this file. Prepare missing inputs with prepare.py.
 # All IDs refer to recipes in datasets/sources.yaml.
 # Datasets are indexed one at a time; the budget excludes the loaded column.
 output_root = "generated"
@@ -8,40 +9,12 @@ index_memory_mib = 16384
 negative_attempts = 4000
 
 [[datasets]]
-id = "amazon-title"
-path = "../../datasets/amazon-title"
-
-[[datasets]]
-id = "msmarco-query"
-path = "../../datasets/msmarco-query"
-
-[[datasets]]
-id = "msmarco-url"
-path = "../../datasets/msmarco-url"
-
-[[datasets]]
-id = "tpch-pname-sf10"
-path = "../../datasets/tpch-pname-sf10"
-
-[[datasets]]
-id = "tpch-ccomment-sf10"
-path = "../../datasets/tpch-ccomment-sf10"
-
-[[datasets]]
-id = "tpch-caddress-sf10"
-path = "../../datasets/tpch-caddress-sf10"
-
-[[datasets]]
-id = "dblp-title"
-path = "../../datasets/dblp-title"
-
-[[datasets]]
-id = "dblp-author"
-path = "../../datasets/dblp-author"
-
-[[datasets]]
 id = "clickbench-url-1m"
 path = "../../datasets/clickbench-url-1m"
+
+[[datasets]]
+id = "amazon-title"
+path = "../../datasets/amazon-title"
 
 [[datasets]]
 id = "dbpedia-abstract"
