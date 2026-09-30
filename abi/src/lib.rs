@@ -369,6 +369,8 @@ unsafe impl Send for LbScanner {}
 
 // -------------------------------------------------------- small helpers
 
+pub mod resolve;
+
 /// Read a NUL-terminated C string field from a vtable; None for NULL.
 ///
 /// # Safety

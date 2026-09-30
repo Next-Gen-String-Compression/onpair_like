@@ -116,8 +116,11 @@ pub fn vtable() -> &'static LbScanner {
 // (msmarco-query ~36 B) the per-row loop restarts the kernel every few bytes
 // and never gets a runway; the haystack pass keeps the SIMD kernel saturated
 // for the whole column. A match is attributed only if it lies wholly within
-// one row (`gpos + m <= offsets[r+1]`), which rejects the false positives
-// that a needle straddling a row boundary would otherwise produce.
+// one row, which rejects the false positives that a needle straddling a row
+// boundary would otherwise produce. Hits are resolved by the shared
+// `lb_abi::resolve::haystack_rows`, so every haystack scan pays the same
+// bookkeeping: a forward galloping row cursor, and a jump to the end of a row
+// once it matches.
 //
 // `contains` only: prefix/suffix are position-anchored (no haystack win) and
 // contains_any is the multi-pattern engines' territory.
@@ -164,22 +167,13 @@ unsafe extern "C" fn scan_hay(
         }
         return 0;
     }
-    let m = p.needle_len;
-    // Advance by 1 after each hit (not by m): a match that straddles a row
-    // boundary is rejected but may overlap a *valid* within-row occurrence
-    // of a periodic needle (e.g. "aa" across `...a|a...`); skipping by m
-    // would drop it. Advancing by 1 enumerates every occurrence; the SIMD
-    // kernel still scans the gaps between hits.
-    let mut start = 0usize;
-    while let Some(rel) = p.finder.find(&payload[start..]) {
-        let gpos = start + rel;
-        // Row containing byte gpos: first offset strictly greater, minus one.
-        let r = offsets.partition_point(|&o| (o as usize) <= gpos) - 1;
-        if gpos + m <= offsets[r + 1] as usize {
-            set_bit(words, r);
-        }
-        start = gpos + 1;
-    }
+    lb_abi::resolve::haystack_rows(
+        payload,
+        offsets,
+        p.needle_len,
+        |hay| p.finder.find(hay),
+        |row| set_bit(words, row),
+    );
     0
 }
 
@@ -190,7 +184,7 @@ unsafe extern "C" fn release_hay(prepared: *mut c_void) {
 static VTABLE_HAY: LbScanner = LbScanner {
     abi_version: LB_ABI_VERSION,
     name: c"memmem-hay".as_ptr(),
-    version: c"0.1.0".as_ptr(),
+    version: c"0.2.0".as_ptr(),
     cpu_features: core::ptr::null(),
     supported_ops: op_bit(LB_CONTAINS),
     prepare: Some(prepare_hay),

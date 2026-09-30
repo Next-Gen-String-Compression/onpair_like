@@ -6,7 +6,8 @@
 //! Storage is zero-copy (build retains the view; compression ratio 1.0). The
 //! `memmem` searches each row separately and supports every operation;
 //! `memmem-hay` makes one pass over the concatenated payload for `contains`
-//! and rejects occurrences that cross a row boundary.
+//! and resolves hits to rows with the shared `lb_abi::resolve::haystack_rows`,
+//! which rejects occurrences that cross a row boundary.
 
 use core::ffi::{c_char, c_void};
 
@@ -75,19 +76,13 @@ unsafe extern "C" fn run(
         }
 
         let finder = Finder::new(needle);
-        let mut start = 0usize;
-        while let Some(relative) = finder.find(&payload[start..]) {
-            let position = start + relative;
-            // Find the row containing `position`. The suite never supplies an
-            // empty needle here, so a hit always names a payload byte.
-            let row = offsets.partition_point(|&offset| offset as usize <= position) - 1;
-            if position + needle.len() <= offsets[row + 1] as usize {
-                set_bit(words, row);
-            }
-            // Preserve overlapping hits. A rejected boundary-spanning match
-            // may overlap a valid occurrence at the next byte.
-            start = position + 1;
-        }
+        lb_abi::resolve::haystack_rows(
+            payload,
+            offsets,
+            needle.len(),
+            |hay| finder.find(hay),
+            |row| set_bit(words, row),
+        );
         return 0;
     }
 
@@ -173,7 +168,7 @@ static STRATEGIES: [LbStrategy; 2] = [
 static VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
     name: c"uncompressed_memmem".as_ptr(),
-    version: c"0.2.0".as_ptr(),
+    version: c"0.3.0".as_ptr(),
     cpu_features: core::ptr::null(),
     strategies: STRATEGIES.as_ptr(),
     strategy_count: STRATEGIES.len() as u32,
