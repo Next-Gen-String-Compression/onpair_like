@@ -1,0 +1,47 @@
+# The FSST-LIKE pattern automaton ORC-JITted in process, on the 2^20-row
+# roster, to be read against micro-1mi*.toml's `interp` line and to give
+# `micro-breakdown` its LLVM JIT bar. One row group, 512k rows, which is the
+# size that figure is drawn at.
+#
+#   paper/gen-micro-data.sh runs this after the micro spec, on x86 only.
+#
+# Why a separate spec: `chunk_rows` is a property of [measure], not of a
+# candidate, and this strategy cannot afford the small chunks. Hygiene rule 1
+# forbids memoizing across calls, so the automaton is compiled once per run(),
+# i.e. once per chunk, and every chunk is run warmup + iters times. At 512k
+# rows a 2^20-row column is two chunks, ten compiles per needle, which at the
+# 12-21 ms a compile costs is minutes rather than hours.
+#
+# `llvm-simd` registers only where the candidate was built against LLVM 14-16
+# on x86-64 (HAVE_LLVM, and SSE4.2 intrinsics in the generated kernels), so
+# this spec produces nothing on the arm64 host and is not run there.
+
+strategies = ["llvm-simd"]
+
+[[datasets]]
+path = "../../datasets/clickbench-url-1mi"
+[[datasets]]
+path = "../../datasets/amazon-title-1mi"
+[[datasets]]
+path = "../../datasets/dbpedia-abstract-1mi"
+[[datasets]]
+path = "../../datasets/imdb-mcnote-1mi"
+
+[[suites]]
+path = "../../experiments/matcher_selection/generated/clickbench-url-1mi/sa-lcp-v1-s42-n10-76a1cfeaf7ff8fbe"
+[[suites]]
+path = "../../experiments/matcher_selection/generated/amazon-title-1mi/sa-lcp-v1-s42-n10-9355081547f10caf"
+[[suites]]
+path = "../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa-lcp-v1-s42-n10-2862fe216f2b674b"
+[[suites]]
+path = "../../experiments/matcher_selection/generated/imdb-mcnote-1mi/sa-lcp-v1-s42-n10-12bb2d5e74a4ca68"
+
+[[candidates]]
+name = "fsst_like_tum"
+
+[measure]
+chunk_rows = [524288]
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

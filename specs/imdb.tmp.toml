@@ -1,0 +1,25 @@
+# IMDB aka-name: 901K short strings (mean 15.7 B), a different shape from URLs.
+strategies = ["dict+compressed", "kmp", "pf_walk"]
+
+[[datasets]]
+path = "../datasets/imdb-akaname"
+
+[[suites]]
+path = "../suites/imdb-akaname-sqlstorm"
+
+[[candidates]]
+name = "dict_onpair"
+configs = ['{"bits":12}', '{"bits":16}']
+
+[[candidates]]
+name = "onpair_spiral"
+configs = ['{"bits":12}', '{"bits":16}']
+
+[[candidates]]
+name = "fsst_rs"
+
+[measure]
+chunk_rows = [0]
+warmup = 2
+min_iters = 3
+min_millis = 0

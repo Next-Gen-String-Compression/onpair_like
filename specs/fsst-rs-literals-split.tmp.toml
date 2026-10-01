@@ -1,0 +1,22 @@
+# fsst_rs (FSST table, OnPair planner) against the C++ FSST prefilter it competes
+# with, on the curated literals. Instrumented, so the verify splits into
+# decompress and search.
+strategies = ["pf_memmem", "fsst-prefilter"]
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-literals"
+
+[[candidates]]
+name = "fsst_rs"
+
+[[candidates]]
+name = "fsst_prefilter"
+
+[measure]
+chunk_rows = [0, 122880]
+warmup = 2
+min_iters = 3
+min_millis = 0

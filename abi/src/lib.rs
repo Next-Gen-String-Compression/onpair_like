@@ -8,7 +8,7 @@
 
 use core::ffi::c_char;
 
-pub const LB_ABI_VERSION: u32 = 5;
+pub const LB_ABI_VERSION: u32 = 6;
 
 /// Guaranteed writable headroom past the decoded payload in `decode()`
 /// output buffers (mirrors `LB_DECODE_PAD`; SEMANTICS.md rule 8).
@@ -156,6 +156,10 @@ pub struct LbRunStats {
     /// Per-query setup (pattern/automaton compilation) before any row or
     /// token is examined (ABI v3).
     pub setup_ns: u64,
+    /// The pass over the rows, for a strategy that owns its scan (ABI v6).
+    /// The harness times this joint itself for the strategies it composes,
+    /// and ignores the field there.
+    pub scan_ns: u64,
     /// The column values this strategy actually evaluated (ABI v5). UNSET
     /// means one per row; a reduced domain (a dictionary front-end
     /// evaluating once per unique value) declares its size here, and it is
@@ -174,6 +178,7 @@ impl LbRunStats {
             prefilter_ns: LB_STAT_UNSET,
             verify_ns: LB_STAT_UNSET,
             setup_ns: LB_STAT_UNSET,
+            scan_ns: LB_STAT_UNSET,
             eval_domain: LB_STAT_UNSET,
             eval_domain_matches: LB_STAT_UNSET,
         }

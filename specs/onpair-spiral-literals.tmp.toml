@@ -1,0 +1,23 @@
+# Rerun of the onpair-spiral candidates only, after the planner change
+# (proper-suffix entry classes + mandatory-chain/sequence probes). Compare
+# against results/paper/clickbench-url-1m-literals (same suite, pre-change).
+strategies = ["kmp", "pf_walk", "dict+pf_walk"]
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-literals"
+
+[[candidates]]
+name = "onpair_spiral"
+
+[[candidates]]
+name = "dict_onpair_spiral"
+
+[measure]
+chunk_rows = [0, 122880]
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

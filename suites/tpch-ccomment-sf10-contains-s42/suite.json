@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "tpch-ccomment-sf10-contains-s42",
+  "description": "Filtered to op=contains (111 queries) from tpch-ccomment-sf10-gen1-s42. Truth embedded per-query; binding via dataset checksum only.",
+  "dataset": {
+    "id": "tpch-ccomment-sf10",
+    "checksum": "xxh3:af8cd73ba0811038"
+  },
+  "provenance": {
+    "generator": {
+      "name": "gen1",
+      "ops": [
+        "prefix",
+        "suffix",
+        "contains",
+        "multi_contains",
+        "contains_any"
+      ],
+      "profile": "full",
+      "seed": 42
+    }
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-07-08T16:05:06Z"
+}

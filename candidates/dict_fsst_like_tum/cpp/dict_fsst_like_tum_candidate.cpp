@@ -126,11 +126,17 @@ class FsstLikeTum final : public lb::Matcher {
                                        Clock::now() - t0)
                                        .count());
       }
+      const auto t1 = stats ? Clock::now() : Clock::time_point{};
       for (uint64_t i = 0; i < b_.num_rows; i++) {
         const uint8_t* p = b_.compressed.data() + b_.coffsets[i];
         const size_t len = size_t(b_.coffsets[i + 1] - b_.coffsets[i]);
         if (parser.parse(std::span<const uint8_t>(p, len)))
           out[i >> 6] |= uint64_t(1) << (i & 63);
+      }
+      if (stats) {
+        stats->scan_ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                      Clock::now() - t1)
+                                      .count());
       }
       return 0;
     } catch (...) {

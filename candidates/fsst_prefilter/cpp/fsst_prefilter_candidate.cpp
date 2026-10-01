@@ -16,9 +16,15 @@
 //   dict_fsst_prefilter : the same matcher as a DictMatcher child, so planning
 //                         and the scan run once per UNIQUE value.
 //
-// The walk is exact, so there is no verify phase to time apart from the scan:
-// instrumented mode reports setup_ns (planning), scan_ns (the scan with the
-// walk inline) and prefilter_candidates (rows the mask named, before the walk).
+// The walk is fused into the scan, so instrumented mode re-runs the phases
+// beside it rather than splitting the fused pass: setup_ns (planning),
+// prefilter_ns (the same cover scanned with the walk off, whose survivors are
+// prefilter_candidates) and verify_ns (the alignment walks alone, over hits
+// located beforehand and untimed). Each is the fastest of five runs after a
+// warm-up, so a phase shorter than the clock's step is still resolved. The
+// same split the onpair_spiral candidate reports, so the two ports' verify
+// costs per candidate row compare directly. No scan_ns: the timed path is the
+// fused scan, so the harness's median is already that number.
 // The kernels are NEON on aarch64 and AVX-512BW or AVX2 on x86-64, chosen by
 // -march=native at build time; the candidate declares the set it was built
 // with and the harness gates on the host.
@@ -34,6 +40,7 @@
 
 #include "prefilter.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -43,6 +50,73 @@
 namespace {
 
 namespace pf = fsst::search::prefilter;
+
+// Keeps a phase whose result the timing loop does not otherwise use from
+// being optimized away.
+inline void keep(const void* p) { asm volatile("" : : "r"(p) : "memory"); }
+
+// Nanoseconds of the fastest of five runs, after one untimed; a region under
+// the floor is repeated inside the timer until it clears and the time divided
+// back. A phase measured once, cold, against another measured once, warm,
+// reports the order the two ran in as much as the work they did.
+template <typename F>
+uint64_t best_ns(F&& run) {
+  using clk = std::chrono::steady_clock;
+  constexpr int kPasses = 5;
+  constexpr uint64_t kFloorNs = 1000;
+  run();
+  for (uint64_t reps = 1;; reps *= 2) {
+    uint64_t best = UINT64_MAX;
+    for (int pass = 0; pass < kPasses; pass++) {
+      const auto t0 = clk::now();
+      for (uint64_t i = 0; i < reps; i++) run();
+      best = std::min(best, static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                                      clk::now() - t0)
+                                                      .count()));
+    }
+    if (best > kFloorNs || reps == (uint64_t{1} << 20)) return best / reps;
+  }
+}
+
+// Stage-two policies for the instrumented pass. The resolver emits a row at
+// its first passing hit and resumes past the row, so a check that always
+// passes is the superset scan and one that never passes enumerates every hit.
+struct SupersetCheck {
+  bool passes(size_t, size_t, size_t) const { return true; }
+};
+
+struct Hit {
+  size_t code, row_start, row_end;
+};
+
+struct HitCollector {
+  std::vector<Hit>& out;
+  bool passes(size_t code, size_t row_start, size_t row_end) const {
+    out.push_back({code, row_start, row_end});
+    return false;
+  }
+};
+
+// The walk alone, over hits the scan already located, deciding a row at its
+// first passing hit and skipping the rest of it as the resolver does.
+size_t walk_hits(const pf::scan::WalkCheck& walk, const std::vector<Hit>& hits) {
+  size_t rows = 0;
+  for (size_t i = 0; i < hits.size();) {
+    const size_t start = hits[i].row_start;
+    bool passed = false;
+    for (; i < hits.size() && hits[i].row_start == start; i++) {
+      if (walk.passes(hits[i].code, start, hits[i].row_end)) {
+        passed = true;
+        break;
+      }
+    }
+    if (passed) {
+      rows++;
+      while (i < hits.size() && hits[i].row_start == start) i++;
+    }
+  }
+  return rows;
+}
 
 class FsstPrefilter final : public lb::Matcher {
  public:
@@ -95,39 +169,59 @@ class FsstPrefilter final : public lb::Matcher {
       }
     }
 
-    // One planned scan per needle, ORed into the bitmap. The clock is read
-    // only in instrumented mode; the timed work is identical either way.
-    using clk = std::chrono::steady_clock;
+    // One planned scan per needle, ORed into the bitmap. Instrumented mode
+    // re-runs the phases beside that scan; the timed work is identical either
+    // way, and the harness never instruments a timed sample.
     const bool timed = stats != nullptr;
-    uint64_t setup_ns = 0, scan_ns = 0, candidates = 0;
+    uint64_t setup_ns = 0, prefilter_ns = 0, verify_ns = 0, candidates = 0;
     const uint8_t* codes = b_.compressed.data();
     const size_t len = b_.compressed.size();
     for (uint32_t k = 0; k < q->needle_count; k++) {
-      const auto t_plan = timed ? clk::now() : clk::time_point{};
-      pf::Analysis a = pf::analyze(q->needles[k].ptr, static_cast<size_t>(q->needles[k].len), dict_,
-                                   freq_, b_.num_rows);
-      const auto t_scan = timed ? clk::now() : clk::time_point{};
+      const uint8_t* needle = q->needles[k].ptr;
+      const size_t nlen = static_cast<size_t>(q->needles[k].len);
+      const pf::Analysis a = pf::analyze(needle, nlen, dict_, freq_, b_.num_rows);
+      const pf::scan::WalkCheck walk{a.walk, dict_, codes};
+      auto scan = [&](const auto& check, std::vector<size_t>& into) {
+        pf::scan::execute(a.cover, codes, len, coff32_.data(), coff32_.size(), a.covered_frequency,
+                          a.total_frequency, check, into);
+      };
+
       rows_.clear();
+      scan(walk, rows_);
+
       if (timed) {
-        pf::scan::CountingWalkCheck check{{a.walk, dict_, codes}};
-        pf::scan::execute(a.cover, codes, len, coff32_.data(), coff32_.size(), a.covered_frequency,
-                          a.total_frequency, check, rows_);
-        candidates += check.rows;
-        const auto t_end = clk::now();
-        setup_ns += static_cast<uint64_t>(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(t_scan - t_plan).count());
-        scan_ns += static_cast<uint64_t>(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(t_end - t_scan).count());
-      } else {
-        pf::scan::execute(a.cover, codes, len, coff32_.data(), coff32_.size(), a.covered_frequency,
-                          a.total_frequency, pf::scan::WalkCheck{a.walk, dict_, codes}, rows_);
+        setup_ns += best_ns([&] {
+          const pf::Analysis again = pf::analyze(needle, nlen, dict_, freq_, b_.num_rows);
+          keep(&again);
+        });
+
+        // The same cover with the walk off: its survivors are the denominator
+        // of the prune and false-positive rates, and its time is the scan the
+        // walk sits behind.
+        prefilter_ns += best_ns([&] {
+          survivors_.clear();
+          scan(SupersetCheck{}, survivors_);
+        });
+        candidates += survivors_.size();
+
+        // The walks alone, over the hits the kernels produce. Locating them is
+        // the scan's job and is charged to prefilter_ns, so it runs once here,
+        // untimed. The collector never passes, so nothing lands in `sink`.
+        hits_.clear();
+        std::vector<size_t> sink;
+        scan(HitCollector{hits_}, sink);
+        verify_ns += best_ns([&] {
+          const size_t n = walk_hits(walk, hits_);
+          keep(&n);
+        });
       }
       for (size_t row : rows_) out[row >> 6] |= uint64_t{1} << (row & 63);
     }
     if (stats) {
       stats->prefilter_candidates = candidates;
       stats->setup_ns = setup_ns;
-      stats->scan_ns = scan_ns;
+      stats->prefilter_ns = prefilter_ns;
+      stats->verify_ns = verify_ns;
     }
     return 0;
   }
@@ -154,6 +248,8 @@ class FsstPrefilter final : public lb::Matcher {
   pf::Frequency freq_;
   std::vector<uint32_t> coff32_;  // num_rows + 1, 32-bit offsets into the code stream
   std::vector<size_t> rows_;      // scratch: the rows of one needle
+  std::vector<size_t> survivors_; // scratch: the superset scan's rows, instrumented mode
+  std::vector<Hit> hits_;         // scratch: the hits the walk is timed over
 };
 
 void* build_plain(const lb_chunk_view* view, const char*, char* eb, uint64_t ec) {
@@ -176,13 +272,13 @@ const char* const kCpuFeatures = "avx2";
 
 const lb_strategy kPlainStrats[] = {{"fsst-prefilter", kOps}};
 const lb_candidate kPlainVtable = {
-    LB_ABI_VERSION, "fsst_prefilter", "0.3.0+1db200f", kCpuFeatures,
+    LB_ABI_VERSION, "fsst_prefilter", "0.3.0+ecc636d", kCpuFeatures,
     kPlainStrats, 1, build_plain, lb::adapter_footprint, lb::adapter_run,
     nullptr, nullptr, lb::adapter_destroy};
 
 const lb_strategy kDictStrats[] = {{"dict+fsst-prefilter", kOps}};
 const lb_candidate kDictVtable = {
-    LB_ABI_VERSION, "dict_fsst_prefilter", "0.3.0+1db200f", kCpuFeatures,
+    LB_ABI_VERSION, "dict_fsst_prefilter", "0.3.0+ecc636d", kCpuFeatures,
     kDictStrats, 1, build_dict, lb::adapter_footprint, lb::adapter_run,
     nullptr, nullptr, lb::adapter_destroy};
 

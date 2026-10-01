@@ -1,0 +1,120 @@
+# Copy of specs/paper/clickbench-url-1m-literals.toml with `onpair_spiral_pinned`
+# added: the same candidate built against the pinned upstream revision rather
+# than the local checkout, so one run measures a working tree against the rev it
+# started from. `fsst_rs` and `dict_fsst_rs` were dropped while that candidate is
+# unported to the local onpair's API.
+
+# Curated real-world URL literals over clickbench-url-1m, op=contains: a
+# selectivity ladder from 0.614 (".ru/") down to 3e-6 ("lenta.ru"), including
+# "google" at 9.5e-5. Needle lengths 3-8, where the gen1 suites floor at 8.
+#
+#   cargo run --release --bin bench -- run specs/paper/clickbench-url-1m-literals.toml \
+#       -o results/paper/clickbench-url-1m-literals
+#
+# Same 14 candidates, 14 strategies, scanners and [measure] block as
+# clickbench-url-1m-contains-l8l32.toml, so the two runs are comparable
+# system-for-system. Separate spec because load.py allows only one suite per
+# dataset (a result row names its dataset, not its suite).
+
+strategies = [
+  "memmem",
+  "prefilter",
+  "dict+prefilter",
+  "interp",
+  "dict+interp",
+  "dict+decode+prefilter",
+  "fsst-prefilter",
+  "dict+fsst-prefilter",
+  "decode",
+  "compressed",
+  "dict+compressed",
+  "kmp",
+  # `pf_walk` is the local checkout's single prefiltered path: it walks inside
+  # its own scan, so there is no second verifier to name. `pf_kmp` and
+  # `pf_memmem` are onpair_spiral_pinned's verify pair.
+  "pf_walk",
+  "pf_kmp",
+  "pf_memmem",
+  "dict+pf_walk",
+]
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-literals"
+
+# Self-contained Matcher-based pipelines (candidates/common/matcher): each owns
+# its scanner, so the [[scanners]] list below applies only to the decode/direct
+# candidates further down. The dict_* pair evaluates the predicate once per
+# UNIQUE value (the encoded domain) instead of once per row.
+[[candidates]]
+name = "uncompressed_memmem"
+
+[[candidates]]
+name = "uncompressed_prefilter"
+
+[[candidates]]
+name = "dict_uncompressed_prefilter"
+
+[[candidates]]
+name = "dict_fsst_like_tum"
+
+[[candidates]]
+name = "dict_fsst_decode_prefilter"
+
+[[candidates]]
+name = "fsst_prefilter"
+
+[[candidates]]
+name = "dict_fsst_prefilter"
+
+[[candidates]]
+name = "onpair"
+
+[[candidates]]
+name = "fsst"
+
+[[candidates]]
+name = "fsst_like_tum"
+
+[[candidates]]
+name = "zstd"
+
+[[candidates]]
+name = "onpair_spiral"
+# MaxDictBits 12 vs 16 (4096 vs 65536 max dictionary tokens) -- the same two the
+# extended and contains sweeps carry, so the three runs compare config for
+# config. `PruneFactor` is gone from the local checkout, so no pruned configs.
+configs = [
+  '{"bits":12}',
+  '{"bits":16}',
+]
+
+[[candidates]]
+name = "onpair_spiral_pinned"
+# Upstream rev 5927cce, the revision the local checkout started from. No `prune`
+# key: `PruneFactor` did not exist yet, so the sweep is bits alone.
+configs = ['{"bits":12}', '{"bits":16}']
+
+[[candidates]]
+name = "dict_onpair"
+
+[[candidates]]
+name = "dict_onpair_spiral"
+# MaxDictBits: 2^12 = 4096 vs 2^16 = 65536 max dictionary tokens. The dict
+# wrapper passes config through to the inner onpair_spiral build.
+configs = ['{"bits":12}', '{"bits":16}']
+
+[[scanners]]
+name = "memmem"
+
+[[scanners]]
+name = "prefilter"
+
+[measure]
+chunk_rows = [0, 122880]  # 0 = whole column; 122880 = 60*2048 rows/chunk
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

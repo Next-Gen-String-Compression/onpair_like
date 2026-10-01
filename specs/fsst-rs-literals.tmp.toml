@@ -1,0 +1,27 @@
+# Temporary: fsst_rs on the curated literals, against the FSST prefilter it
+# competes with and the OnPair candidate whose prefilter it mirrors.
+# [measure] copied verbatim from specs/paper/clickbench-url-1m-literals.toml so
+# the numbers sit beside that run's.
+strategies = ["pf_walk", "fsst-prefilter"]
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-literals"
+
+[[candidates]]
+name = "fsst_rs"
+
+[[candidates]]
+name = "fsst_prefilter"
+
+[[candidates]]
+name = "onpair_spiral"
+
+[measure]
+chunk_rows = [0, 122880]
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

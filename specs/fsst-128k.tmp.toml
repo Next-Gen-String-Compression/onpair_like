@@ -1,0 +1,20 @@
+# Same ladder, 122880-row chunks: eight FSST tables, per-chunk probes.
+strategies = ["pf_memmem", "fsst-prefilter"]
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-literals"
+
+[[candidates]]
+name = "fsst_rs"
+
+[[candidates]]
+name = "fsst_prefilter"
+
+[measure]
+chunk_rows = [122880]
+warmup = 2
+min_iters = 3
+min_millis = 0

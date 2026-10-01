@@ -1,0 +1,6 @@
+{
+    "1": {
+        "root cause component": "Redis02",
+        "root cause reason": "high memory usage"
+    }
+}

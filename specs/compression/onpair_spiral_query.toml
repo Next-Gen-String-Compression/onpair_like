@@ -1,27 +1,26 @@
 # Query-axis spec for SpiralDB's OnPair (Rust, github.com/spiraldb/onpair): the
-# three contains recipes its `feat/search-prefilter` branch ships, measured
+# two contains recipes its `feat/search-prefilter` branch ships, measured
 # head-to-head on the SAME columns.
 #
-#   pf_kmp    — SIMD substring prefilter, then verify each survivor in the
-#               compressed domain with a token-level KMP automaton
+#   pf_walk   — SIMD substring prefilter, whose scan checks every probe hit
+#               against the alignment graph in the compressed domain, so the
+#               rows come back exact and nothing verifies behind it
 #               (ColumnView::rows_containing_prefiltered).
-#   pf_memmem — the SAME prefilter, then verify each survivor by decoding it and
-#               running memmem over the bytes
-#               (ColumnView::rows_containing_prefiltered_memmem).
 #   kmp       — the token-KMP automaton over EVERY row, no prefilter
 #               (ColumnView::rows_containing). The un-prefiltered baseline.
 #
-# All answer CONTAINS only, off one shared build. pf_kmp vs kmp isolates the
-# prefilter's payoff (same verify, ± the prefilter); pf_kmp vs pf_memmem
-# isolates the verify (compressed-domain KMP vs decode+SIMD memmem) at identical
-# prefilter selectivity. `onpair` (the C++ onpair_cpp) rides along as the
+# Both answer CONTAINS only, off one shared build. pf_walk vs kmp isolates the
+# prefilter's payoff over the same column. The separate verifiers this spec used
+# to isolate (compressed-domain KMP vs decode+memmem) went with the split scan:
+# the walk verifies inside the prefilter now. `onpair` (the C++ onpair_cpp)
+# rides along as the
 # reference: its `compressed` path is the cross-library counterpart of `kmp`
 # (token-KMP over every row) — a different library and storage scheme, not the
 # same bytes.
 #
 # Contains-only lean suites (11-20 q/col). Correctness-gated before any latency
 # is recorded. Regenerate the suites with:  bench gen --profile quick --ops contains
-strategies = ["pf_kmp", "pf_memmem", "kmp", "compressed"]
+strategies = ["pf_walk", "kmp", "compressed"]
 
 [measure]
 chunk_rows = [0]

@@ -1,0 +1,336 @@
+context_id,scope,connection_id,transaction_id,query_id,thread_id,timestamp,type,log_level,message
+15,CONNECTION,2,2,4,,2026-08-06 13:13:11.757612+00,QueryLog,INFO,"
+SELECT DISTINCT cmdb_id FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet' WHERE day=DATE'2021-03-04' ORDER BY 1;
+"
+15,CONNECTION,2,2,4,,2026-08-06 13:13:17.98616+00,QueryLog,INFO,"
+SELECT kpi_name, count(*) n, count(DISTINCT cmdb_id) nc FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet' WHERE day=DATE'2021-03-04' GROUP BY 1 ORDER BY nc DESC, n DESC;
+"
+15,CONNECTION,2,2,4,,2026-08-06 13:13:25.956659+00,QueryLog,INFO,"
+SELECT kpi_name, count(DISTINCT cmdb_id) nc, list(DISTINCT cmdb_id) cs FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet' WHERE day=DATE'2021-03-04' AND kpi_name NOT LIKE 'Container-DOCKER%' GROUP BY 1 ORDER BY 1;
+"
+15,CONNECTION,2,2,4,,2026-08-06 13:13:33.340974+00,QueryLog,INFO,"
+SELECT kpi_name, count(DISTINCT cmdb_id) nc FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet' WHERE day=DATE'2021-03-04' AND (kpi_name LIKE 'OSLinux%' OR kpi_name LIKE 'JVM%') GROUP BY 1 ORDER BY 1;
+"
+15,CONNECTION,2,2,4,,2026-08-06 13:13:42.05121+00,QueryLog,INFO,"
+SELECT kpi_name FROM (SELECT DISTINCT kpi_name FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet' WHERE day=DATE'2021-03-04' AND kpi_name LIKE 'OSLinux%') ORDER BY 1;
+"
+15,CONNECTION,2,2,4,,2026-08-06 13:14:18.217136+00,QueryLog,INFO,"
+COPY (
+  SELECT ts, cmdb_id, kpi_name, value
+  FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+  WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+    AND ts BETWEEN TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 60 MINUTE
+                AND TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 60 MINUTE
+    AND kpi_name NOT LIKE 'Container-DOCKER%'
+) TO '/Users/paul/workspace/onpair_like/datasets/OpenRCA/local_agent/bank/out/task_001/metric_window.parquet'
+"
+31,CONNECTION,2,3,5,,2026-08-06 13:14:18.240664+00,QueryLog,INFO,"
+COPY (
+  SELECT ts, cmdb_id, kpi_name, value
+  FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+  WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+    AND ts::DATE = DATE '2021-03-04'
+    AND (ts < TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 30 MINUTE
+         OR ts > TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 60 MINUTE)
+    AND kpi_name NOT LIKE 'Container-DOCKER%'
+) TO '/Users/paul/workspace/onpair_like/datasets/OpenRCA/local_agent/bank/out/task_001/metric_base.parquet'
+"
+47,CONNECTION,2,5,6,,2026-08-06 13:14:18.281461+00,QueryLog,INFO,"WITH b AS (SELECT cmdb_id, kpi_name, median(""value"") AS med, stddev_pop(""value"") AS sd, min(""value"") AS bmin, max(""value"") AS bmax FROM ""/Users/paul/workspace/onpair_like/datasets/OpenRCA/local_agent/bank/out/task_001/metric_base.parquet"" GROUP BY 1, 2), w AS (SELECT ts, cmdb_id, kpi_name, ""value"" FROM ""/Users/paul/workspace/onpair_like/datasets/OpenRCA/local_agent/bank/out/task_001/metric_window.parquet"" WHERE (ts BETWEEN (CAST('2021-03-04 14:30:00' AS TIMESTAMP) - to_minutes(CAST(trunc(CAST(20 AS DOUBLE)) AS BIGINT))) AND (CAST('2021-03-04 15:00:00' AS TIMESTAMP) + to_minutes(CAST(trunc(CAST(15 AS DOUBLE)) AS BIGINT))))), z AS (SELECT w.cmdb_id, w.kpi_name, w.ts, w.""value"", b.med, b.sd, b.bmin, b.bmax, (abs((w.""value"" - b.med)) / greatest(b.sd, (0.02 * abs(b.med)), 1e-09)) AS zs FROM w INNER JOIN b USING (cmdb_id, kpi_name))SELECT cmdb_id, kpi_name, round(max(zs), 1) AS maxz, round(any_value(med), 3) AS med, round(any_value(sd), 3) AS sd, round(min(""value""), 3) AS wmin, round(max(""value""), 3) AS wmax, round(any_value(bmin), 3) AS bmin, round(any_value(bmax), 3) AS bmax, arg_max(ts, zs) AS t_peak FROM z GROUP BY 1, 2 HAVING ((max(zs) > 4) AND ((max(""value"") > any_value(bmax)) OR (min(""value"") < any_value(bmin)))) ORDER BY maxz DESC LIMIT 40"
+15,CONNECTION,2,2,4,,2026-08-06 13:14:40.423327+00,QueryLog,INFO,"
+COPY (
+  SELECT ts, cmdb_id, kpi_name, value
+  FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+  WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+    AND ts BETWEEN TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 60 MINUTE
+                AND TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 60 MINUTE
+    AND kpi_name NOT LIKE 'Container-DOCKER%'
+) TO '/Users/paul/workspace/onpair_like/datasets/OpenRCA/local_agent/bank/out/task_001/metric_window.parquet'
+"
+31,CONNECTION,2,3,5,,2026-08-06 13:14:40.44801+00,QueryLog,INFO,"
+COPY (
+  SELECT ts, cmdb_id, kpi_name, value
+  FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+  WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+    AND ts::DATE = DATE '2021-03-04'
+    AND (ts < TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 30 MINUTE
+         OR ts > TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 60 MINUTE)
+    AND kpi_name NOT LIKE 'Container-DOCKER%'
+) TO '/Users/paul/workspace/onpair_like/datasets/OpenRCA/local_agent/bank/out/task_001/metric_base.parquet'
+"
+47,CONNECTION,2,5,6,,2026-08-06 13:14:40.481095+00,QueryLog,INFO,"WITH b AS (SELECT cmdb_id, kpi_name, median(""value"") AS med, stddev_pop(""value"") AS sd, min(""value"") AS bmin, max(""value"") AS bmax FROM ""/Users/paul/workspace/onpair_like/datasets/OpenRCA/local_agent/bank/out/task_001/metric_base.parquet"" GROUP BY 1, 2), w AS (SELECT ts, cmdb_id, kpi_name, ""value"" FROM ""/Users/paul/workspace/onpair_like/datasets/OpenRCA/local_agent/bank/out/task_001/metric_window.parquet"" WHERE (ts BETWEEN (CAST('2021-03-04 14:30:00' AS TIMESTAMP) - to_minutes(CAST(trunc(CAST(20 AS DOUBLE)) AS BIGINT))) AND (CAST('2021-03-04 15:00:00' AS TIMESTAMP) + to_minutes(CAST(trunc(CAST(15 AS DOUBLE)) AS BIGINT))))), z AS (SELECT w.cmdb_id, w.kpi_name, w.ts, w.""value"", b.med, b.sd, b.bmin, b.bmax, (abs((w.""value"" - b.med)) / greatest(b.sd, (0.02 * abs(b.med)), 1e-09)) AS zs FROM w INNER JOIN b USING (cmdb_id, kpi_name))SELECT cmdb_id, kpi_name, round(max(zs), 1) AS maxz, round(any_value(med), 3) AS med, round(any_value(sd), 3) AS sd, round(min(""value""), 3) AS wmin, round(max(""value""), 3) AS wmax, round(any_value(bmin), 3) AS bmin, round(any_value(bmax), 3) AS bmax, arg_max(ts, zs) AS t_peak FROM z GROUP BY 1, 2 HAVING ((max(zs) > 4) AND ((max(""value"") > any_value(bmax)) OR (min(""value"") < any_value(bmin)))) ORDER BY maxz DESC LIMIT 40"
+15,CONNECTION,2,2,4,,2026-08-06 13:16:17.298962+00,QueryLog,INFO,"
+CREATE VIEW win AS
+SELECT ts, cmdb_id, kpi_name, value
+FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+  AND ts BETWEEN TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 20 MINUTE
+              AND TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 15 MINUTE
+  AND kpi_name NOT LIKE 'Container-DOCKER%'
+"
+19,CONNECTION,2,3,5,,2026-08-06 13:16:17.304079+00,QueryLog,INFO,"
+CREATE VIEW base AS
+SELECT ts, cmdb_id, kpi_name, value
+FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+  AND ts::DATE = DATE '2021-03-04'
+  AND (ts < TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 30 MINUTE
+       OR ts > TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 60 MINUTE)
+  AND kpi_name NOT LIKE 'Container-DOCKER%'
+"
+23,CONNECTION,2,5,6,,2026-08-06 13:16:17.308039+00,QueryLog,INFO,"WITH b AS (SELECT cmdb_id, kpi_name, median(""value"") AS med, stddev_pop(""value"") AS sd, min(""value"") AS bmin, max(""value"") AS bmax FROM base GROUP BY 1, 2), z AS (SELECT w.cmdb_id, w.kpi_name, w.ts, w.""value"", b.med, b.sd, b.bmin, b.bmax, (abs((w.""value"" - b.med)) / greatest(b.sd, (0.02 * abs(b.med)), 1e-09)) AS zs FROM win AS w INNER JOIN b USING (cmdb_id, kpi_name))SELECT cmdb_id, kpi_name, round(max(zs), 1) AS maxz, round(any_value(med), 3) AS med, round(any_value(sd), 3) AS sd, round(min(""value""), 3) AS wmin, round(max(""value""), 3) AS wmax, round(any_value(bmin), 3) AS bmin, round(any_value(bmax), 3) AS bmax, arg_max(ts, zs) AS t_peak FROM z GROUP BY 1, 2 HAVING ((max(zs) > 4) AND ((max(""value"") > any_value(bmax)) OR (min(""value"") < any_value(bmin)))) ORDER BY maxz DESC LIMIT 40"
+15,CONNECTION,2,2,4,,2026-08-06 13:16:54.68426+00,QueryLog,INFO,"
+CREATE VIEW win AS
+SELECT ts, cmdb_id, kpi_name, value
+FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+  AND ts BETWEEN TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 15 MINUTE
+              AND TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 5 MINUTE
+  AND kpi_name NOT LIKE 'Container-DOCKER%'
+"
+19,CONNECTION,2,3,5,,2026-08-06 13:16:54.685184+00,QueryLog,INFO,"
+CREATE VIEW base AS
+SELECT ts, cmdb_id, kpi_name, value
+FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+  AND ts::DATE = DATE '2021-03-04'
+  AND (ts < TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 30 MINUTE
+       OR ts > TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 30 MINUTE)
+  AND kpi_name NOT LIKE 'Container-DOCKER%'
+"
+23,CONNECTION,2,5,6,,2026-08-06 13:16:54.686923+00,QueryLog,INFO,"WITH b AS (SELECT cmdb_id, kpi_name, median(""value"") AS med, stddev_pop(""value"") AS sd, min(""value"") AS bmin, max(""value"") AS bmax FROM base GROUP BY 1, 2), z AS (SELECT w.cmdb_id, w.kpi_name, w.ts, w.""value"", b.med, b.sd, b.bmin, b.bmax, (abs((w.""value"" - b.med)) / greatest(b.sd, (0.02 * abs(b.med)), 1e-09)) AS zs FROM win AS w INNER JOIN b USING (cmdb_id, kpi_name))SELECT cmdb_id, kpi_name, round(max(zs), 1) AS maxz, round(any_value(med), 3) AS med, round(any_value(sd), 3) AS sd, round(min(""value""), 3) AS wmin, round(max(""value""), 3) AS wmax, round(any_value(bmin), 3) AS bmin, round(any_value(bmax), 3) AS bmax, arg_max(ts, zs) AS t_peak FROM z GROUP BY 1, 2 HAVING ((max(zs) > 4) AND ((max(""value"") > any_value(bmax)) OR (min(""value"") < any_value(bmin)))) ORDER BY maxz DESC LIMIT 40"
+15,CONNECTION,2,2,4,,2026-08-06 13:17:22.459855+00,QueryLog,INFO,"
+CREATE VIEW win AS
+SELECT ts, cmdb_id, kpi_name, value
+FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+  AND ts BETWEEN TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 15 MINUTE
+              AND TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 5 MINUTE
+  AND kpi_name NOT LIKE 'Container-DOCKER%'
+"
+19,CONNECTION,2,3,5,,2026-08-06 13:17:22.465796+00,QueryLog,INFO,"
+CREATE VIEW base AS
+SELECT ts, cmdb_id, kpi_name, value
+FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+  AND ts::DATE = DATE '2021-03-04'
+  AND (ts < TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 30 MINUTE
+       OR ts > TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 30 MINUTE)
+  AND kpi_name NOT LIKE 'Container-DOCKER%'
+"
+23,CONNECTION,2,5,6,,2026-08-06 13:17:22.46945+00,QueryLog,INFO,"WITH b AS (SELECT cmdb_id, kpi_name, median(""value"") AS med, stddev_pop(""value"") AS sd, min(""value"") AS bmin, max(""value"") AS bmax FROM base GROUP BY 1, 2), z AS (SELECT w.cmdb_id, w.kpi_name, w.ts, w.""value"", b.med, b.sd, b.bmin, b.bmax, (abs((w.""value"" - b.med)) / greatest(b.sd, (0.02 * abs(b.med)), 1e-09)) AS zs FROM win AS w INNER JOIN b USING (cmdb_id, kpi_name))SELECT cmdb_id, kpi_name, round(max(zs), 1) AS maxz, round(any_value(med), 3) AS med, round(any_value(sd), 3) AS sd, round(min(""value""), 3) AS wmin, round(max(""value""), 3) AS wmax, round(any_value(bmin), 3) AS bmin, round(any_value(bmax), 3) AS bmax, arg_max(ts, zs) AS t_peak FROM z GROUP BY 1, 2 HAVING ((max(zs) > 4) AND ((max(""value"") > any_value(bmax)) OR (min(""value"") < any_value(bmin)))) ORDER BY maxz DESC LIMIT 40"
+78,CONNECTION,2,7,7,,2026-08-06 13:17:22.504606+00,QueryLog,INFO,"SELECT ts, round(rr, 4) AS rr, round(sr, 4) AS sr, cnt, round(mrt, 2) AS mrt, tc FROM ""datasets/OpenRCA/data/bank/parquet/metric_app.parquet"" WHERE ((""day"" BETWEEN (CAST('2021-03-04' AS ""DATE"") - 1) AND (CAST('2021-03-04' AS ""DATE"") + 1)) AND (ts BETWEEN (CAST('2021-03-04 14:30:00' AS TIMESTAMP) - to_minutes(CAST(trunc(CAST(15 AS DOUBLE)) AS BIGINT))) AND (CAST('2021-03-04 15:00:00' AS TIMESTAMP) + to_minutes(CAST(trunc(CAST(10 AS DOUBLE)) AS BIGINT))))) ORDER BY ts"
+84,CONNECTION,2,8,8,,2026-08-06 13:17:22.511522+00,QueryLog,INFO,"
+CREATE VIEW span AS
+SELECT ts, cmdb_id, span_id, parent_id, duration
+FROM 'datasets/OpenRCA/data/bank/parquet/trace_span.parquet'
+WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+  AND ts BETWEEN TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 40 MINUTE
+              AND TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 20 MINUTE
+"
+88,CONNECTION,2,9,9,,2026-08-06 13:17:22.520062+00,QueryLog,INFO,"
+CREATE VIEW selft AS
+SELECT p.ts, p.cmdb_id, p.duration - coalesce(c.kids, 0) AS self_ms
+FROM span p
+LEFT JOIN (SELECT parent_id, sum(duration) kids FROM span GROUP BY 1) c
+       ON c.parent_id = p.span_id
+"
+92,CONNECTION,2,11,10,,2026-08-06 13:17:22.547252+00,QueryLog,INFO,"SELECT time_bucket(to_minutes(CAST(trunc(CAST(5 AS DOUBLE)) AS BIGINT)), ts) AS t, cmdb_id, count_star() AS n, round(avg(self_ms), 1) AS avg_self, round(quantile_cont(self_ms, 0.95), 1) AS p95_self, round(max(self_ms), 1) AS max_self FROM selft GROUP BY 1, 2 ORDER BY 2, 1"
+15,CONNECTION,2,2,4,,2026-08-06 13:17:50.0651+00,QueryLog,INFO,"
+CREATE VIEW win AS
+SELECT ts, cmdb_id, kpi_name, value
+FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+  AND ts BETWEEN TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 15 MINUTE
+              AND TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 5 MINUTE
+  AND kpi_name NOT LIKE 'Container-DOCKER%'
+"
+19,CONNECTION,2,3,5,,2026-08-06 13:17:50.070986+00,QueryLog,INFO,"
+CREATE VIEW base AS
+SELECT ts, cmdb_id, kpi_name, value
+FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+  AND ts::DATE = DATE '2021-03-04'
+  AND (ts < TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 30 MINUTE
+       OR ts > TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 30 MINUTE)
+  AND kpi_name NOT LIKE 'Container-DOCKER%'
+"
+23,CONNECTION,2,5,6,,2026-08-06 13:17:50.074863+00,QueryLog,INFO,"WITH b AS (SELECT cmdb_id, kpi_name, median(""value"") AS med, stddev_pop(""value"") AS sd, min(""value"") AS bmin, max(""value"") AS bmax FROM base GROUP BY 1, 2), z AS (SELECT w.cmdb_id, w.kpi_name, w.ts, w.""value"", b.med, b.sd, b.bmin, b.bmax, (abs((w.""value"" - b.med)) / greatest(b.sd, (0.02 * abs(b.med)), 1e-09)) AS zs FROM win AS w INNER JOIN b USING (cmdb_id, kpi_name))SELECT cmdb_id, kpi_name, round(max(zs), 1) AS maxz, round(any_value(med), 3) AS med, round(any_value(sd), 3) AS sd, round(min(""value""), 3) AS wmin, round(max(""value""), 3) AS wmax, round(any_value(bmin), 3) AS bmin, round(any_value(bmax), 3) AS bmax, arg_max(ts, zs) AS t_peak FROM z GROUP BY 1, 2 HAVING ((max(zs) > 4) AND ((max(""value"") > any_value(bmax)) OR (min(""value"") < any_value(bmin)))) ORDER BY maxz DESC LIMIT 40"
+78,CONNECTION,2,7,7,,2026-08-06 13:17:50.110012+00,QueryLog,INFO,"SELECT ts, round(min(sr), 2) AS min_sr, round(min(rr), 2) AS min_rr, sum(cnt) AS cnt, round(max(mrt), 1) AS max_mrt, round(avg(mrt), 1) AS avg_mrt, arg_min(tc, sr) AS worst_svc FROM ""datasets/OpenRCA/data/bank/parquet/metric_app.parquet"" WHERE ((""day"" BETWEEN (CAST('2021-03-04' AS ""DATE"") - 1) AND (CAST('2021-03-04' AS ""DATE"") + 1)) AND (ts BETWEEN (CAST('2021-03-04 14:30:00' AS TIMESTAMP) - to_minutes(CAST(trunc(CAST(15 AS DOUBLE)) AS BIGINT))) AND (CAST('2021-03-04 15:00:00' AS TIMESTAMP) + to_minutes(CAST(trunc(CAST(10 AS DOUBLE)) AS BIGINT))))) GROUP BY 1 ORDER BY 1"
+96,CONNECTION,2,8,8,,2026-08-06 13:17:50.115811+00,QueryLog,INFO,"
+CREATE VIEW span AS
+SELECT ts, cmdb_id, span_id, parent_id, duration
+FROM 'datasets/OpenRCA/data/bank/parquet/trace_span.parquet'
+WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+  AND ts BETWEEN TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 40 MINUTE
+              AND TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 20 MINUTE
+"
+100,CONNECTION,2,9,9,,2026-08-06 13:17:50.124297+00,QueryLog,INFO,"
+CREATE VIEW selft AS
+SELECT p.ts, p.cmdb_id, p.duration - coalesce(c.kids, 0) AS self_ms
+FROM span p
+LEFT JOIN (SELECT parent_id, sum(duration) kids FROM span GROUP BY 1) c
+       ON c.parent_id = p.span_id
+"
+104,CONNECTION,2,11,10,,2026-08-06 13:17:50.1529+00,QueryLog,INFO,"SELECT time_bucket(to_minutes(CAST(trunc(CAST(5 AS DOUBLE)) AS BIGINT)), ts) AS t, cmdb_id, count_star() AS n, round(avg(self_ms), 1) AS avg_self, round(quantile_cont(self_ms, 0.95), 1) AS p95_self, round(max(self_ms), 1) AS max_self FROM selft GROUP BY 1, 2 ORDER BY 2, 1"
+15,CONNECTION,2,2,4,,2026-08-06 13:18:21.74+00,QueryLog,INFO,"
+CREATE VIEW win AS
+SELECT ts, cmdb_id, kpi_name, value
+FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+  AND ts BETWEEN TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 15 MINUTE
+              AND TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 5 MINUTE
+  AND kpi_name NOT LIKE 'Container-DOCKER%'
+"
+19,CONNECTION,2,3,5,,2026-08-06 13:18:21.740885+00,QueryLog,INFO,"
+CREATE VIEW base AS
+SELECT ts, cmdb_id, kpi_name, value
+FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+  AND ts::DATE = DATE '2021-03-04'
+  AND (ts < TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 30 MINUTE
+       OR ts > TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 30 MINUTE)
+  AND kpi_name NOT LIKE 'Container-DOCKER%'
+"
+23,CONNECTION,2,5,6,,2026-08-06 13:18:21.742916+00,QueryLog,INFO,"WITH b AS (SELECT cmdb_id, kpi_name, median(""value"") AS med, stddev_pop(""value"") AS sd, min(""value"") AS bmin, max(""value"") AS bmax FROM base GROUP BY 1, 2), z AS (SELECT w.cmdb_id, w.kpi_name, w.ts, w.""value"", b.med, b.sd, b.bmin, b.bmax, (abs((w.""value"" - b.med)) / greatest(b.sd, (0.02 * abs(b.med)), 1e-09)) AS zs FROM win AS w INNER JOIN b USING (cmdb_id, kpi_name))SELECT cmdb_id, kpi_name, round(max(zs), 1) AS maxz, round(any_value(med), 3) AS med, round(any_value(sd), 3) AS sd, round(min(""value""), 3) AS wmin, round(max(""value""), 3) AS wmax, round(any_value(bmin), 3) AS bmin, round(any_value(bmax), 3) AS bmax, arg_max(ts, zs) AS t_peak FROM z GROUP BY 1, 2 HAVING ((max(zs) > 4) AND ((max(""value"") > any_value(bmax)) OR (min(""value"") < any_value(bmin)))) ORDER BY maxz DESC LIMIT 40"
+78,CONNECTION,2,7,7,,2026-08-06 13:18:21.767869+00,QueryLog,INFO,"SELECT ts, round(min(sr), 2) AS min_sr, round(min(rr), 2) AS min_rr, sum(cnt) AS cnt, round(max(mrt), 1) AS max_mrt, round(avg(mrt), 1) AS avg_mrt, arg_min(tc, sr) AS worst_svc FROM ""datasets/OpenRCA/data/bank/parquet/metric_app.parquet"" WHERE ((""day"" BETWEEN (CAST('2021-03-04' AS ""DATE"") - 1) AND (CAST('2021-03-04' AS ""DATE"") + 1)) AND (ts BETWEEN (CAST('2021-03-04 14:30:00' AS TIMESTAMP) - to_minutes(CAST(trunc(CAST(15 AS DOUBLE)) AS BIGINT))) AND (CAST('2021-03-04 15:00:00' AS TIMESTAMP) + to_minutes(CAST(trunc(CAST(10 AS DOUBLE)) AS BIGINT))))) GROUP BY 1 ORDER BY 1"
+96,CONNECTION,2,8,8,,2026-08-06 13:18:21.771279+00,QueryLog,INFO,"
+CREATE VIEW span AS
+SELECT ts, cmdb_id, span_id, parent_id, duration
+FROM 'datasets/OpenRCA/data/bank/parquet/trace_span.parquet'
+WHERE day BETWEEN DATE '2021-03-04' - 1 AND DATE '2021-03-04' + 1
+  AND ts BETWEEN TIMESTAMP '2021-03-04 14:30:00' - INTERVAL 40 MINUTE
+              AND TIMESTAMP '2021-03-04 15:00:00' + INTERVAL 20 MINUTE
+"
+100,CONNECTION,2,9,9,,2026-08-06 13:18:21.779094+00,QueryLog,INFO,"
+CREATE VIEW selft AS
+SELECT p.ts, p.cmdb_id, p.duration - coalesce(c.kids, 0) AS self_ms
+FROM span p
+LEFT JOIN (SELECT parent_id, sum(duration) kids FROM span GROUP BY 1) c
+       ON c.parent_id = p.span_id
+"
+104,CONNECTION,2,11,10,,2026-08-06 13:18:21.808018+00,QueryLog,INFO,"SELECT time_bucket(to_minutes(CAST(trunc(CAST(1 AS DOUBLE)) AS BIGINT)), ts) AS t, count_star() FILTER (WHERE (cmdb_id = 'MG01')) AS MG01, count_star() FILTER (WHERE (cmdb_id = 'MG02')) AS MG02, count_star() FILTER (WHERE (cmdb_id = 'IG01')) AS IG01, count_star() FILTER (WHERE (cmdb_id = 'IG02')) AS IG02, count_star() FILTER (WHERE (cmdb_id = 'Tomcat01')) AS T01, count_star() FILTER (WHERE (cmdb_id = 'Tomcat02')) AS T02, count_star() FILTER (WHERE (cmdb_id = 'Tomcat03')) AS T03, count_star() FILTER (WHERE (cmdb_id = 'Tomcat04')) AS T04, count_star() FILTER (WHERE (cmdb_id ~~ 'docker%')) AS dock FROM selft WHERE (self_ms > 1000) GROUP BY 1 ORDER BY 1"
+159,CONNECTION,2,13,11,,2026-08-06 13:18:21.901815+00,QueryLog,INFO,"SELECT time_bucket(to_minutes(CAST(trunc(CAST(1 AS DOUBLE)) AS BIGINT)), ts) AS t, max(self_ms) FILTER (WHERE (cmdb_id = 'MG01')) AS MG01, max(self_ms) FILTER (WHERE (cmdb_id = 'MG02')) AS MG02, max(self_ms) FILTER (WHERE (cmdb_id = 'Tomcat01')) AS T01, max(self_ms) FILTER (WHERE (cmdb_id = 'Tomcat02')) AS T02, max(self_ms) FILTER (WHERE (cmdb_id = 'Tomcat03')) AS T03, max(self_ms) FILTER (WHERE (cmdb_id = 'Tomcat04')) AS T04 FROM selft GROUP BY 1 ORDER BY 1"
+15,CONNECTION,2,2,4,,2026-08-06 13:18:46.107586+00,QueryLog,INFO,"
+WITH span AS (
+  SELECT ts, cmdb_id, span_id, parent_id, duration
+  FROM 'datasets/OpenRCA/data/bank/parquet/trace_span.parquet'
+  WHERE day BETWEEN DATE '2021-03-03' AND DATE '2021-03-05'
+    AND ts BETWEEN '2021-03-04 14:30:00' AND '2021-03-04 14:50:00'
+), selft AS (
+  SELECT p.ts, p.cmdb_id, p.duration - coalesce(c.kids,0) AS self_ms
+  FROM span p LEFT JOIN (SELECT parent_id, sum(duration) kids FROM span GROUP BY 1) c ON c.parent_id = p.span_id
+)
+SELECT time_bucket(INTERVAL 10 SECOND, ts) t, cmdb_id, count(*) n_slow, max(self_ms) mx
+FROM selft WHERE self_ms > 2000 AND cmdb_id IN ('MG01','MG02')
+GROUP BY 1,2 ORDER BY 1,2;
+"
+15,CONNECTION,2,2,4,,2026-08-06 13:19:03.251583+00,QueryLog,INFO,"
+WITH span AS (
+  SELECT ts, cmdb_id, span_id, parent_id, duration
+  FROM 'datasets/OpenRCA/data/bank/parquet/trace_span.parquet'
+  WHERE day BETWEEN DATE '2021-03-03' AND DATE '2021-03-05'
+    AND ts BETWEEN '2021-03-04 14:10:00' AND '2021-03-04 15:10:00'
+), selft AS (
+  SELECT p.ts, p.cmdb_id, p.duration - coalesce(c.kids,0) AS self_ms
+  FROM span p LEFT JOIN (SELECT parent_id, sum(duration) kids FROM span GROUP BY 1) c ON c.parent_id = p.span_id
+)
+SELECT time_bucket(INTERVAL 10 SECOND, ts) t, count(*) n_slow, max(self_ms) mx
+FROM selft WHERE self_ms > 2000 AND cmdb_id IN ('MG01','MG02') AND ts BETWEEN '2021-03-04 14:25:00' AND '2021-03-04 14:50:00'
+GROUP BY 1 ORDER BY 1;
+"
+15,CONNECTION,2,2,4,,2026-08-06 13:20:27.346804+00,QueryLog,INFO,"
+SELECT log_name, cmdb_id, count(*) n FROM 'datasets/OpenRCA/data/bank/parquet/log_service.parquet'
+WHERE day BETWEEN DATE '2021-03-03' AND DATE '2021-03-05' AND log_name NOT LIKE '%access_log'
+GROUP BY 1,2 ORDER BY 1,3 DESC;
+"
+15,CONNECTION,2,2,4,,2026-08-06 13:20:27.369302+00,QueryLog,INFO,"
+SELECT log_name, cmdb_id, substr(value,1,150) v FROM 'datasets/OpenRCA/data/bank/parquet/log_service.parquet'
+WHERE day BETWEEN DATE '2021-03-03' AND DATE '2021-03-05' AND log_name IN ('gc','error','catalina','slow','localhost') USING SAMPLE 12 ROWS;
+"
+15,CONNECTION,2,2,4,,2026-08-06 13:22:36.589099+00,QueryLog,INFO,"
+SELECT scoring_points FROM (
+  SELECT row_number() OVER () AS task_id, scoring_points
+  FROM read_csv('datasets/OpenRCA/data/bank/query.csv')
+) WHERE task_id = 1;
+"
+15,CONNECTION,2,2,4,,2026-08-06 13:23:14.957626+00,QueryLog,INFO,"
+SELECT scoring_points FROM 'datasets/OpenRCA/data/bank/parquet/query.parquet'
+WHERE instruction = (SELECT instruction FROM read_csv('datasets/OpenRCA/local_agent/bank/out/tasks.csv') WHERE task_id=1);
+"
+15,CONNECTION,2,2,4,,2026-08-06 13:23:41.372476+00,QueryLog,INFO,"
+WITH span AS (
+  SELECT ts, cmdb_id, span_id, parent_id, duration
+  FROM 'datasets/OpenRCA/data/bank/parquet/trace_span.parquet'
+  WHERE day BETWEEN DATE '2021-03-03' AND DATE '2021-03-05'
+    AND ts BETWEEN '2021-03-04 09:00:00' AND '2021-03-04 20:00:00'
+), selft AS (
+  SELECT p.ts, p.cmdb_id, p.duration - coalesce(c.kids,0) AS self_ms
+  FROM span p LEFT JOIN (SELECT parent_id, sum(duration) kids FROM span GROUP BY 1) c ON c.parent_id = p.span_id
+)
+SELECT time_bucket(INTERVAL 1 MINUTE, ts) t, count(*) n, max(self_ms) mx
+FROM selft WHERE self_ms > 4000 AND cmdb_id IN ('MG01','MG02')
+GROUP BY 1 HAVING count(*) >= 3 ORDER BY 1;
+"
+15,CONNECTION,2,2,4,,2026-08-06 13:23:59.316853+00,QueryLog,INFO,"
+WITH mc AS (
+  SELECT ts, cmdb_id, kpi_name, value
+  FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+  WHERE day BETWEEN DATE '2021-03-03' AND DATE '2021-03-05' AND ts::DATE = DATE '2021-03-04'
+    AND kpi_name NOT LIKE 'Container-DOCKER%'
+),
+b AS (SELECT cmdb_id, kpi_name, median(value) med, stddev_pop(value) sd, min(value) bmin, max(value) bmax
+      FROM mc WHERE ts BETWEEN '2021-03-04 11:00:00' AND '2021-03-04 14:45:00' GROUP BY 1,2),
+w AS (SELECT * FROM mc WHERE ts BETWEEN '2021-03-04 14:50:00' AND '2021-03-04 15:20:00')
+SELECT w.cmdb_id, w.kpi_name,
+       round(max(abs(w.value-b.med)/greatest(b.sd,0.02*abs(b.med),1e-9)),1) maxz,
+       round(any_value(b.med),3) med, round(any_value(b.bmin),3) bmin, round(any_value(b.bmax),3) bmax,
+       round(min(w.value),3) wmin, round(max(w.value),3) wmax,
+       arg_max(w.ts, abs(w.value-b.med)) t_peak
+FROM w JOIN b USING (cmdb_id, kpi_name)
+GROUP BY 1,2
+HAVING max(w.value) > any_value(b.bmax) OR min(w.value) < any_value(b.bmin)
+ORDER BY maxz DESC LIMIT 25;
+"
+15,CONNECTION,2,2,4,,2026-08-06 13:24:14.236545+00,QueryLog,INFO,"
+SELECT ts,
+  max(value) FILTER (cmdb_id='Tomcat01' AND kpi_name LIKE '%sdb_DSKRead') T01_sdbRead,
+  max(value) FILTER (cmdb_id='Tomcat01' AND kpi_name LIKE '%sdb_DSKPercentBusy') T01_sdbBusy,
+  max(value) FILTER (cmdb_id='Tomcat01' AND kpi_name='OSLinux-CPU_CPU_CPUWio') T01_wio,
+  max(value) FILTER (cmdb_id='Tomcat03' AND kpi_name LIKE '%sdb_DSKRead') T03_sdbRead,
+  max(value) FILTER (cmdb_id='Mysql01' AND kpi_name LIKE '%sdc_DSKRead') My01_sdcRead,
+  max(value) FILTER (cmdb_id='apache01' AND kpi_name='OSLinux-CPU_CPU_CPUWio') ap01_wio,
+  max(value) FILTER (cmdb_id='apache01' AND kpi_name='OSLinux-CPU_CPU_CPULoad') ap01_load
+FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+WHERE day BETWEEN DATE '2021-03-03' AND DATE '2021-03-05'
+  AND ts BETWEEN '2021-03-04 14:45:00' AND '2021-03-04 15:20:00'
+GROUP BY 1 ORDER BY 1;
+"
+15,CONNECTION,2,2,4,,2026-08-06 13:24:38.161353+00,QueryLog,INFO,"
+WITH mc AS (
+  SELECT ts, cmdb_id, kpi_name, value FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+  WHERE day BETWEEN DATE '2021-03-03' AND DATE '2021-03-05' AND ts::DATE = DATE '2021-03-04'
+    AND kpi_name NOT LIKE 'Container-DOCKER%'),
+pre AS (SELECT cmdb_id,kpi_name, avg(value) m, stddev_pop(value) sd, count(*) n FROM mc
+        WHERE ts BETWEEN '2021-03-04 13:30:00' AND '2021-03-04 14:56:00' GROUP BY 1,2),
+post AS (SELECT cmdb_id,kpi_name, avg(value) m, count(*) n FROM mc
+        WHERE ts BETWEEN '2021-03-04 14:57:00' AND '2021-03-04 15:30:00' GROUP BY 1,2)
+SELECT pre.cmdb_id, pre.kpi_name, round(pre.m,3) pre_avg, round(post.m,3) post_avg,
+       round(abs(post.m-pre.m)/greatest(pre.sd,1e-9),1) step_z, pre.n pre_n, post.n post_n
+FROM pre JOIN post USING (cmdb_id,kpi_name)
+WHERE pre.n>=8 AND post.n>=5 AND pre.sd>0
+ORDER BY step_z DESC LIMIT 20;
+"
+15,CONNECTION,2,2,4,,2026-08-06 13:25:14.44543+00,QueryLog,INFO,"
+SELECT ts,
+  max(value) FILTER (WHERE kpi_name='OSLinux-CPU_CPU_CPUCpuUtil') cpuUtil,
+  max(value) FILTER (WHERE kpi_name='OSLinux-CPU_CPU_CPUidleutil') idle,
+  max(value) FILTER (WHERE kpi_name='OSLinux-CPU_CPU_CPUUserTime') usert,
+  max(value) FILTER (WHERE kpi_name='OSLinux-CPU_CPU_CPUSysTime') syst,
+  max(value) FILTER (WHERE kpi_name='OSLinux-CPU_CPU_CPULoad') cload,
+  max(value) FILTER (WHERE kpi_name='OSLinux-CPU_CPU-0_SingleCpuUtil') cpu0,
+  max(value) FILTER (WHERE kpi_name='OSLinux-CPU_CPU_CPUWio') wio
+FROM 'datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+WHERE day BETWEEN DATE '2021-03-03' AND DATE '2021-03-05' AND cmdb_id='Redis01'
+  AND ts BETWEEN '2021-03-04 14:30:00' AND '2021-03-04 15:25:00'
+GROUP BY 1 ORDER BY 1;
+"

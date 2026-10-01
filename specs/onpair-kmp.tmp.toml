@@ -1,0 +1,18 @@
+# onpair_spiral (pf_walk, its one prefiltered path) and fsst_rs after the
+# cost-weighted cut.
+strategies = ["kmp"]
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-literals"
+
+[[candidates]]
+name = "onpair_spiral"
+
+[measure]
+chunk_rows = [0, 122880]
+warmup = 2
+min_iters = 3
+min_millis = 0

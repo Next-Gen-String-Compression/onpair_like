@@ -23,9 +23,11 @@ from __future__ import annotations
 
 import argparse
 import bz2
+import csv
 import gzip
 import hashlib
 import io
+import itertools
 import json
 import re
 import subprocess
@@ -208,16 +210,61 @@ def rows_dblp_xml(raw: Path, params: dict):
     yield from rows
 
 
+def rows_tgz_csv_column(raw: Path, params: dict):
+    """One CSV member of a .tgz, one column by index. Parsing matches the
+    JOB load scripts (PostgreSQL COPY: FORMAT csv, ESCAPE '\\')."""
+    member = params["member"]
+    col = int(params["column_index"])
+    # A NULL field is empty in these CSVs; keep_empty preserves it as an empty
+    # row instead of dropping it, so a sparse column stays sparse.
+    keep_empty = bool(params.get("keep_empty"))
+    with tarfile.open(str(raw), mode="r:gz") as tar:
+        names = [n for n in tar.getnames() if n == member or n.endswith("/" + member)]
+        if not names:
+            raise SystemExit(f"{raw}: no member named {member}")
+        f_in = tar.extractfile(names[0])
+        text = io.TextIOWrapper(f_in, encoding="utf-8", newline="")
+        for parts in csv.reader(text, escapechar="\\", doublequote=False):
+            if len(parts) > col:
+                row = parts[col].strip()
+                if row or keep_empty:
+                    yield row
+
+
 EXTRACTORS = {
     "tar-tsv-field": rows_tar_tsv_field,
     "gzip-tsv-field": rows_gzip_tsv_field,
     "jsonl-field": rows_jsonl_field,
     "ttl-en-literal": rows_ttl_en_literal,
     "dblp-xml": rows_dblp_xml,
+    "tgz-csv-column": rows_tgz_csv_column,
 }
 
 
 # ------------------------------------------------------------- parquet
+
+
+def parquet_column_to_parquet(files: list[Path], column: str, limit: int | None,
+                              out: Path) -> int:
+    """One column of several parquet files, in order, cut to `limit` rows."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    schema = pa.schema([(PARQUET_COLUMN, pa.large_string())])
+    out.parent.mkdir(parents=True, exist_ok=True)
+    n = 0
+    with pq.ParquetWriter(str(out), schema, compression="zstd") as writer:
+        for f in files:
+            for batch in pq.ParquetFile(f).iter_batches(batch_size=BATCH_ROWS,
+                                                        columns=[column]):
+                col = batch.column(0).cast(pa.large_string())
+                if limit and n + len(col) > limit:
+                    col = col.slice(0, limit - n)
+                writer.write_table(pa.table({PARQUET_COLUMN: col}))
+                n += len(col)
+                if limit and n >= limit:
+                    return n
+    return n
 
 
 def write_parquet(rows, out: Path) -> int:
@@ -330,12 +377,28 @@ def prepare_entry(entry: dict, update_checksums: bool) -> dict:
             tpch_to_parquet(entry["params"], parquet, RAW_DIR / "tpch")
         column = PARQUET_COLUMN
     elif kind == "parquet":
-        url = entry["source"]["url"]
-        parquet = raw_dir / url.rsplit("/", 1)[1]
-        got_sha = download(url, parquet, _pinned_sha(entry))
-        if update_checksums and not _pinned_sha(entry):
-            writeback.setdefault(ds_id, {})["sha256"] = got_sha
-        column = entry["params"]["column"]
+        params = entry.get("params") or {}
+        limit = int(params.get("limit", 0)) or None
+        extra = entry["source"].get("extra") or []
+        files = []
+        for i, src in enumerate([entry["source"], *extra]):
+            f = raw_dir / src["url"].rsplit("/", 1)[1]
+            sha = src.get("sha256")
+            pin = sha if isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{64}", sha) else None
+            got_sha = download(src["url"], f, pin)
+            files.append(f)
+            if update_checksums and not sha and i == 0:
+                writeback.setdefault(ds_id, {})["sha256"] = got_sha
+        if limit or len(files) > 1:
+            parquet = raw_dir / "column.parquet"
+            if not parquet.exists():
+                log(f"  slicing {len(files)} parquet file(s), limit {limit} -> {parquet.name}")
+                n = parquet_column_to_parquet(files, params["column"], limit, parquet)
+                log(f"  extracted {n} rows")
+            column = PARQUET_COLUMN
+        else:
+            parquet = files[0]
+            column = params["column"]
     else:
         url = entry["source"]["url"]
         raw = raw_dir / url.rsplit("/", 1)[1]
@@ -344,9 +407,23 @@ def prepare_entry(entry: dict, update_checksums: bool) -> dict:
             writeback.setdefault(ds_id, {})["sha256"] = got_sha
         parquet = raw_dir / "column.parquet"
         if not parquet.exists():
+            params = entry.get("params") or {}
+            limit = int(params.get("limit", 0)) or None
+            rows = EXTRACTORS[kind](raw, params)
+            # `offset` picks the window: a column can be ordered by something
+            # that correlates with its content, so row 0 is not always where a
+            # representative slice starts.
+            offset = int(params.get("offset", 0))
+            if limit or offset:
+                rows = itertools.islice(rows, offset, offset + limit if limit else None)
             log(f"  extracting ({kind}) -> {parquet.name}")
-            n = write_parquet(EXTRACTORS[kind](raw, entry.get("params") or {}), parquet)
+            n = write_parquet(rows, parquet)
             log(f"  extracted {n} rows")
+            if limit and n != limit:
+                parquet.unlink()
+                raise SystemExit(
+                    f"{ds_id}: extracted {n} rows, not the {limit} requested — "
+                    f"check `spread_over` against the source's row count")
         column = PARQUET_COLUMN
 
     log("  ingesting -> canonical artifact")

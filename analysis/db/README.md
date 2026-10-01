@@ -140,8 +140,11 @@ FROM v WHERE is_latest GROUP BY ALL ORDER BY run_name;
   by the module. The instrumented *counters* —
   `eval_domain`, `eval_domain_matches`, `prefilter_candidates` — are a
   different animal: they are structural, identical in every sample, so
-  `ns_per_domain_value` and `verify_ns_per_survivor` divide the median by
-  them legitimately.
+  `ns_per_domain_value` divides the median by them legitimately.
+  `verify_ns_per_survivor` divides the self-reported `verify_ns` instead, and
+  is NULL for a module that reports no verify phase: the median stood in for
+  it once, and since most of a prefiltered query is the scan, that overstated
+  the per-row verify cost by 2x to 32x.
 - **`eval_domain` is NULL in the table and coalesced in the view.** The
   `dict_*` systems evaluate the predicate once per *unique* value and scatter
   to rows, so they declare a reduced domain; everything else leaves it unset,

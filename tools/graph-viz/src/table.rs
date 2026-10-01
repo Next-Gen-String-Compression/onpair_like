@@ -9,14 +9,13 @@
 //! Roles come from the same cover the DAG figure drew, so the two are two views
 //! of one decision rather than two computations.
 
-use onpair::{DictionaryView, MAX_TOKEN_SIZE, Token};
-
-use crate::graph::{PathGraph, Weights, preview};
+use crate::graph::{PathGraph, TOKEN_PREVIEW, Token, preview};
+use crate::load::Symbols;
 use crate::render::{compact_u64, xml};
 
-/// Every token is spelled out in full — [`MAX_TOKEN_SIZE`] is the whole of one —
-/// and the column widens to whatever that takes.
-const TOKEN_CHARS: usize = MAX_TOKEN_SIZE;
+/// Every token is spelled out in full, and the column widens to whatever that
+/// takes.
+const TOKEN_CHARS: usize = TOKEN_PREVIEW;
 
 /// Column width with tokens of ordinary length. A column holding a wider one
 /// grows past this; nothing in the table is ever cut to fit.
@@ -73,32 +72,46 @@ impl Role {
 /// Draw every dictionary token, marking the ones this query's cover probes for.
 ///
 /// `cover` is the membership table the DAG figure drew — one bool per token id.
-pub fn render_table_svg<V: DictionaryView>(
-    dict: V,
-    weights: &Weights,
+pub fn render_table_svg(
+    symbols: &Symbols,
     graph: &PathGraph,
     cover: &[bool],
     title: &str,
 ) -> String {
-    let num_tokens = dict.num_tokens();
+    // Ids with a row in the symbol table; the FSST escape code is one, spelled
+    // `<ESC>`.
+    let listed: Vec<(Token, String)> = symbols
+        .content
+        .iter()
+        .enumerate()
+        .filter_map(|(id, content)| {
+            let content = content.as_ref()?;
+            let text = if content.is_empty() {
+                "<ESC>".to_string()
+            } else {
+                preview(content, TOKEN_CHARS)
+            };
+            Some((id as Token, text))
+        })
+        .collect();
+    let num_tokens = listed.len();
     let cols = num_tokens.div_ceil(PREFERRED_ROWS).clamp(1, MAX_COLS);
     let rows_per_col = num_tokens.div_ceil(cols).max(1);
 
-    let tokens: Vec<String> = (0..num_tokens)
-        .map(|id| preview(dict.token(id as Token), TOKEN_CHARS))
-        .collect();
-    let widest = tokens
+    let widest = listed
         .iter()
-        .map(|token| token.chars().count() + 2)
+        .map(|(_, token)| token.chars().count() + 2)
         .max()
         .unwrap_or(0);
     let col_w = COL_W_BASE.max(widest as f64 * TOKEN_GLYPH_W + ROW_FURNITURE_W);
 
-    let probed = (0..num_tokens)
-        .filter(|&id| cover.get(id).copied().unwrap_or(false))
+    let probed = listed
+        .iter()
+        .filter(|&&(id, _)| cover.get(id as usize).copied().unwrap_or(false))
         .count();
-    let unused = (0..num_tokens)
-        .filter(|&id| weights.token_term_frequency(id as Token) == 0)
+    let unused = listed
+        .iter()
+        .filter(|&&(id, _)| symbols.frequency[id as usize] == 0)
         .count();
     let needle = preview(&graph.needle, 32);
 
@@ -179,14 +192,15 @@ pub fn render_table_svg<V: DictionaryView>(
         ));
     }
 
-    for (id, token) in tokens.iter().enumerate() {
-        let col = id / rows_per_col;
-        let row = id % rows_per_col;
+    for (at, (id, token)) in listed.iter().enumerate() {
+        let id = *id;
+        let col = at / rows_per_col;
+        let row = at % rows_per_col;
         let x = PAD + col as f64 * col_w;
         let y = HEADER_H + row as f64 * ROW_H;
 
-        let term_frequency = weights.token_term_frequency(id as Token);
-        let role = Role::of(id as Token, graph, cover, term_frequency);
+        let term_frequency = symbols.frequency[id as usize];
+        let role = Role::of(id, graph, cover, term_frequency);
         let (class, badge) = role.marks();
         // RF, as everywhere else in these figures: occurrences over rows, the
         // share of rows the token is priced as admitting.

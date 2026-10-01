@@ -199,10 +199,17 @@ int run_interp(void* self, const lb_query* query, uint64_t* out_bitmap_words,
                                                                setup_start)
               .count());
     }
+    const auto scan_start = stats_or_null ? Clock::now() : Clock::time_point{};
     for (uint64_t i = 0; i < h->b.num_rows; i++) {
       const uint8_t* p = h->b.compressed.data() + h->b.coffsets[i];
       const size_t len = size_t(h->b.coffsets[i + 1] - h->b.coffsets[i]);
       if (parser.parse(std::span<const uint8_t>(p, len))) set_bit(i);
+    }
+    if (stats_or_null) {
+      stats_or_null->scan_ns = uint64_t(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+                                                               scan_start)
+              .count());
     }
     return 0;
   } catch (...) {

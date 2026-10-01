@@ -1,0 +1,26 @@
+# TPC-H customer comments: 1.5M rows of prose (mean 72.5 B) — the l_comment
+# shape. Third data shape after URLs and short names.
+strategies = ["dict+compressed", "pf_walk", "kmp"]
+
+[[datasets]]
+path = "../datasets/tpch-ccomment-sf10"
+
+[[suites]]
+path = "../suites/tpch-ccomment-sf10-gen1-s42"
+
+[[candidates]]
+name = "onpair_spiral"
+configs = ['{"bits":12}', '{"bits":16}']
+
+[[candidates]]
+name = "dict_onpair"
+configs = ['{"bits":16}']
+
+[[candidates]]
+name = "fsst_rs"
+
+[measure]
+chunk_rows = [0]
+warmup = 2
+min_iters = 3
+min_millis = 0

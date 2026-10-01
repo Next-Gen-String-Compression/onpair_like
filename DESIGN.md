@@ -895,13 +895,15 @@ candidates/
   onpair/        C++: OnPair (pinned via FetchContent) — the first real
                  compressed candidate; decode() plus a "compressed"
                  strategy (token automata over the packed stream)
-  onpair_spiral/ Rust: SpiralDB's OnPair (git dep, github.com/spiraldb/onpair,
-                 branch feat/search-prefilter) — three contains-only run()
-                 strategies: "pf_kmp" (SIMD prefilter + compressed-domain
-                 token-KMP verify), "pf_memmem" (prefilter + decode-survivors +
-                 memmem verify), and "kmp" (token-KMP over every row, no
-                 prefilter — the cross-library counterpart of `onpair`'s
-                 `compressed`); a distinct library/scheme from `onpair`
+  onpair_spiral/ Rust: SpiralDB's OnPair (path dep on the local checkout of
+                 github.com/spiraldb/onpair, branch feat/search-prefilter) —
+                 two contains-only run() strategies: "pf_walk" (SIMD prefilter
+                 whose scan verifies each probe hit against the alignment graph,
+                 so its rows are exact and nothing verifies behind it) and
+                 "kmp" (token-KMP over every row, no prefilter — the
+                 cross-library counterpart of `onpair`'s `compressed`); a
+                 distinct library/scheme from `onpair`. The pinned and refactor
+                 peers still carry the older "pf_kmp"/"pf_memmem" verify pair
 scanners/
   memmem/        Rust: memchr/memmem SIMD kernels (phase-1 workhorse)
   cpp_std_find/  C++: std::string_view::find — proves the C++ scanner path
@@ -1022,6 +1024,25 @@ only its own directory plus one registry line.
   `specs/compression/onpair_spiral_query.toml` (pf_kmp vs pf_memmem vs kmp,
   with onpair `compressed` as the cross-library reference) and the unified
   `specs/shootout/candidates.toml` head-to-head.
+
+- *(Implementation, 2026-09-10)* `onpair_spiral` follows upstream's split scan.
+  The local checkout rewrote the prefilter: `prefilter_candidates` now checks
+  every probe hit against the alignment graph as it scans, so its rows are
+  exact and no verify pass runs behind it. The two verify variants above are
+  gone with `rows_containing_prefiltered_memmem`, and the one surviving
+  prefiltered strategy is renamed `pf_walk` (`dict+pf_walk` in the dict
+  wrapper) so the label names the mechanism rather than a verifier that no
+  longer runs. `prefilter_candidates` is left UNSET: nothing public reports
+  what the probes admitted before the walk, so prune rate and false-positive
+  rate have no denominator for this candidate; `setup_ns` (analysis) and
+  `scan_ns` (the scan) are still reported. `PruneFactor` is absent from this
+  branch, so the pruned configs are gone from every spec.
+  `onpair_spiral_pinned` (5927cce) and `onpair_spiral_refactor` (78f53c6) keep
+  `pf_kmp`/`pf_memmem`, so a run compares the designs rather than two
+  verifiers. Both peers now report the same two phases as `pf_walk` —
+  `setup_ns` (probe-cover analysis, plus the token-KMP table `pf_kmp` builds up
+  front) and `scan_ns` (the probe scan and, for them, the verify pass behind
+  it) — so the three lines compare phase for phase.
 
 ---
 

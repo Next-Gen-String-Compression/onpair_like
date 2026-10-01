@@ -1,0 +1,24 @@
+# fsst_rs on the generic point scanner, against the C++ FSST prefilter and
+# OnPair's own candidate. Instrumented, so verify splits into decompress/search.
+strategies = ["pf_walk", "fsst-prefilter"]
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-literals"
+
+[[candidates]]
+name = "fsst_rs"
+
+[[candidates]]
+name = "fsst_prefilter"
+
+[[candidates]]
+name = "onpair_spiral"
+
+[measure]
+chunk_rows = [0, 122880]
+warmup = 2
+min_iters = 3
+min_millis = 0

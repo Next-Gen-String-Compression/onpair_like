@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="460" viewBox="0 0 980 460">
+<rect width="100%" height="100%" fill="#FFFFFF"/>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;fill:#202124}</style>
+<text x="67" y="30" font-size="22" font-weight="650">Post-training pruning stopped paying</text>
+<text x="67" y="53" font-size="12.5" fill="#5F6368">pruned over unpruned throughput, pf_memmem, 8 URL literals over clickbench-url-1m</text>
+<line x1="67.2" y1="80.0" x2="94.2" y2="80.0" stroke="#0072B2" stroke-width="2.5"/>
+<circle cx="80.70" cy="80.00" r="4.20" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.2"/>
+<text x="101.2" y="84.0" font-size="12">12 bits, chunked</text>
+<line x1="224.0" y1="80.0" x2="251.0" y2="80.0" stroke="#D55E00" stroke-width="2.5"/>
+<path d="M 237.50 75.00 L 242.50 84.20 L 232.50 84.20 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.2"/>
+<text x="258.0" y="84.0" font-size="12">16 bits, chunked</text>
+<line x1="380.8" y1="80.0" x2="407.8" y2="80.0" stroke="#009E73" stroke-width="2.5"/>
+<rect x="390.10" y="75.80" width="8.40" height="8.40" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.2"/>
+<text x="414.8" y="84.0" font-size="12">12 bits, whole column</text>
+<line x1="570.4" y1="80.0" x2="597.4" y2="80.0" stroke="#CC79A7" stroke-width="2.5"/>
+<path d="M 583.85 75.30 L 588.55 80.00 L 583.85 84.70 L 579.15 80.00 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.2"/>
+<text x="604.4" y="84.0" font-size="12">16 bits, whole column</text>
+<text transform="translate(20 245.0) rotate(-90)" text-anchor="middle" font-size="13" font-weight="600">speedup from PruneFactor 1.0</text>
+<line x1="67.2" y1="382.00" x2="952.0" y2="382.00" stroke="#ECEFF1" stroke-width="0.7"/>
+<text x="58.2" y="386.00" text-anchor="end" font-size="10.5" fill="#6B7075">0.8</text>
+<line x1="67.2" y1="336.33" x2="952.0" y2="336.33" stroke="#ECEFF1" stroke-width="0.7"/>
+<text x="58.2" y="340.33" text-anchor="end" font-size="10.5" fill="#6B7075">1</text>
+<line x1="67.2" y1="290.67" x2="952.0" y2="290.67" stroke="#ECEFF1" stroke-width="0.7"/>
+<text x="58.2" y="294.67" text-anchor="end" font-size="10.5" fill="#6B7075">1.2</text>
+<line x1="67.2" y1="245.00" x2="952.0" y2="245.00" stroke="#ECEFF1" stroke-width="0.7"/>
+<text x="58.2" y="249.00" text-anchor="end" font-size="10.5" fill="#6B7075">1.4</text>
+<line x1="67.2" y1="199.33" x2="952.0" y2="199.33" stroke="#ECEFF1" stroke-width="0.7"/>
+<text x="58.2" y="203.33" text-anchor="end" font-size="10.5" fill="#6B7075">1.6</text>
+<line x1="67.2" y1="153.67" x2="952.0" y2="153.67" stroke="#ECEFF1" stroke-width="0.7"/>
+<text x="58.2" y="157.67" text-anchor="end" font-size="10.5" fill="#6B7075">1.8</text>
+<line x1="67.2" y1="108.00" x2="952.0" y2="108.00" stroke="#ECEFF1" stroke-width="0.7"/>
+<text x="58.2" y="112.00" text-anchor="end" font-size="10.5" fill="#6B7075">2</text>
+<line x1="130.40" y1="108.0" x2="130.40" y2="382.0" stroke="#F0F1F2" stroke-width="0.8"/>
+<line x1="130.40" y1="382.0" x2="130.40" y2="387.0" stroke="#9AA0A6"/>
+<text x="130.40" y="402.0" text-anchor="middle" font-size="10.5" fill="#5F6368">v16</text>
+<line x1="256.80" y1="108.0" x2="256.80" y2="382.0" stroke="#F0F1F2" stroke-width="0.8"/>
+<line x1="256.80" y1="382.0" x2="256.80" y2="387.0" stroke="#9AA0A6"/>
+<text x="256.80" y="402.0" text-anchor="middle" font-size="10.5" fill="#5F6368">v17</text>
+<line x1="383.20" y1="108.0" x2="383.20" y2="382.0" stroke="#F0F1F2" stroke-width="0.8"/>
+<line x1="383.20" y1="382.0" x2="383.20" y2="387.0" stroke="#9AA0A6"/>
+<text x="383.20" y="402.0" text-anchor="middle" font-size="10.5" fill="#5F6368">v18</text>
+<line x1="509.60" y1="108.0" x2="509.60" y2="382.0" stroke="#F0F1F2" stroke-width="0.8"/>
+<line x1="509.60" y1="382.0" x2="509.60" y2="387.0" stroke="#9AA0A6"/>
+<text x="509.60" y="402.0" text-anchor="middle" font-size="10.5" fill="#5F6368">v19</text>
+<line x1="636.00" y1="108.0" x2="636.00" y2="382.0" stroke="#F0F1F2" stroke-width="0.8"/>
+<line x1="636.00" y1="382.0" x2="636.00" y2="387.0" stroke="#9AA0A6"/>
+<text x="636.00" y="402.0" text-anchor="middle" font-size="10.5" fill="#5F6368">v20</text>
+<line x1="762.40" y1="108.0" x2="762.40" y2="382.0" stroke="#F0F1F2" stroke-width="0.8"/>
+<line x1="762.40" y1="382.0" x2="762.40" y2="387.0" stroke="#9AA0A6"/>
+<text x="762.40" y="402.0" text-anchor="middle" font-size="10.5" fill="#5F6368">v21</text>
+<line x1="888.80" y1="108.0" x2="888.80" y2="382.0" stroke="#F0F1F2" stroke-width="0.8"/>
+<line x1="888.80" y1="382.0" x2="888.80" y2="387.0" stroke="#9AA0A6"/>
+<text x="888.80" y="402.0" text-anchor="middle" font-size="10.5" fill="#5F6368">v22</text>
+<line x1="67.2" y1="382.0" x2="952.0" y2="382.0" stroke="#9AA0A6"/>
+<line x1="67.2" y1="336.33" x2="952.0" y2="336.33" stroke="#9AA0A6" stroke-width="1.4"/>
+<defs><clipPath id="panel"><rect x="67.2" y="108.0" width="884.8" height="274.0"/></clipPath></defs>
+<g clip-path="url(#panel)">
+<path d="M 130.40 327.84 L 256.80 330.67 L 383.20 330.32 L 509.60 330.94 L 636.00 321.93 L 762.40 326.34 L 888.80 331.48" fill="none" stroke="#0072B2" stroke-width="2.15" stroke-linejoin="round" stroke-linecap="round" opacity="0.94"/>
+<circle cx="130.40" cy="327.84" r="3.80" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<circle cx="256.80" cy="330.67" r="3.80" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<circle cx="383.20" cy="330.32" r="3.80" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<circle cx="509.60" cy="330.94" r="3.80" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<circle cx="636.00" cy="321.93" r="3.80" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<circle cx="762.40" cy="326.34" r="3.80" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<circle cx="888.80" cy="331.48" r="3.80" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 130.40 132.05 L 256.80 303.04 L 383.20 329.47 L 509.60 331.11 L 636.00 334.17 L 762.40 333.14 L 888.80 333.10" fill="none" stroke="#D55E00" stroke-width="2.15" stroke-linejoin="round" stroke-linecap="round" opacity="0.94"/>
+<path d="M 130.40 127.45 L 135.00 135.85 L 125.80 135.85 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 256.80 298.44 L 261.40 306.84 L 252.20 306.84 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 383.20 324.87 L 387.80 333.27 L 378.60 333.27 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 509.60 326.51 L 514.20 334.91 L 505.00 334.91 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 636.00 329.57 L 640.60 337.97 L 631.40 337.97 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 762.40 328.54 L 767.00 336.94 L 757.80 336.94 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 888.80 328.50 L 893.40 336.90 L 884.20 336.90 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 130.40 329.00 L 256.80 336.53 L 383.20 334.49 L 509.60 332.08 L 636.00 331.48 L 762.40 338.26 L 888.80 335.04" fill="none" stroke="#009E73" stroke-width="2.15" stroke-linejoin="round" stroke-linecap="round" opacity="0.94"/>
+<rect x="126.60" y="325.20" width="7.60" height="7.60" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<rect x="253.00" y="332.73" width="7.60" height="7.60" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<rect x="379.40" y="330.69" width="7.60" height="7.60" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<rect x="505.80" y="328.28" width="7.60" height="7.60" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<rect x="632.20" y="327.68" width="7.60" height="7.60" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<rect x="758.60" y="334.46" width="7.60" height="7.60" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<rect x="885.00" y="331.24" width="7.60" height="7.60" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 130.40 202.83 L 256.80 325.65 L 383.20 334.05 L 509.60 339.59 L 636.00 333.12 L 762.40 338.78 L 888.80 335.41" fill="none" stroke="#CC79A7" stroke-width="2.15" stroke-linejoin="round" stroke-linecap="round" opacity="0.94"/>
+<path d="M 130.40 198.53 L 134.70 202.83 L 130.40 207.13 L 126.10 202.83 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 256.80 321.35 L 261.10 325.65 L 256.80 329.95 L 252.50 325.65 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 383.20 329.75 L 387.50 334.05 L 383.20 338.35 L 378.90 334.05 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 509.60 335.29 L 513.90 339.59 L 509.60 343.89 L 505.30 339.59 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 636.00 328.82 L 640.30 333.12 L 636.00 337.42 L 631.70 333.12 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 762.40 334.48 L 766.70 338.78 L 762.40 343.08 L 758.10 338.78 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 888.80 331.11 L 893.10 335.41 L 888.80 339.71 L 884.50 335.41 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+</g>
+<text x="509.6" y="428.0" text-anchor="middle" font-size="12" font-weight="600">benchmark run</text>
+<text x="67" y="446" font-size="10.5" fill="#6B7075">Above 1.0 pruning is worth it. On this column it still costs 1.5% of compression ratio at 16 bits whole-column and 3.7% chunked, whether or not it buys throughput.</text>
+</svg>

@@ -1,0 +1,20 @@
+# onpair_spiral at both dictionary budgets: 4096 vs 65536 tokens. The cover's
+# width (and so its scan cost) grows with the vocabulary, while pruning
+# improves — this measures the trade.
+strategies = ["pf_walk", "kmp"]
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-literals"
+
+[[candidates]]
+name = "onpair_spiral"
+configs = ['{"bits":12}', '{"bits":16}']
+
+[measure]
+chunk_rows = [0]
+warmup = 2
+min_iters = 3
+min_millis = 0

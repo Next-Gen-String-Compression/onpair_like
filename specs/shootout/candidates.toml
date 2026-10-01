@@ -22,7 +22,7 @@
 # NOT the compression spec's single-shot mode: this IS a latency race.
 #
 # Harness composes the applicable strategy per candidate (direct for the
-# zero-copy view; compressed/interp/pf_kmp/pf_memmem/kmp for compressed-domain
+# zero-copy view; compressed/interp/pf_walk/kmp for compressed-domain
 # matchers; decode for decode-only codecs). Listing every name keeps all paths
 # in-scope; unsupported (candidate, strategy) pairs are simply not emitted.
 # (`kmp` here is onpair_spiral's un-prefiltered strategy, distinct from the
@@ -31,7 +31,7 @@
 # This key MUST sit above the [[...]] arrays below: a bare key after an
 # array-of-tables binds to its last table, not the top-level spec (cf.
 # specs/compression/codecs.toml).
-strategies = ["direct", "compressed", "interp", "pf_kmp", "pf_memmem", "kmp", "decode"]
+strategies = ["direct", "compressed", "interp", "pf_walk", "kmp", "decode"]
 
 [[datasets]]
 path = "../../datasets/msmarco-query"
@@ -65,10 +65,10 @@ configs = ['{"bits":12}', '{"bits":16}']
 name = "onpair_decode"
 configs = ['{"bits":12}', '{"bits":16}']
 
-# SpiralDB's OnPair (Rust) — contains-only. SIMD substring prefilter + verify
-# (`pf_kmp` compressed-domain token-KMP, `pf_memmem` decode-survivors + memmem)
-# plus `kmp`, the un-prefiltered token-KMP baseline (the cross-library
-# counterpart of `onpair`'s `compressed`). Distinct scheme from C++ `onpair`.
+# SpiralDB's OnPair (Rust) — contains-only. `pf_walk` is the SIMD substring
+# prefilter, exact out of its own scan (the walk verifies inside it), plus
+# `kmp`, the un-prefiltered token-KMP baseline (the cross-library counterpart
+# of `onpair`'s `compressed`). Distinct scheme from C++ `onpair`.
 [[candidates]]
 name = "onpair_spiral"
 configs = ['{"bits":12}', '{"bits":16}']

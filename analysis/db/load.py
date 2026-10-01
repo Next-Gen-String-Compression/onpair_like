@@ -399,6 +399,8 @@ def load_run(con, run_dir: Path) -> str:
         setup_ns = phase(prefilter, "setup_ns")
         decode_ns = phase(prefilter, "decode_ns")
         scan_ns = phase(prefilter, "scan_ns")
+        prefilter_ns = phase(prefilter, "prefilter_ns")
+        verify_ns = phase(prefilter, "verify_ns")
         dataset_id = datasets[row["dataset_checksum"]]
         suite = suite_of[row["dataset_checksum"]][0]
         footprint = build["footprint_total_bytes"]
@@ -451,6 +453,8 @@ def load_run(con, run_dir: Path) -> str:
                 setup_ns,
                 decode_ns,
                 scan_ns,
+                prefilter_ns,
+                verify_ns,
             )
         )
     # Placeholders are generated from the column list: hand-counting them is
@@ -464,7 +468,7 @@ def load_run(con, run_dir: Path) -> str:
                  footprint_components,
                  prefilter_candidates, prune_rate, false_positive_rate,
                  verify_ns_per_survivor,
-                 setup_ns, decode_ns, scan_ns"""
+                 setup_ns, decode_ns, scan_ns, prefilter_ns, verify_ns"""
     marks = ", ".join(["?"] * len(columns.split(",")))
     if rows and len(rows[0]) != len(columns.split(",")):
         raise SystemExit(

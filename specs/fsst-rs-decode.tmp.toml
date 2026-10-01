@@ -1,0 +1,29 @@
+# Temporary: does fsst-rs's own decompressor, retargeted at the sorted symbol
+# table, close the gap to the C++ decoder? `decode` is harness-composed and
+# identical for both candidates, so only the decompressor differs.
+strategies = ["pf_memmem", "fsst-prefilter", "decode"]
+
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-literals"
+
+[[candidates]]
+name = "fsst_rs"
+
+[[candidates]]
+name = "fsst"
+
+[[candidates]]
+name = "fsst_prefilter"
+
+[measure]
+chunk_rows = [0]
+warmup = 1
+min_iters = 2
+min_millis = 0
+
+[[scanners]]
+name = "memmem"

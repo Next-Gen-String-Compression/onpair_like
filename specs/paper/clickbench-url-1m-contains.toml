@@ -7,9 +7,9 @@
 #   cargo run --release --bin bench -- run specs/paper/clickbench-url-1m-contains.toml \
 #       -o results/paper/clickbench-url-1m-contains
 
-# Every strategy the candidates below declare, MINUS fsst_like_tum's `cpp`
-# codegen backend (and its `cpp-simd` / `llvm*` siblings on hosts that register
-# them). `cpp` emits a specialized kernel per query and shells out to
+# Every strategy the candidates below declare, MINUS fsst_like_tum's `cpp` and
+# `cpp-simd` codegen backends, and minus plain `llvm` (its SIMD sibling below
+# supersedes it). `cpp` emits a specialized kernel per query and shells out to
 # `clang++ -shared` to build it; hygiene rule 1 (no memoization across calls)
 # means it must redo that on every run(), i.e. once per chunk. Measured here:
 # 552 ms of the 552 ms whole-column median is that compile, and at
@@ -17,6 +17,13 @@
 # ~83 minutes for the 142 queries, more than the other 19 candidates combined.
 # The cost is real and self-timed into setup_ns, so it belongs in a run that is
 # about compile-vs-match attribution; it does not belong in this sweep.
+#
+# `llvm-simd` IS listed: it ORC-JITs the same automaton in process, measured at
+# 12-21 ms per query on a whole 1M-row column (AMD EPYC 9R14, LLVM 15), not the
+# 552 ms a `clang++` fork costs, and it is the backend whose SIMD self-loop
+# kernels section 4.5 describes. It registers only where the candidate was
+# built against LLVM 14-16 on x86-64; on any other host the runner drops the
+# name silently, so the spec stays portable.
 #
 # This must stay ABOVE the first [[table]] header: a root-level key placed after
 # one is parsed as a key OF that table, and serde drops it silently.
@@ -28,6 +35,7 @@ strategies = [
   "prefilter",
   "dict+prefilter",
   "interp",
+  "llvm-simd",
   "dict+interp",
   "decode",
   "decode+prefilter",
@@ -40,9 +48,8 @@ strategies = [
   "dict+compressed",
   "comet",
   "kmp",
-  "pf_kmp",
-  "pf_memmem",
-  "dict+pf_kmp",
+  "pf_walk",
+  "dict+pf_walk",
 ]
 
 [[datasets]]

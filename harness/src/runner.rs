@@ -77,6 +77,7 @@ struct StatsAgg {
     prefilter_ns: Option<u64>,
     verify_ns: Option<u64>,
     setup_ns: Option<u64>,
+    scan_ns: Option<u64>,
     /// Summing these across chunks is the right composition: each chunk has
     /// its own dictionary, so the domains add up exactly the way rows do.
     eval_domain: Option<u64>,
@@ -95,6 +96,7 @@ impl StatsAgg {
         add(&mut self.prefilter_ns, s.prefilter_ns);
         add(&mut self.verify_ns, s.verify_ns);
         add(&mut self.setup_ns, s.setup_ns);
+        add(&mut self.scan_ns, s.scan_ns);
         add(&mut self.eval_domain, s.eval_domain);
         add(&mut self.eval_domain_matches, s.eval_domain_matches);
     }
@@ -587,9 +589,6 @@ fn run_cell(
         let fp_rate = prefilter_candidates
             .filter(|&c| c > 0)
             .map(|c| (c as f64 - domain_matches as f64) / c as f64);
-        let verify_per_survivor = prefilter_candidates
-            .filter(|&c| c > 0)
-            .map(|c| median as f64 / c as f64);
         // Decode strategies: the harness owns the joint, so its measurement
         // is authoritative even when a tiny chunk quantizes to 0 ticks.
         let decode_ns = if matches!(strat, Strat::Decode(_)) {
@@ -597,9 +596,23 @@ fn run_cell(
         } else {
             agg.decode_ns.map(|ns| PhaseNs { ns, origin: "self_reported" })
         };
-        let scan_ns = composed.then_some(PhaseNs { ns: phases.scan_ns, origin: "harness" });
+        // The harness owns the joint for a composed pipeline, so its clock wins
+        // there; a self-contained strategy that scans rows itself reports its own.
+        let scan_ns = if composed {
+            Some(PhaseNs { ns: phases.scan_ns, origin: "harness" })
+        } else {
+            agg.scan_ns.map(|ns| PhaseNs { ns, origin: "self_reported" })
+        };
         let prefilter_ns = agg.prefilter_ns.map(|ns| PhaseNs { ns, origin: "self_reported" });
         let verify_ns = agg.verify_ns.map(|ns| PhaseNs { ns, origin: "self_reported" });
+        // The verify phase alone, over the rows it verified. Left unset when the
+        // module reports no verify phase: the query median stood in for it here
+        // once, and since most of a prefiltered query is the scan, that
+        // overstated the per-row cost by 2x to 32x.
+        let verify_per_survivor = match (&verify_ns, prefilter_candidates) {
+            (Some(v), Some(c)) if c > 0 => Some(v.ns as f64 / c as f64),
+            _ => None,
+        };
         let setup_ns = agg.setup_ns.map(|ns| PhaseNs { ns, origin: "self_reported" });
         if prefilter_candidates.is_none()
             && decode_ns.is_none()

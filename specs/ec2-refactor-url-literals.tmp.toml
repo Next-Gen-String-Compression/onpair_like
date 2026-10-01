@@ -1,0 +1,42 @@
+# x86-64 (EC2 Xeon 6975P, AVX-512, pinning effective): the refactor branch
+# against the local tree on the curated URL literals, the comparison the arm64
+# literals-extended runs make, taken on the other instruction set.
+#
+#   ./target/release/bench run specs/ec2-refactor-url-literals.tmp.toml \
+#       -o results/ec2-refactor-url-literals-v1
+#
+# `pf_walk` is the local checkout's one prefiltered path (walk inside the
+# scan); `pf_memmem_superset`/`pf_kmp_superset` are the same cover with the
+# walk off, which is what the refactor branch's `pf_kmp`/`pf_memmem` do by
+# construction, so those four lines price the design against its predecessor.
+strategies = [
+  "pf_walk",
+  "pf_memmem_superset",
+  "pf_kmp_superset",
+  "pf_kmp",
+  "pf_memmem",
+  "kmp",
+]
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-literals"
+
+[[candidates]]
+name = "onpair_spiral"
+configs = ['{"bits":12}', '{"bits":16}']
+
+[[candidates]]
+name = "onpair_spiral_refactor"
+# Branch `codex/prefilter-scan-refactor` at 78f53c6, a git dep, so this is the
+# same code the arm64 runs measured. No `prune` key at that rev.
+configs = ['{"bits":12}', '{"bits":16}']
+
+[measure]
+chunk_rows = [0, 122880]
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

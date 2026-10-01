@@ -1,0 +1,14 @@
+{
+  "format_version": 1,
+  "id": "clickbench-url-1m-google",
+  "description": "The single `google` literal from clickbench-url-1m-literals, op=contains, selectivity 9.5e-5. Split out to re-measure the onpair_spiral cells on their own.",
+  "dataset": {
+    "id": "clickbench-url-1m",
+    "checksum": "xxh3:d164c1b5dbd6aff2"
+  },
+  "provenance": {
+    "curated_by": "hand-picked literals; selectivity measured on datasets/clickbench-url-1m/data.arrow"
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-08-24T08:23:58Z"
+}

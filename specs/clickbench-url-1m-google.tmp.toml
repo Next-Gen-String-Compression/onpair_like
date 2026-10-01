@@ -1,0 +1,40 @@
+# The `google` literal on its own, to re-measure the onpair_spiral cells
+# of specs/clickbench-url-1m-literals.tmp.toml against the uncompressed
+# baseline. Same dataset, same candidate, same configs and the same [measure]
+# block, so a cell here is comparable to the same cell there.
+#
+#   ./target/release/bench run specs/clickbench-url-1m-google.tmp.toml \
+#       --out results/url-google-1m
+#
+# Written to check the 220 GB/s that `{"bits":16,"prune":1.0}` reported: its
+# `total_ns` sat below the time stage one alone needs for the 5-point probe
+# cover that config produced. That config is gone with `PruneFactor`, so what
+# is left is the bits-only pair.
+
+strategies = ["memmem", "kmp", "pf_walk"]
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-google"
+
+[[candidates]]
+name = "uncompressed_memmem"
+
+[[candidates]]
+name = "onpair_spiral"
+configs = [
+  '{"bits":12}',
+  '{"bits":16}',
+]
+
+[[scanners]]
+name = "memmem"
+
+[measure]
+chunk_rows = [0, 122880]  # 0 = whole column; 122880 = 60*2048 rows/chunk
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

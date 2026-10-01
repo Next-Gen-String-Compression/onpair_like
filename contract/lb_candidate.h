@@ -17,7 +17,7 @@
 extern "C" {
 #endif
 
-#define LB_ABI_VERSION 5u
+#define LB_ABI_VERSION 6u
 
 /* Guaranteed writable headroom past the decoded payload in every decode()
  * output buffer (see lb_candidate.decode). Lets fixed-stride over-copying
@@ -90,6 +90,12 @@ typedef struct lb_run_stats {
   uint64_t setup_ns;             /* per-query setup: pattern/automaton
                                     compilation before any row or token
                                     is examined (ABI v3)               */
+  uint64_t scan_ns;              /* the pass over the rows themselves,
+                                    for a strategy that owns its scan
+                                    (ABI v6). The harness times this
+                                    joint itself for the strategies it
+                                    composes and ignores the field
+                                    there                              */
   /* The column values this strategy actually evaluated (ABI v5). One per
    * row is the norm, and UNSET means exactly that — leave both fields
    * alone unless the domain is *reduced*, as under a dictionary front-end

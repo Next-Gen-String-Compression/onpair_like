@@ -2,20 +2,24 @@
 # requires-python = ">=3.11"
 # dependencies = ["matplotlib==3.10.6", "pandas>=2"]
 # ///
-"""Stage one: GB/s of every matcher against K tokens and against R ranges,
-one column of panels per instruction set.
+"""Stage one: GB/s of every matcher against |C| cut codes and against |R| code
+ranges, one column of panels per instruction set.
 
-    uv run paper/plot_matcher.py [--data CSV ...] [--out DIR] [--encoding onpair16|fsst]
+    uv run paper/plot_matcher.py [--data CSV ...] [--out DIR]
 
 Each CSV is a `novel_mask_*.csv` from onpair's `scan::bench::matcher` or from
 the FSST port's `prefilter_matcher_sweep`; see gen-kernel-data.sh and
 gen-kernel-data-fsst.sh. The instruction set of a row is read off its
-`machine` column. An instruction set with no rows gets the fitted cost model
-drawn dashed as a placeholder, so the panel is laid out before the sweep
-exists. One encoding is drawn per run: onpair16 (u16 codes, two bytes each)
-into kernel-matcher/, fsst (u8 codes) into kernel-matcher-fsst/, which has the
-universal nibble bitmap the u16 build dropped and no byte table, since the
-bitmap takes every cover the table would.
+`machine` column.
+
+Both encodings share a panel: onpair16's u16 codes solid, FSST's u8 codes
+dashed, one colour per kernel. The background is banded by the u16 kernel
+that measured fastest at each point of the sweep. The u16 build has no plain nibble bitmap, and
+the u8 build no byte table, since there the bitmap takes every minimum cut the
+table would. An encoding with no rows for an instruction set gets its fitted cost
+model drawn faint in the same style, so a panel is laid out before the sweep
+exists. GB/s is over the code stream, where a u8 code is one byte against
+u16's two.
 """
 
 import argparse
@@ -29,19 +33,22 @@ import paperfig as pf
 HERE = Path(__file__).resolve().parent
 ISAS = ["NEON", "AVX2", "AVX-512"]
 FILE = {"NEON": "neon", "AVX2": "avx2", "AVX-512": "avx512"}
-KERNELS = {"eq_or": "compare", "nibble_n_8k": "nibble table", "nibble": "bitmap", "range": "range",
+KERNELS = {"eq_or": "compare", "nibble_n_8k": r"nibble\_8k", "nibble": "bit-table", "range": "range",
            "table": "byte table"}
-KEY = {"eq_or": "eq_or", "nibble_n_8k": "nibble", "nibble": "bitmap", "range": "range", "table": "table"}
+# The bit-table takes the byte table's colour: it is the same lookup over the
+# whole code space, and the two never appear in one encoding, the byte table
+# being u16's and the bit-table u8's.
+KEY = {"eq_or": "eq_or", "nibble_n_8k": "nibble", "nibble": "table", "range": "range", "table": "table"}
 BYTES_PER_CODE = {"onpair16": 2.0, "fsst": 1.0}
 TICKS = [1, 2, 5, 10, 20, 50, 100]
 
-# ns per code, mirroring policy::{neon, avx2, avx512bw}: (intercept, per K or
-# per batch, per R). Only read for an instruction set with no measurements.
+# ns per code, mirroring policy::{neon, avx2, avx512bw}: (intercept, per cut
+# code or per batch, per code range). Only read for an instruction set with no measurements.
 # The u8 rows are onpair commit b081914's fit, which the FSST port carries.
 MODEL = {
     "onpair16": {
-        "NEON": {"eq_or": (0.0043, 0.0144, 0.0205), "nibble_n_8k": (0.0228, 0.0325, 0.0213),
-                 "range": (0.0043, 0.0, 0.0212), "table": (0.195, 0.0, 0.0)},
+        "NEON": {"eq_or": (0.0043, 0.0141, 0.0215), "nibble_n_8k": (0.0218, 0.0322, 0.0221),
+                 "range": (0.0035, 0.0, 0.0213), "table": (0.189, 0.0, 0.0)},
         "AVX2": {"eq_or": (0.0136, 0.0105, 0.0239), "nibble_n_8k": (0.0594, 0.0310, 0.0225),
                  "range": (0.0084, 0.0, 0.0225), "table": (0.201, 0.0, 0.0)},
         "AVX-512": {"eq_or": (0.0079, 0.0113, 0.0127), "nibble_n_8k": (0.0270, 0.0141, 0.0119),
@@ -56,7 +63,24 @@ MODEL = {
     },
 }
 MAX_BATCHES = {"onpair16": {"NEON": 3, "AVX2": 2, "AVX-512": 3}, "fsst": {"NEON": 1, "AVX2": 1, "AVX-512": 1}}
-ENCODING = "onpair16"
+
+# The two encodings a panel carries, with the name a legend entry opens with
+# and the line style that separates them.
+ENCODINGS = [("onpair16", "u16", "-"), ("fsst", "u8", (0, (3, 1.2)))]
+# The encoding whose fastest kernel bands the background.
+BANDED = "onpair16"
+# The u8 build has no byte table: its nibble bitmap takes every minimum cut
+# the table would. The sweep still measures one, so drop it here rather than
+# leave a series the build would never plan.
+DROPPED = {"fsst": {"table"}}
+# The width the |R| sweep is read at, the widest whose disjoint ranges span the
+# grid out to |R| = 32: 16 codes in u16's 65536, 8 in u8's 256. A range costs
+# two compares whatever it spans, so the two are the same measurement.
+RANGE_WIDTH = {"onpair16": 16, "fsst": 8}
+
+# Which `bandwidth/results` run each panel is read against. Named rather than
+# matched on the CPU column, since the two x86 boxes report the same model.
+BANDWIDTH = {"NEON": "m4pro", "AVX2": "c7a.xlarge", "AVX-512": "c7a.xlarge"}
 
 
 def isa_of(machine):
@@ -68,10 +92,21 @@ def isa_of(machine):
     return "NEON"
 
 
-def model_gbs(isa, kernel, k=0, r=0):
-    a, slope, per_r = MODEL[ENCODING][isa][kernel]
+def model_gbs(encoding, isa, kernel, k=0, r=0):
+    a, slope, per_r = MODEL[encoding][isa][kernel]
     x = np.ceil(np.asarray(k) / 8) if kernel == "nibble_n_8k" else np.asarray(k)
-    return BYTES_PER_CODE[ENCODING] / (a + slope * x + per_r * np.asarray(r))
+    return BYTES_PER_CODE[encoding] / (a + slope * x + per_r * np.asarray(r))
+
+
+def bandwidth_gbs(encoding, isa, rows):
+    """What one core reads sequentially at the size of the stream this sweep
+    walked, so a kernel sitting on the line is bound by the machine."""
+    path = HERE / "bandwidth" / "results" / f"{BANDWIDTH[isa]}.csv"
+    if rows is None or not path.exists():
+        return None
+    kib = rows["codes"].iloc[0] * BYTES_PER_CODE[encoding] / 1024
+    measured = pd.read_csv(path)
+    return measured.loc[(measured["kib"] - kib).abs().idxmin(), "seq_gbs"]
 
 
 def log_axis(ax, ticks):
@@ -83,92 +118,154 @@ def log_axis(ax, ticks):
     ax.set_xlim(ticks[0] * 0.85, ticks[-1] * 1.18)
 
 
-def tokens_panel(ax, isa, rows):
+def note_modelled(ax, tags):
+    if tags:
+        ax.text(0.5, 0.06, f"{', '.join(tags)}: cost model, not yet measured",
+                transform=ax.transAxes, ha="center", fontsize=pf.SMALL_PT, color="#707070")
+
+
+def draw_ceilings(ax, isa, measured, name=False):
+    """One line per encoding, each at what the machine reads at that sweep's
+    stream size. Sweeps of the same size put them on top of each other. Only
+    one panel names it, so the pooled legend ends on it rather than breaking a
+    pair of encodings apart."""
+    for encoding, _tag, _style in ENCODINGS:
+        rate = bandwidth_gbs(encoding, isa, measured.get(encoding))
+        if rate is not None:
+            ax.axhline(rate, color="#808080", lw=0.8, ls=(0, (4, 2)), zorder=0,
+                       label="memory bandwidth" if name else None)
+            name = False
+
+
+def shade_best(ax, series):
+    """Band the background by the kernel with the highest rate at each swept
+    x, `series` being one measured `pd.Series` per kernel over the same grid.
+    Band edges sit at the geometric midpoints between neighbouring points."""
+    table = pd.DataFrame(series).dropna(how="all")
+    if table.empty:
+        return
+    best = table.idxmax(axis=1)
+    x = best.index.to_numpy(dtype=float)
+    mid = np.sqrt(x[1:] * x[:-1])
+    edges = np.concatenate(([x[0] ** 2 / mid[0]], mid, [x[-1] ** 2 / mid[-1]]))
+    start = 0
+    for i in range(1, len(x) + 1):
+        if i == len(x) or best.iloc[i] != best.iloc[start]:
+            ax.axvspan(edges[start], edges[i], color=pf.COLOR[KEY[best.iloc[start]]],
+                       alpha=0.13, linewidth=0, zorder=0)
+            start = i
+
+
+def tokens_panel(ax, isa, measured):
     names = ["eq_or", "nibble_n_8k", "nibble", "table"]
-    if rows is not None:
-        sub = rows[(rows["ranges"] == 0) & (rows["count"] > 0)]
-        for name in names:
-            g = sub[sub["matcher"] == name].groupby("count")["gbs"].mean()
-            if g.empty:
+    ks = np.arange(1, 257)
+    # Kernel outer, encoding inner, so the legend lists the two encodings of a
+    # kernel next to each other.
+    swept, best = {}, {}
+    for encoding, _tag, _style in ENCODINGS:
+        rows = measured.get(encoding)
+        swept[encoding] = None if rows is None else rows[(rows["ranges"] == 0) & (rows["count"] > 0)]
+    for name in names:
+        for encoding, tag, style in ENCODINGS:
+            if name in DROPPED.get(encoding, ()):
                 continue
-            ax.plot(g.index, g.values, marker=pf.MARKER[KEY[name]], color=pf.COLOR[KEY[name]], markersize=2, label=KERNELS[name])
-    else:
-        ks = np.arange(1, 257)
-        for name in names:
-            if name not in MODEL[ENCODING][isa]:
-                continue
-            k = ks[ks <= 8 * MAX_BATCHES[ENCODING][isa]] if name == "nibble_n_8k" else ks
-            ax.plot(k, model_gbs(isa, name, k=k), "--", color=pf.COLOR[KEY[name]], alpha=0.6, label=KERNELS[name])
-        ax.text(0.5, 0.06, "cost model, not yet measured", transform=ax.transAxes,
-                ha="center", fontsize=pf.SMALL_PT, color="#707070")
+            rows = swept[encoding]
+            label, color = f"{tag}, {KERNELS[name]}", pf.COLOR[KEY[name]]
+            if rows is not None:
+                g = rows[rows["matcher"] == name].groupby("count")["gbs"].mean()
+                if g.empty:
+                    continue
+                ax.plot(g.index, g.values, linestyle=style, color=color, label=label)
+                if encoding == BANDED:
+                    best[name] = g
+            elif name in MODEL[encoding][isa]:
+                k = ks[ks <= 8 * MAX_BATCHES[encoding][isa]] if name == "nibble_n_8k" else ks
+                ax.plot(k, model_gbs(encoding, isa, name, k=k), linestyle=style, color=color,
+                        alpha=0.45, label=label)
+    shade_best(ax, best)
+    note_modelled(ax, [tag for e, tag, _s in ENCODINGS if measured.get(e) is None])
+    draw_ceilings(ax, isa, measured)
     log_axis(ax, [1, 4, 16, 64, 256])
 
 
-def ranges_panel(ax, isa, rows):
-    series = [("range", 0, "range"), ("nibble", 0, "bitmap"), ("table", 1, "byte table")]
-    if rows is not None:
-        sub = rows[(rows["ranges"] > 0) & (rows["width"] == 16)]
-        for name, k, label in series:
-            g = sub[(sub["matcher"] == name) & (sub["count"] == k)].groupby("ranges")["gbs"].mean()
-            if g.empty:
+def ranges_panel(ax, isa, measured):
+    series = [("range", 0), ("nibble", 0), ("table", 1)]
+    rs = np.arange(1, 33)
+    swept, best = {}, {}
+    for encoding, _tag, _style in ENCODINGS:
+        rows = measured.get(encoding)
+        width = RANGE_WIDTH[encoding]
+        swept[encoding] = None if rows is None else rows[(rows["ranges"] > 0) & (rows["width"] == width)]
+    for name, k in series:
+        for encoding, tag, style in ENCODINGS:
+            if name in DROPPED.get(encoding, ()):
                 continue
-            ax.plot(g.index, g.values, marker=pf.MARKER[KEY[name]], color=pf.COLOR[KEY[name]], markersize=2, label=label)
-    else:
-        rs = np.arange(1, 33)
-        for name, k, label in series:
-            if name not in MODEL[ENCODING][isa]:
-                continue
-            ax.plot(rs, model_gbs(isa, name, k=k, r=rs), "--", color=pf.COLOR[KEY[name]], alpha=0.6, label=label)
-        ax.text(0.5, 0.06, "cost model, not yet measured", transform=ax.transAxes,
-                ha="center", fontsize=pf.SMALL_PT, color="#707070")
+            rows = swept[encoding]
+            label, color = f"{tag}, {KERNELS[name]}", pf.COLOR[KEY[name]]
+            if rows is not None:
+                g = rows[(rows["matcher"] == name) & (rows["count"] == k)].groupby("ranges")["gbs"].mean()
+                if g.empty:
+                    continue
+                ax.plot(g.index, g.values, linestyle=style, color=color, label=label)
+                if encoding == BANDED:
+                    best[name] = g
+            elif name in MODEL[encoding][isa]:
+                ax.plot(rs, model_gbs(encoding, isa, name, k=k, r=rs), linestyle=style,
+                        color=color, alpha=0.45, label=label)
+    shade_best(ax, best)
+    note_modelled(ax, [tag for e, tag, _s in ENCODINGS if measured.get(e) is None])
+    draw_ceilings(ax, isa, measured, name=True)
     log_axis(ax, [1, 2, 4, 8, 16, 32])
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data", nargs="+", default=sorted(HERE.glob("data/matcher_*.csv")))
+    ap.add_argument("--data", nargs="+", default=[HERE / p for p in pf.inputs("kernel")["matcher"]])
     ap.add_argument("--out", default=None)
-    ap.add_argument("--encoding", default="onpair16", choices=sorted(MODEL))
     args = ap.parse_args()
-    global ENCODING
-    ENCODING = args.encoding
-    figure = "kernel-matcher" if ENCODING == "onpair16" else f"kernel-matcher-{ENCODING}"
+    figure = "kernel-matcher"
 
     df = pd.concat(pd.read_csv(path) for path in args.data)
     # onpair's 2026-09-10 scan refactor renamed the batched nibble kernel
     # `nibble_n_8k` -> `nibble_n8k`; older CSVs in data/ carry the old spelling.
     df = df.assign(matcher=df["matcher"].replace({"nibble_n8k": "nibble_n_8k"}))
-    df = df[(df["encoding"] == ENCODING) & df["matcher"].isin(KERNELS)]
+    names = [encoding for encoding, _tag, _style in ENCODINGS]
+    df = df[df["encoding"].isin(names) & df["matcher"].isin(KERNELS)]
     df["isa"] = df["machine"].map(isa_of)
-    measured = {isa: g for isa, g in df.groupby("isa")}
+    swept = {key: g for key, g in df.groupby(["isa", "encoding"])}
+    measured = {isa: {enc: swept.get((isa, enc)) for enc in names} for isa in ISAS}
+
+    # One y range over the panels, wide enough for the highest ceiling drawn,
+    # since a line off the top would read as no ceiling at all.
+    rates = [r for isa in ISAS for enc in names
+             if (r := bandwidth_gbs(enc, isa, measured[isa][enc])) is not None]
+    top = max(130.0, max(rates, default=0.0) * 1.15)
+    ticks = [t for t in TICKS + [200, 500] if t <= top]
 
     def finish(ax, xlabel):
         ax.set_yscale("log")
-        ax.set_yticks(TICKS)
-        ax.set_yticklabels([str(t) for t in TICKS])
-        ax.set_ylim(0.9, 130)
+        ax.set_yticks(ticks)
+        ax.set_yticklabels([str(t) for t in ticks])
+        ax.set_ylim(0.9, top)
         ax.set_xlabel(xlabel)
         ax.set_ylabel("GB/s")
 
-    # One row of panels sweeps K over the three instruction sets, one sweeps
-    # R, as `tokens-<isa>` and `ranges-<isa>`, with one legend strip under
+    # One row of panels sweeps |C| over the three instruction sets, one sweeps
+    # |R|, as `codes-<isa>` and `ranges-<isa>`, with one legend strip under
     # both rows pooled from a panel of each.
     legend_from = []
-    for col, isa in enumerate(ISAS):
-        fig, ax = pf.panel()
-        tokens_panel(ax, isa, measured.get(isa))
-        finish(ax, "K tokens")
-        if col == 0:
-            legend_from.append(ax)
-        pf.save_panel(fig, figure, f"tokens-{FILE[isa]}", args.out)
-    for col, isa in enumerate(ISAS):
-        fig, ax = pf.panel()
-        ranges_panel(ax, isa, measured.get(isa))
-        finish(ax, "R ranges")
-        if col == 0:
-            legend_from.append(ax)
-        pf.save_panel(fig, figure, f"ranges-{FILE[isa]}", args.out)
-    pf.save_legend(legend_from, figure, 5 if ENCODING == "fsst" else 4, args.out)
+    for kind, draw, xlabel in (("codes", tokens_panel, r"$|C|$ cut codes"),
+                               ("ranges", ranges_panel, r"$|R|$ code ranges")):
+        panels = []
+        for isa in ISAS:
+            fig, ax = pf.panel()
+            draw(ax, isa, measured[isa])
+            finish(ax, xlabel)
+            panels.append((fig, ax))
+        legend_from.append(panels[0][1])
+        pf.save_row(panels, figure, [f"{kind}-{FILE[isa]}" for isa in ISAS],
+                    pf.PANEL_3UP, args.out)
+    pf.save_legend(legend_from, figure, 5, args.out)
 
 
 if __name__ == "__main__":

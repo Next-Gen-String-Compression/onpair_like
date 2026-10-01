@@ -37,6 +37,8 @@ pub fn candidates() -> Vec<Candidate> {
     {
         v.push(lb_cand_dict_onpair::vtable());
         v.push(lb_cand_dict_onpair::vtable_spiral());
+        #[cfg(feature = "cand-fsst-rs")]
+        v.push(lb_cand_dict_onpair::vtable_fsst_rs());
     }
     #[cfg(feature = "cand-gate-canary")]
     v.push(lb_cand_gate_canary::vtable());
@@ -51,6 +53,13 @@ pub fn candidates() -> Vec<Candidate> {
     }
     #[cfg(feature = "cand-onpair-spiral")]
     v.push(lb_cand_onpair_spiral::vtable());
+    // The same candidate built against the pinned upstream revision rather than
+    // the local checkout, so a spec can put the two side by side.
+    #[cfg(feature = "cand-onpair-spiral-pinned")]
+    v.push(lb_cand_onpair_spiral_pinned::vtable());
+    // And against the `codex/prefilter-scan-refactor` branch, a third line.
+    #[cfg(feature = "cand-onpair-spiral-refactor")]
+    v.push(lb_cand_onpair_spiral_refactor::vtable());
     #[cfg(feature = "cand-lz4")]
     v.push(lb_cand_lz4::vtable());
     #[cfg(feature = "cand-zstd")]

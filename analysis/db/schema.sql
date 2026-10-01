@@ -213,9 +213,22 @@ CREATE TABLE IF NOT EXISTS result (
     setup_ns               BIGINT,
     decode_ns              BIGINT,
     scan_ns                BIGINT,
+    -- The prefilter/verify split, for a module that reports it: how much of a
+    -- cell went into finding candidate rows and how much into checking them.
+    -- A cover that admits too much shows up here as a verify that dwarfs its
+    -- prefilter, which no other column says.
+    prefilter_ns           BIGINT,
+    verify_ns              BIGINT,
 
     PRIMARY KEY (run_id, system_id, dataset_id, chunk_rows, query_pk)
 );
+
+-- Columns added after the first DBs were built. `CREATE TABLE IF NOT EXISTS`
+-- leaves an existing table alone, so a new column has to be added here too or
+-- the loader inserts into a table that does not have it. Idempotent, and the
+-- README's "delete the file and rebuild" stays the other way out.
+ALTER TABLE result ADD COLUMN IF NOT EXISTS prefilter_ns BIGINT;
+ALTER TABLE result ADD COLUMN IF NOT EXISTS verify_ns    BIGINT;
 
 -- ----------------------------------------------------------------- the view
 
@@ -285,6 +298,8 @@ SELECT
     res.setup_ns,
     res.decode_ns,
     res.scan_ns,
+    res.prefilter_ns,
+    res.verify_ns,
     res.run_id,
     res.system_id,
     res.dataset_id,

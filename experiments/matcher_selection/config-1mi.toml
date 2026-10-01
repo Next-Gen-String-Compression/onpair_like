@@ -1,0 +1,25 @@
+# The 2^20-row roster: one row count for every column, so a needle grid means
+# the same thing across them. Same knobs as config.toml; only the datasets
+# differ. Generated suites land in generated/<dataset>/<suite key>, and the
+# key carries the quota, so --per-cell 1 and --per-cell 20 do not collide.
+output_root = "generated"
+cache_root = "cache"
+per_cell = 20
+index_memory_mib = 16384
+negative_attempts = 4000
+
+[[datasets]]
+id = "clickbench-url-1mi"
+path = "../../datasets/clickbench-url-1mi"
+
+[[datasets]]
+id = "amazon-title-1mi"
+path = "../../datasets/amazon-title-1mi"
+
+[[datasets]]
+id = "dbpedia-abstract-1mi"
+path = "../../datasets/dbpedia-abstract-1mi"
+
+[[datasets]]
+id = "imdb-mcnote-1mi"
+path = "../../datasets/imdb-mcnote-1mi"

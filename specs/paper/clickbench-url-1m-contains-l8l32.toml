@@ -4,10 +4,46 @@
 #
 #   cargo run --release --bin bench -- run specs/paper/clickbench-url-1m-contains-l8l32.toml \
 #       -o results/paper/clickbench-url-1m-contains-l8l32
+#
+# Dropped for iteration speed: fsst_like_utn, fsst_decode_prefilter, lz4, and
+# fsst_like_tum's `cpp` strategy (it invokes clang++ once per query, ~7.5 s
+# each -- alone it was ~2/3 of the wall time of this "fast" spec).
+
+# Root-level key: MUST stay above the first [[table]] header, or TOML binds it
+# to that table instead of the document (harness/src/spec.rs module docs).
+# Allowlist, not a denylist: the runner keeps only these names and drops the
+# rest silently, so every strategy of every candidate below must be listed.
+# `cpp` and `cpp-simd` are omitted -- that is how fsst_like_tum loses the
+# clang++-forking backends while keeping `interp` and the in-process
+# `llvm-simd` JIT (see clickbench-url-1m-contains.toml for the measured cost of
+# each). `llvm-simd` registers only on x86-64 hosts built against LLVM 14-16;
+# elsewhere the runner drops the name silently.
+strategies = [
+  "memmem",
+  "prefilter",
+  "dict+prefilter",
+  "interp",
+  "llvm-simd",
+  "dict+interp",
+  "dict+decode+prefilter",
+  "fsst-prefilter",
+  "dict+fsst-prefilter",
+  "decode",
+  "compressed",
+  "dict+compressed",
+  "kmp",
+  "pf_walk",
+  "dict+pf_walk",
+]
 
 [[datasets]]
 path = "../../datasets/clickbench-url-1m"
 
+# Exactly one suite per dataset. The runner would happily concatenate several
+# (runner.rs iterates every suite x every query), but a result row names its
+# dataset and not its suite, so analysis/db/load.py derives the suite from the
+# manifest binding and refuses two suites on one dataset as unattributable.
+# The curated literals live in their own spec: clickbench-url-1m-literals.toml.
 [[suites]]
 path = "../../suites/clickbench-url-1m-contains-l8l32-s42"
 
@@ -28,9 +64,6 @@ name = "dict_uncompressed_prefilter"
 name = "dict_fsst_like_tum"
 
 [[candidates]]
-name = "fsst_decode_prefilter"
-
-[[candidates]]
 name = "dict_fsst_decode_prefilter"
 
 [[candidates]]
@@ -47,12 +80,6 @@ name = "fsst"
 
 [[candidates]]
 name = "fsst_like_tum"
-
-[[candidates]]
-name = "fsst_like_utn"
-
-[[candidates]]
-name = "lz4"
 
 [[candidates]]
 name = "zstd"

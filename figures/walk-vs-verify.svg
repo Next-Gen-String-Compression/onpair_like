@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="460" viewBox="0 0 980 460">
+<rect width="100%" height="100%" fill="#FFFFFF"/>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;fill:#202124}</style>
+<text x="67" y="30" font-size="22" font-weight="650">What the alignment walk is worth</text>
+<text x="67" y="53" font-size="12.5" fill="#5F6368">pf_memmem at 16 bits, 8 URL literals over clickbench-url-1m, whole column</text>
+<line x1="67.2" y1="80.0" x2="94.2" y2="80.0" stroke="#0072B2" stroke-width="2.5"/>
+<circle cx="80.70" cy="80.00" r="4.20" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.2"/>
+<text x="101.2" y="84.0" font-size="12">walk (compressed domain)</text>
+<line x1="276.4" y1="80.0" x2="303.4" y2="80.0" stroke="#D55E00" stroke-width="2.5"/>
+<path d="M 289.90 75.00 L 294.90 84.20 L 284.90 84.20 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.2"/>
+<text x="310.4" y="84.0" font-size="12">token KMP</text>
+<line x1="387.3" y1="80.0" x2="414.3" y2="80.0" stroke="#009E73" stroke-width="2.5"/>
+<rect x="396.65" y="75.80" width="8.40" height="8.40" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.2"/>
+<text x="421.3" y="84.0" font-size="12">no prefilter</text>
+<line x1="517.9" y1="80.0" x2="544.9" y2="80.0" stroke="#CC79A7" stroke-width="2.5"/>
+<path d="M 531.45 75.30 L 536.15 80.00 L 531.45 84.70 L 526.75 80.00 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.2"/>
+<text x="551.9" y="84.0" font-size="12">decode + memmem</text>
+<text transform="translate(20 245.0) rotate(-90)" text-anchor="middle" font-size="13" font-weight="600">GB/s over payload bytes</text>
+<line x1="67.2" y1="382.00" x2="952.0" y2="382.00" stroke="#ECEFF1" stroke-width="0.7"/>
+<text x="58.2" y="386.00" text-anchor="end" font-size="10.5" fill="#6B7075">2</text>
+<line x1="67.2" y1="327.48" x2="952.0" y2="327.48" stroke="#ECEFF1" stroke-width="0.7"/>
+<text x="58.2" y="331.48" text-anchor="end" font-size="10.5" fill="#6B7075">5</text>
+<line x1="67.2" y1="286.24" x2="952.0" y2="286.24" stroke="#ECEFF1" stroke-width="0.7"/>
+<text x="58.2" y="290.24" text-anchor="end" font-size="10.5" fill="#6B7075">10</text>
+<line x1="67.2" y1="245.00" x2="952.0" y2="245.00" stroke="#ECEFF1" stroke-width="0.7"/>
+<text x="58.2" y="249.00" text-anchor="end" font-size="10.5" fill="#6B7075">20</text>
+<line x1="67.2" y1="190.48" x2="952.0" y2="190.48" stroke="#ECEFF1" stroke-width="0.7"/>
+<text x="58.2" y="194.48" text-anchor="end" font-size="10.5" fill="#6B7075">50</text>
+<line x1="67.2" y1="149.24" x2="952.0" y2="149.24" stroke="#ECEFF1" stroke-width="0.7"/>
+<text x="58.2" y="153.24" text-anchor="end" font-size="10.5" fill="#6B7075">100</text>
+<line x1="67.2" y1="108.00" x2="952.0" y2="108.00" stroke="#ECEFF1" stroke-width="0.7"/>
+<text x="58.2" y="112.00" text-anchor="end" font-size="10.5" fill="#6B7075">200</text>
+<line x1="67.20" y1="108.0" x2="67.20" y2="382.0" stroke="#F0F1F2" stroke-width="0.8"/>
+<line x1="67.20" y1="382.0" x2="67.20" y2="387.0" stroke="#9AA0A6"/>
+<text x="67.20" y="402.0" text-anchor="middle" font-size="10.5" fill="#5F6368">1e-06</text>
+<line x1="214.67" y1="108.0" x2="214.67" y2="382.0" stroke="#F0F1F2" stroke-width="0.8"/>
+<line x1="214.67" y1="382.0" x2="214.67" y2="387.0" stroke="#9AA0A6"/>
+<text x="214.67" y="402.0" text-anchor="middle" font-size="10.5" fill="#5F6368">1e-05</text>
+<line x1="362.13" y1="108.0" x2="362.13" y2="382.0" stroke="#F0F1F2" stroke-width="0.8"/>
+<line x1="362.13" y1="382.0" x2="362.13" y2="387.0" stroke="#9AA0A6"/>
+<text x="362.13" y="402.0" text-anchor="middle" font-size="10.5" fill="#5F6368">0.0001</text>
+<line x1="509.60" y1="108.0" x2="509.60" y2="382.0" stroke="#F0F1F2" stroke-width="0.8"/>
+<line x1="509.60" y1="382.0" x2="509.60" y2="387.0" stroke="#9AA0A6"/>
+<text x="509.60" y="402.0" text-anchor="middle" font-size="10.5" fill="#5F6368">0.001</text>
+<line x1="657.07" y1="108.0" x2="657.07" y2="382.0" stroke="#F0F1F2" stroke-width="0.8"/>
+<line x1="657.07" y1="382.0" x2="657.07" y2="387.0" stroke="#9AA0A6"/>
+<text x="657.07" y="402.0" text-anchor="middle" font-size="10.5" fill="#5F6368">0.01</text>
+<line x1="804.53" y1="108.0" x2="804.53" y2="382.0" stroke="#F0F1F2" stroke-width="0.8"/>
+<line x1="804.53" y1="382.0" x2="804.53" y2="387.0" stroke="#9AA0A6"/>
+<text x="804.53" y="402.0" text-anchor="middle" font-size="10.5" fill="#5F6368">0.1</text>
+<line x1="952.00" y1="108.0" x2="952.00" y2="382.0" stroke="#F0F1F2" stroke-width="0.8"/>
+<line x1="952.00" y1="382.0" x2="952.00" y2="387.0" stroke="#9AA0A6"/>
+<text x="952.00" y="402.0" text-anchor="middle" font-size="10.5" fill="#5F6368">1</text>
+<line x1="67.2" y1="382.0" x2="952.0" y2="382.0" stroke="#9AA0A6"/>
+<defs><clipPath id="panel"><rect x="67.2" y="108.0" width="884.8" height="274.0"/></clipPath></defs>
+<g clip-path="url(#panel)">
+<path d="M 137.56 143.44 L 358.85 132.81 L 619.45 201.71 L 663.22 207.92 L 722.70 213.19 L 886.70 256.63 L 911.64 265.36 L 920.76 280.98" fill="none" stroke="#0072B2" stroke-width="2.15" stroke-linejoin="round" stroke-linecap="round" opacity="0.94"/>
+<circle cx="137.56" cy="143.44" r="3.80" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<circle cx="358.85" cy="132.81" r="3.80" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<circle cx="619.45" cy="201.71" r="3.80" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<circle cx="663.22" cy="207.92" r="3.80" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<circle cx="722.70" cy="213.19" r="3.80" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<circle cx="886.70" cy="256.63" r="3.80" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<circle cx="911.64" cy="265.36" r="3.80" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<circle cx="920.76" cy="280.98" r="3.80" fill="#0072B2" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 137.56 181.71 L 358.85 164.78 L 619.45 216.47 L 663.22 225.57 L 722.70 231.84 L 886.70 259.54 L 911.64 268.31 L 920.76 286.90" fill="none" stroke="#D55E00" stroke-width="2.15" stroke-linejoin="round" stroke-linecap="round" opacity="0.94"/>
+<path d="M 137.56 177.11 L 142.16 185.51 L 132.96 185.51 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 358.85 160.18 L 363.45 168.58 L 354.25 168.58 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 619.45 211.87 L 624.05 220.27 L 614.85 220.27 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 663.22 220.97 L 667.82 229.37 L 658.62 229.37 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 722.70 227.24 L 727.30 235.64 L 718.10 235.64 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 886.70 254.94 L 891.30 263.34 L 882.10 263.34 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 911.64 263.71 L 916.24 272.11 L 907.04 272.11 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 920.76 282.30 L 925.36 290.70 L 916.16 290.70 Z" fill="#D55E00" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 137.56 314.79 L 358.85 309.64 L 619.45 305.83 L 663.22 309.54 L 722.70 313.52 L 886.70 293.46 L 911.64 276.92 L 920.76 291.57" fill="none" stroke="#009E73" stroke-width="2.15" stroke-linejoin="round" stroke-linecap="round" opacity="0.94"/>
+<rect x="133.76" y="310.99" width="7.60" height="7.60" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<rect x="355.05" y="305.84" width="7.60" height="7.60" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<rect x="615.65" y="302.03" width="7.60" height="7.60" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<rect x="659.42" y="305.74" width="7.60" height="7.60" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<rect x="718.90" y="309.72" width="7.60" height="7.60" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<rect x="882.90" y="289.66" width="7.60" height="7.60" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<rect x="907.84" y="273.12" width="7.60" height="7.60" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<rect x="916.96" y="287.77" width="7.60" height="7.60" rx="0.7" fill="#009E73" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 137.56 159.16 L 358.85 132.82 L 619.45 212.22 L 663.22 229.23 L 722.70 230.74 L 886.70 302.17 L 911.64 320.26 L 920.76 329.87" fill="none" stroke="#CC79A7" stroke-width="2.15" stroke-linejoin="round" stroke-linecap="round" opacity="0.94"/>
+<path d="M 137.56 154.86 L 141.86 159.16 L 137.56 163.46 L 133.26 159.16 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 358.85 128.52 L 363.15 132.82 L 358.85 137.12 L 354.55 132.82 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 619.45 207.92 L 623.75 212.22 L 619.45 216.52 L 615.15 212.22 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 663.22 224.93 L 667.52 229.23 L 663.22 233.53 L 658.92 229.23 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 722.70 226.44 L 727.00 230.74 L 722.70 235.04 L 718.40 230.74 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 886.70 297.87 L 891.00 302.17 L 886.70 306.47 L 882.40 302.17 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 911.64 315.96 L 915.94 320.26 L 911.64 324.56 L 907.34 320.26 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+<path d="M 920.76 325.57 L 925.06 329.87 L 920.76 334.17 L 916.46 329.87 Z" fill="#CC79A7" fill-opacity="1.000" stroke="#FFFFFF" stroke-width="1.0"/>
+</g>
+<text x="509.6" y="428.0" text-anchor="middle" font-size="12" font-weight="600">selectivity (fraction of rows matching)</text>
+<text x="67" y="446" font-size="10.5" fill="#6B7075">The walk verifies in the compressed domain, so its lead grows with the number of survivors. Below 1e-4 the verifier is free either way.</text>
+</svg>

@@ -1,0 +1,30 @@
+context_id,scope,connection_id,transaction_id,query_id,thread_id,timestamp,type,log_level,message
+15,CONNECTION,2,2,4,,2026-08-06 13:30:32.279436+00,QueryLog,INFO,"
+CREATE OR REPLACE VIEW mc AS
+SELECT * FROM '/Users/paul/workspace/onpair_like/datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+WHERE day = DATE '2021-03-04'
+  AND ts BETWEEN TIMESTAMP '2021-03-04 18:00:00' AND TIMESTAMP '2021-03-04 21:00:00'
+"
+19,CONNECTION,2,3,5,,2026-08-06 13:30:32.284637+00,QueryLog,INFO,"
+CREATE OR REPLACE VIEW mc_day AS
+SELECT * FROM '/Users/paul/workspace/onpair_like/datasets/OpenRCA/data/bank/parquet/metric_container.parquet'
+WHERE day = DATE '2021-03-04'
+"
+23,CONNECTION,2,4,6,,2026-08-06 13:30:32.285118+00,QueryLog,INFO,"
+CREATE OR REPLACE VIEW ma AS
+SELECT * FROM '/Users/paul/workspace/onpair_like/datasets/OpenRCA/data/bank/parquet/metric_app.parquet'
+WHERE day = DATE '2021-03-04'
+  AND ts BETWEEN TIMESTAMP '2021-03-04 18:00:00' AND TIMESTAMP '2021-03-04 21:00:00'
+"
+27,CONNECTION,2,5,7,,2026-08-06 13:30:32.28556+00,QueryLog,INFO,"
+CREATE OR REPLACE VIEW lg AS
+SELECT * FROM '/Users/paul/workspace/onpair_like/datasets/OpenRCA/data/bank/parquet/log_service.parquet'
+WHERE day = DATE '2021-03-04'
+  AND ts BETWEEN TIMESTAMP '2021-03-04 18:00:00' AND TIMESTAMP '2021-03-04 21:00:00'
+"
+31,CONNECTION,2,7,8,,2026-08-06 13:30:32.288373+00,QueryLog,INFO,"SELECT count_star() AS ""rows"", count(DISTINCT cmdb_id) AS hosts, count(DISTINCT kpi_name) AS kpis, min(ts) AS t0, max(ts) AS t1 FROM mc LIMIT 10000"
+59,CONNECTION,2,9,9,,2026-08-06 13:30:32.300809+00,QueryLog,INFO,"WITH tagged AS (SELECT cmdb_id, kpi_name, ""value"", ts, (ts BETWEEN CAST('2021-03-04 19:00:00' AS TIMESTAMP) AND CAST('2021-03-04 19:35:00' AS TIMESTAMP)) AS in_win, (ts < CAST('2021-03-04 18:30:00' AS TIMESTAMP)) AS pre FROM mc), base AS (SELECT cmdb_id, kpi_name, avg(""value"") AS b_avg, stddev_samp(""value"") AS b_sd, count_star() AS b_n FROM tagged WHERE ((NOT in_win) AND (NOT pre)) GROUP BY 1, 2), win AS (SELECT cmdb_id, kpi_name, max(""value"") AS w_max, min(""value"") AS w_min, avg(""value"") AS w_avg, count_star() AS w_n FROM tagged WHERE in_win GROUP BY 1, 2)SELECT cmdb_id, kpi_name, round(b_avg, 3) AS b_avg, round(b_sd, 3) AS b_sd, round(w_min, 3) AS w_min, round(w_max, 3) AS w_max, round(((w_max - b_avg) / ""nullif""(b_sd, 0)), 1) AS z_max, round(((w_min - b_avg) / ""nullif""(b_sd, 0)), 1) AS z_min FROM win INNER JOIN base USING (cmdb_id, kpi_name) WHERE ((b_n >= 20) AND (w_n >= 3) AND (greatest(abs(((w_max - b_avg) / ""nullif""(b_sd, 0))), abs(((w_min - b_avg) / ""nullif""(b_sd, 0)))) > 6)) ORDER BY greatest(abs(z_max), abs(z_min)) DESC LIMIT 30 LIMIT 10000"
+115,CONNECTION,2,11,10,,2026-08-06 13:30:32.313921+00,QueryLog,INFO,"SELECT time_bucket(CAST('5 minutes' AS INTERVAL), ts) AS b, round(min(sr), 4) AS sr_min, round(max(mrt), 1) AS mrt_max, round(avg(mrt), 1) AS mrt_avg, round(max(rr), 4) AS rr_max FROM ma GROUP BY 1 ORDER BY 1 LIMIT 10000"
+15,CONNECTION,2,3,4,,2026-08-06 13:30:57.308566+00,QueryLog,INFO,"WITH tagged AS (SELECT cmdb_id, kpi_name, ""value"", (ts BETWEEN CAST('2021-03-04 19:00:00' AS TIMESTAMP) AND CAST('2021-03-04 19:35:00' AS TIMESTAMP)) AS in_win, (ts < CAST('2021-03-04 18:30:00' AS TIMESTAMP)) AS pre FROM mc), base AS (SELECT cmdb_id, kpi_name, avg(""value"") AS b_avg, stddev_samp(""value"") AS b_sd, count_star() AS b_n FROM tagged WHERE ((NOT in_win) AND (NOT pre)) GROUP BY 1, 2), win AS (SELECT cmdb_id, kpi_name, max(""value"") AS w_max, min(""value"") AS w_min, count_star() AS w_n FROM tagged WHERE in_win GROUP BY 1, 2)SELECT cmdb_id, kpi_name, round(b_avg, 3) AS b_avg, round(w_max, 3) AS w_max, round(((w_max - b_avg) / ""nullif""(b_sd, 0)), 1) AS z_max FROM win INNER JOIN base USING (cmdb_id, kpi_name) WHERE ((b_n >= 20) AND (w_n >= 3)) ORDER BY abs(z_max) DESC LIMIT 12 LIMIT 10000"
+71,CONNECTION,2,5,5,,2026-08-06 13:30:57.318025+00,QueryLog,INFO,"WITH tagged AS (SELECT cmdb_id, kpi_name, ""value"", (ts BETWEEN CAST('2021-03-04 19:00:00' AS TIMESTAMP) AND CAST('2021-03-04 19:35:00' AS TIMESTAMP)) AS in_win, (ts < CAST('2021-03-04 18:30:00' AS TIMESTAMP)) AS pre FROM mc), base AS (SELECT cmdb_id, kpi_name, avg(""value"") AS b_avg, stddev_samp(""value"") AS b_sd, count_star() AS b_n FROM tagged WHERE ((NOT in_win) AND (NOT pre)) GROUP BY 1, 2), win AS (SELECT cmdb_id, kpi_name, max(""value"") AS w_max, min(""value"") AS w_min, count_star() AS w_n FROM tagged WHERE in_win GROUP BY 1, 2)SELECT cmdb_id, count_star() FILTER (WHERE (greatest(abs(((w_max - b_avg) / ""nullif""(b_sd, 0))), abs(((w_min - b_avg) / ""nullif""(b_sd, 0)))) > 6)) AS n_anom, count_star() AS n_kpi FROM win INNER JOIN base USING (cmdb_id, kpi_name) WHERE ((b_n >= 20) AND (w_n >= 3)) GROUP BY 1 ORDER BY n_anom DESC LIMIT 10000"
+139,CONNECTION,2,7,6,,2026-08-06 13:30:57.326398+00,QueryLog,INFO,"SELECT ts, round(max(""value"") FILTER (WHERE (kpi_name ~~ '%CPU_CPUCpuUtil')), 2) AS cpu_util, round(max(""value"") FILTER (WHERE (kpi_name ~~ '%CPU_CPUidleutil')), 2) AS cpu_idle, round(max(""value"") FILTER (WHERE (kpi_name ~~ '%CPU_CPUWio')), 2) AS cpu_wio, round(max(""value"") FILTER (WHERE (kpi_name ~~ '%CPU_CPULoad')), 2) AS ""load"", round(max(""value"") FILTER (WHERE (kpi_name ~~ '%sda_DSKRead')), 1) AS sda_read, round(max(""value"") FILTER (WHERE (kpi_name ~~ '%sdb_DSKRead')), 1) AS sdb_read, round(max(""value"") FILTER (WHERE (kpi_name ~~ '%sda_DSKPercentBusy')), 1) AS sda_busy FROM mc WHERE ((cmdb_id = 'apache01') AND (ts BETWEEN CAST('2021-03-04 18:40:00' AS TIMESTAMP) AND CAST('2021-03-04 20:00:00' AS TIMESTAMP))) GROUP BY ts HAVING (count_star() > 0) ORDER BY ts LIMIT 10000"

@@ -1,0 +1,19 @@
+# fsst_rs with the mandatory-chain sequence probe: the planner's rarest
+# adjacent code run replaces the min-cut cover whenever its frequency bound
+# is lower. Compare against results/spiral-local (same suite, pre-chain).
+strategies = ["fsst-prefilter"]
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-literals"
+
+[[candidates]]
+name = "fsst_prefilter"
+
+[measure]
+chunk_rows = [0]
+warmup = 2
+min_iters = 3
+min_millis = 0

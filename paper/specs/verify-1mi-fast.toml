@@ -1,0 +1,45 @@
+# The three verifiers on the 2^20-row roster, one needle per grid cell: the datasets and
+# generated suites of micro-1mi-fast.toml, run through onpair_spiral alone so
+# the verify figure stands on the same columns and needles as the rest of the
+# micro-benchmark.
+#
+#   paper/gen-micro-data.sh --fast     runs this beside micro-1mi-fast.toml
+#
+# micro-1mi-fast.toml cannot carry these strategies: its `strategies` list is
+# the one every candidate is filtered by, and pf_memmem_superset and
+# pf_kmp_superset exist only on onpair_spiral. Splitting them out also keeps
+# the row-group sweep off this spec, which needs one size and not five.
+#
+# That size is 524288, the row group every micro figure but the sweep is
+# measured at: this figure reads per row of the column, where the row group is
+# part of the answer, not per candidate row, where it is not.
+
+strategies = ["pf_walk", "pf_memmem_superset", "pf_kmp_superset"]
+
+[[datasets]]
+path = "../../datasets/clickbench-url-1mi"
+[[datasets]]
+path = "../../datasets/amazon-title-1mi"
+[[datasets]]
+path = "../../datasets/dbpedia-abstract-1mi"
+[[datasets]]
+path = "../../datasets/imdb-mcnote-1mi"
+[[suites]]
+path = "../../experiments/matcher_selection/generated/clickbench-url-1mi/sa-lcp-v1-s42-n1-b006c9544343c139"
+[[suites]]
+path = "../../experiments/matcher_selection/generated/amazon-title-1mi/sa-lcp-v1-s42-n1-fbad68395e05e8ae"
+[[suites]]
+path = "../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa-lcp-v1-s42-n1-05988707fed4b1ef"
+[[suites]]
+path = "../../experiments/matcher_selection/generated/imdb-mcnote-1mi/sa-lcp-v1-s42-n1-3d11a42e4d001c1a"
+
+[[candidates]]
+name = "onpair_spiral"
+configs = ['{"bits":12,"prune":1.0}', '{"bits":16,"prune":1.0}']
+
+[measure]
+chunk_rows = [524288]
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

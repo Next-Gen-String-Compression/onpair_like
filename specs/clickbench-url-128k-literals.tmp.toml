@@ -1,0 +1,94 @@
+# The clickbench-url-1m-literals ladder over the first 131072 rows of the same
+# column. Identical candidate/strategy/measure block to
+# specs/paper/clickbench-url-1m-literals.toml, so the two runs are comparable
+# system-for-system at two column sizes.
+
+strategies = [
+  "memmem",
+  "prefilter",
+  "dict+prefilter",
+  "interp",
+  "dict+interp",
+  "dict+decode+prefilter",
+  "fsst-prefilter",
+  "dict+fsst-prefilter",
+  "decode",
+  "compressed",
+  "dict+compressed",
+  "kmp",
+  "pf_walk",
+  "dict+pf_walk",
+]
+
+[[datasets]]
+path = "../datasets/clickbench-url-128k"
+
+[[suites]]
+path = "../suites/clickbench-url-128k-literals"
+
+[[candidates]]
+name = "uncompressed_memmem"
+
+[[candidates]]
+name = "uncompressed_prefilter"
+
+[[candidates]]
+name = "dict_uncompressed_prefilter"
+
+[[candidates]]
+name = "dict_fsst_like_tum"
+
+[[candidates]]
+name = "dict_fsst_decode_prefilter"
+
+[[candidates]]
+name = "fsst_prefilter"
+
+[[candidates]]
+name = "dict_fsst_prefilter"
+
+[[candidates]]
+name = "onpair"
+
+[[candidates]]
+name = "fsst"
+
+[[candidates]]
+name = "fsst_like_tum"
+
+[[candidates]]
+name = "zstd"
+
+[[candidates]]
+name = "onpair_spiral"
+# Same MaxDictBits sweep as dict_onpair_spiral, undicted: 4096 vs 65536
+# max dictionary tokens. 16 is the library default.
+configs = ['{"bits":12}', '{"bits":16}']
+
+[[candidates]]
+name = "dict_onpair"
+
+[[candidates]]
+name = "dict_onpair_spiral"
+# MaxDictBits: 2^12 = 4096 vs 2^16 = 65536 max dictionary tokens. The dict
+# wrapper passes config through to the inner onpair_spiral build.
+configs = ['{"bits":12}', '{"bits":16}']
+
+[[candidates]]
+name = "fsst_rs"
+
+[[candidates]]
+name = "dict_fsst_rs"
+
+[[scanners]]
+name = "memmem"
+
+[[scanners]]
+name = "prefilter"
+
+[measure]
+chunk_rows = [0, 122880]
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

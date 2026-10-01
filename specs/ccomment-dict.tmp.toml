@@ -1,0 +1,23 @@
+# dict_onpair at both dictionary budgets on the prose column: its inner is the
+# plain automaton (no prefilter), so vocabulary should be a pure win here.
+strategies = ["dict+compressed", "dict+pf_walk"]
+
+[[datasets]]
+path = "../datasets/tpch-ccomment-sf10"
+
+[[suites]]
+path = "../suites/tpch-ccomment-sf10-gen1-s42"
+
+[[candidates]]
+name = "dict_onpair"
+configs = ['{"bits":12}', '{"bits":16}']
+
+[[candidates]]
+name = "dict_onpair_spiral"
+configs = ['{"bits":12}', '{"bits":16}']
+
+[measure]
+chunk_rows = [0]
+warmup = 2
+min_iters = 3
+min_millis = 0

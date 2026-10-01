@@ -1,0 +1,128 @@
+# The literals ladder widened to five columns. Same candidate/strategy/measure
+# block as clickbench-url-1m-literals.tmp.toml, so the clickbench rows stay
+# comparable to every run in that series. Sixteen `contains` queries per
+# dataset: the original eight-rung ladder, even in log-selectivity, plus a
+# second eight of hand-picked plausible predicates for that corpus (TPC-H
+# Q9 colours and Q13's %special%requests%, real hosts and URL params, MS MARCO
+# question stems, DBpedia boilerplate). Not the full contains set, so a run
+# still finishes fast enough to iterate on.
+#
+# Suites bind to datasets by manifest id (harness/src/runner.rs:294), so the
+# five pairs sort themselves out and no suite runs against the wrong column.
+
+# Copy of specs/paper/clickbench-url-1m-literals.toml with fsst_rs added
+# (OnPair prefilter over an FSST symbol table, strategy pf_memmem). Kept out
+# of the paper spec so its stated 14-candidate set stays intact.
+
+# Curated real-world URL literals over clickbench-url-1m, op=contains: a
+# selectivity ladder from 0.614 (".ru/") down to 3e-6 ("lenta.ru"), including
+# "google" at 9.5e-5. Needle lengths 3-8, where the gen1 suites floor at 8.
+#
+#   cargo run --release --bin bench -- run specs/paper/clickbench-url-1m-literals.toml \
+#       -o results/paper/clickbench-url-1m-literals
+#
+# Same 14 candidates, 14 strategies, scanners and [measure] block as
+# clickbench-url-1m-contains-l8l32.toml, so the two runs are comparable
+# system-for-system. Separate spec because load.py allows only one suite per
+# dataset (a result row names its dataset, not its suite).
+
+strategies = [
+  "memmem",
+  "prefilter",
+  "interp",
+  "fsst-prefilter",
+  "decode",
+  "compressed",
+  "kmp",
+  # `pf_walk` is the local checkout's one prefiltered path (the walk verifies
+  # inside the scan); `pf_kmp` and `pf_memmem` are the pinned and refactor
+  # lines' superset-scan-plus-verify pair. All three answer the same question.
+  "pf_walk",
+  "pf_kmp",
+  "pf_memmem",
+]
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[datasets]]
+path = "../datasets/dbpedia-abstract"
+
+[[datasets]]
+path = "../datasets/msmarco-query"
+
+[[datasets]]
+path = "../datasets/tpch-pname-sf10"
+
+[[datasets]]
+path = "../datasets/tpch-ccomment-sf10"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-literals"
+
+[[suites]]
+path = "../suites/dbpedia-abstract-literals"
+
+[[suites]]
+path = "../suites/msmarco-query-literals"
+
+[[suites]]
+path = "../suites/tpch-pname-sf10-literals"
+
+[[suites]]
+path = "../suites/tpch-ccomment-sf10-literals"
+
+[[candidates]]
+name = "uncompressed_memmem"
+
+[[candidates]]
+name = "uncompressed_prefilter"
+
+[[candidates]]
+name = "fsst_prefilter"
+
+[[candidates]]
+name = "onpair"
+
+[[candidates]]
+name = "fsst"
+
+[[candidates]]
+name = "fsst_like_tum"
+
+[[candidates]]
+name = "onpair_spiral"
+# MaxDictBits 12 vs 16 (4096 vs 65536 max dictionary tokens). The local
+# checkout (`feat/search-prefilter`, 82cc11f) has no `PruneFactor`, so no
+# pruned configs, and its prefilter walks in the scan: one prefiltered
+# strategy, `pf_walk`, whose rows are exact with nothing verifying behind it.
+configs = ['{"bits":12}', '{"bits":16}']
+
+[[candidates]]
+name = "onpair_spiral_pinned"
+# Upstream rev 5927cce, the revision the local checkout started from, so every
+# column measures the working tree against its own baseline. No `prune` key:
+# `PruneFactor` did not exist yet.
+configs = ['{"bits":12}', '{"bits":16}']
+
+[[candidates]]
+name = "onpair_spiral_refactor"
+# Branch `codex/prefilter-scan-refactor` at 78f53c6. Its prefilter has no
+# alignment walk, so its `pf_kmp` and `pf_memmem` are a superset scan plus a
+# real verify pass — the local tree verifies inside the scan instead, which is
+# why its path is named `pf_walk`: against those two it compares the designs,
+# not two verifiers. No `prune` key.
+configs = ['{"bits":12}', '{"bits":16}']
+
+[[scanners]]
+name = "memmem"
+
+[[scanners]]
+name = "prefilter"
+
+[measure]
+chunk_rows = [0, 122880]  # 0 = whole column; 122880 = 60*2048 rows/chunk
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

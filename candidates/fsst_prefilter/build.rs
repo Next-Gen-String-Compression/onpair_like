@@ -1,5 +1,9 @@
 fn main() {
-    let dst = cmake::Config::new("cpp").profile("Release").build();
+    let march = std::env::var("LB_FSST_MARCH").unwrap_or_else(|_| "native".into());
+    let dst = cmake::Config::new("cpp")
+        .profile("Release")
+        .define("LB_FSST_MARCH", &march)
+        .build();
     println!("cargo:rustc-link-search=native={}/lib", dst.display());
     println!("cargo:rustc-link-lib=static=lb_fsst_prefilter");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
@@ -16,4 +20,5 @@ fn main() {
     println!("cargo:rerun-if-changed=../../contract/lb_candidate.h");
     // Local-checkout override for prefilter development (see cpp/CMakeLists.txt).
     println!("cargo:rerun-if-env-changed=FSST_SOURCE_DIR");
+    println!("cargo:rerun-if-env-changed=LB_FSST_MARCH");
 }

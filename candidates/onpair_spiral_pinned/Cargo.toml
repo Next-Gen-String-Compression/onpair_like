@@ -1,0 +1,16 @@
+# SpiralDB's OnPair at the pinned upstream revision, so one run can hold both it
+# and the local checkout that `onpair_spiral` builds from. The two link separate
+# copies of the `onpair` crate; nothing crosses between them.
+[package]
+name = "lb-cand-onpair-spiral-pinned"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lb-abi = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# branch = "feat/search-prefilter", head 5927cce at time of integration. Do not
+# move this to a path: the whole point is that it does not follow the local tree.
+onpair = { git = "https://github.com/spiraldb/onpair.git", rev = "5927cce985a6e86bc6f49f4ae24106e1fc085e80" }

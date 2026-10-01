@@ -1,0 +1,153 @@
+# Copy of specs/paper/clickbench-url-1m-contains.toml with two changes:
+#   - `kmp` dropped (the unprefiltered token-KMP baseline, 20x off the pace).
+#     `pf_walk` and `dict+pf_walk` are back: the local checkout's prefilter
+#     verifies inside its own scan, so they are the only prefiltered paths
+#     onpair_spiral and its dict wrapper have left, and neither is token-KMP
+#     verify any more.
+#   - onpair_spiral / dict_onpair_spiral sweep MaxDictBits 12 and 16.
+# Same sweep as clickbench-url-1m.toml, but restricted to the 142 `contains`
+# queries via the filtered suite clickbench-url-1m-contains-s42.
+# The filtered suite is a copy of clickbench-url-1m-gen1-s42 with queries.jsonl
+# reduced to op == "contains" (truth is embedded per-query; binding is via the
+# dataset checksum only, so the reduction preserves validity).
+#
+#   cargo run --release --bin bench -- run specs/paper/clickbench-url-1m-contains.toml \
+#       -o results/paper/clickbench-url-1m-contains
+
+# Every strategy the candidates below declare, MINUS fsst_like_tum's `cpp`
+# codegen backend (and its `cpp-simd` / `llvm*` siblings on hosts that register
+# them). `cpp` emits a specialized kernel per query and shells out to
+# `clang++ -shared` to build it; hygiene rule 1 (no memoization across calls)
+# means it must redo that on every run(), i.e. once per chunk. Measured here:
+# 552 ms of the 552 ms whole-column median is that compile, and at
+# chunk_rows = 122880 the nine chunks push it to ~4,900 ms of a 4,821 ms median —
+# ~83 minutes for the 142 queries, more than the other 19 candidates combined.
+# The cost is real and self-timed into setup_ns, so it belongs in a run that is
+# about compile-vs-match attribution; it does not belong in this sweep.
+#
+# This must stay ABOVE the first [[table]] header: a root-level key placed after
+# one is parsed as a key OF that table, and serde drops it silently.
+#
+# NOTE: allowlist, not denylist — a candidate added below will not run until its
+# strategy names are added here too.
+strategies = [
+  "memmem",
+  "prefilter",
+  "dict+prefilter",
+  "interp",
+  "dict+interp",
+  "decode",
+  "decode+prefilter",
+  "dict+decode+prefilter",
+  "fsst-prefilter",
+  "dict+fsst-prefilter",
+  "llm-token-prefilter",
+  "dict+llm-token-prefilter",
+  "compressed",
+  "dict+compressed",
+  "comet",
+  "pf_walk",
+  "dict+pf_walk",
+]
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-contains-s42"
+
+# Self-contained Matcher-based pipelines (candidates/common/matcher): each owns
+# its scanner, so the [[scanners]] list below applies only to the decode/direct
+# candidates further down. The dict_* pair evaluates the predicate once per
+# UNIQUE value (the encoded domain) instead of once per row.
+[[candidates]]
+name = "uncompressed_memmem"
+
+[[candidates]]
+name = "uncompressed_prefilter"
+
+[[candidates]]
+name = "dict_uncompressed_prefilter"
+
+[[candidates]]
+name = "dict_fsst_like_tum"
+
+[[candidates]]
+name = "fsst_decode_prefilter"
+
+[[candidates]]
+name = "dict_fsst_decode_prefilter"
+
+[[candidates]]
+name = "fsst_prefilter"
+
+[[candidates]]
+name = "dict_fsst_prefilter"
+
+# SGTT LLM-token-table pipelines: static-dictionary tokenizer codec
+# (llm_token_tum, decode-then-eval) and its compressed-domain mandatory-chain
+# prefilter (llm_token_prefilter, plus the encoded-domain dict_ peer).
+[[candidates]]
+name = "llm_token_tum"
+
+[[candidates]]
+name = "llm_token_prefilter"
+
+[[candidates]]
+name = "dict_llm_token_prefilter"
+
+[[candidates]]
+name = "onpair"
+
+[[candidates]]
+name = "fsst"
+
+[[candidates]]
+name = "fsst_like_tum"
+
+[[candidates]]
+name = "fsst_like_utn"
+
+[[candidates]]
+name = "lz4"
+
+[[candidates]]
+name = "zstd"
+
+[[candidates]]
+name = "onpair_spiral"
+# MaxDictBits 12 vs 16, each with and without post-training pruning at factor
+# 1.0. Pruning can only cut a table back, so it is paired with both budgets.
+configs = [
+  '{"bits":12}',
+  '{"bits":16}',
+]
+
+[[candidates]]
+name = "dict_onpair"
+
+[[candidates]]
+name = "dict_onpair_spiral"
+# The dict wrapper passes config through to the inner onpair_spiral build, so
+# the same two.
+configs = [
+  '{"bits":12}',
+  '{"bits":16}',
+]
+
+# memmem only. These scanners feed the harness-composed `decode` strategy of the
+# pure codecs (fsst, lz4, zstd, llm_token_tum, onpair), and adding `prefilter`
+# there only appends a filtering pass over already-decoded plaintext: it was
+# 6-10% slower than memmem for all five, with identical match counts. The one
+# thing those cells cross-checked — harness composition vs a self-contained
+# implementation — is covered by fsst_decode_prefilter, which computes the same
+# answer as fsst/decode+prefilter did (prune 0.75398, FPR 0.390383, both).
+[[scanners]]
+name = "memmem"
+
+[measure]
+chunk_rows = [0, 122880]  # 0 = whole column; 122880 = 60*2048 rows/chunk
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

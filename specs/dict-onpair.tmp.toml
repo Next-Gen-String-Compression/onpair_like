@@ -1,0 +1,24 @@
+# Row-dedup front end over onpair: the predicate runs once per unique URL,
+# with per-row codes bitpacked. Both dictionary budgets, against the plain
+# columns for reference.
+strategies = ["dict+compressed", "dict+pf_walk", "pf_memmem", "kmp"]
+
+[[datasets]]
+path = "../datasets/clickbench-url-1m"
+
+[[suites]]
+path = "../suites/clickbench-url-1m-literals"
+
+[[candidates]]
+name = "dict_onpair"
+configs = ['{"bits":12}', '{"bits":16}']
+
+[[candidates]]
+name = "dict_onpair_spiral"
+configs = ['{"bits":12}', '{"bits":16}']
+
+[measure]
+chunk_rows = [0]
+warmup = 2
+min_iters = 3
+min_millis = 0

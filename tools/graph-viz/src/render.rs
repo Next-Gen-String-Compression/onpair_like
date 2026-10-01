@@ -14,21 +14,16 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
-use onpair::Token;
-use serde::Serialize;
-
-use crate::graph::{
-    CoverShape, CoverTerm, EdgeKind, GraphEdge, PathGraph, Probe, ProbeSet, ProbeWeight,
-};
+use crate::graph::{CoverShape, CoverTerm, EdgeKind, GraphEdge, PathGraph, Probe, ProbeSet, Token};
 
 const ENTRY_X: f64 = 28.0;
 const ENTRY_W: f64 = 250.0;
 /// Entry card with no token list. Each listed line adds a [`TOKEN_LINE_H`].
 const ENTRY_BASE_H: f64 = 74.0;
 const TOKEN_LINE_H: f64 = 13.0;
-/// A predicate row is two lines — terms, then their estimated shares — plus
-/// breathing space.
-const PREDICATE_ROW_H: f64 = 32.0;
+/// A predicate row is three lines — terms, the ids each compares against, then
+/// their estimated shares — plus breathing space.
+const PREDICATE_ROW_H: f64 = 45.0;
 /// A measured row is one line of shares under the same columns.
 const PREDICATE_MEASURED_ROW_H: f64 = 17.0;
 /// Characters of a listed token line, at the monospace size the list is set in.
@@ -59,29 +54,17 @@ const TERMINAL_H: f64 = 72.0;
 
 /// The numbers printed in the figure's header, around the graph itself.
 ///
-/// The distinction the chips are careful about: the **cut** is a set of DAG nodes
-/// and the **cover** is what OnPair actually probes for — the cut's ids, minus the
-/// ones pruned as never used, plus the mandatory tokens that hold the whole needle
-/// and are therefore not in the DAG at all. They are different sets, so a cut of
-/// weight zero can still leave a cover with several probes.
-///
-/// Only [`metric`](Self::metric), the weights and the labels are required. The
-/// optional fields are measurements over a column; when absent their chips are
-/// left out rather than shown as zero.
-#[derive(Clone, Debug, Serialize)]
+/// The optional fields are measurements over a column; when absent their chips
+/// are left out rather than shown as zero.
+#[derive(Clone, Debug)]
 pub struct RenderSummary {
     /// Headline, e.g. the column or corpus this dictionary was trained on.
     pub title: String,
     /// Second line: whatever identifies this particular query.
     pub subtitle: String,
-    /// Which weight the cut minimized.
-    pub metric: ProbeWeight,
-    /// The minimum cut's objective value under [`metric`](Self::metric). Zero
-    /// means no occurrence crosses a token boundary in this column — not that
-    /// nothing matches.
+    /// Term frequency of the edges the cut takes on their own.
     pub cut_value: u64,
-    /// Dictionary tokens holding the whole needle. Mandatory members of every
-    /// cover, and outside the DAG, so no drawn probe stands for them.
+    /// Dictionary tokens holding the whole needle after their first byte.
     pub contained_tokens: usize,
     /// Their term frequency.
     pub contained_frequency: u64,
@@ -90,6 +73,8 @@ pub struct RenderSummary {
     /// The terms of the scan's disjunction — what the figure spells out as the
     /// predicate a row is admitted by.
     pub cover_terms: Vec<CoverTerm>,
+    /// Code pairs the cover also probes for (FSST), as (first, second).
+    pub cover_pairs: Vec<(Token, Token)>,
     /// Probes the cover compiles to: one per maximal run of member ids.
     pub cover_probes: usize,
     /// Single-id probes among them.
@@ -103,6 +88,9 @@ pub struct RenderSummary {
     pub column_rows: Option<u64>,
     /// Rows the cover admits, if measured.
     pub cut_candidates: Option<usize>,
+    /// The planner's estimate of the share of rows the cover admits, pairs
+    /// included, when the log carries it.
+    pub estimated_selectivity: Option<f64>,
     /// Share of the column's rows the cover admits, if measured. Not derivable
     /// from the per-term shares: a row holding two terms is admitted once.
     pub candidate_selectivity: Option<f64>,
@@ -111,33 +99,30 @@ pub struct RenderSummary {
 }
 
 impl RenderSummary {
-    /// A summary with labels and cover weights only.
-    ///
-    /// [`cut_value`](Self::cut_value), the contained-token fields and
-    /// [`dead_probes`](Self::dead_probes) default to zero; the caller fills in
-    /// what it knows.
+    /// A summary with labels and cover weights only; the caller fills in the
+    /// rest.
     pub fn new(
         title: impl Into<String>,
         subtitle: impl Into<String>,
-        metric: ProbeWeight,
         cover_frequency: u64,
         cover: CoverShape,
     ) -> Self {
         Self {
             title: title.into(),
             subtitle: subtitle.into(),
-            metric,
             cut_value: 0,
             contained_tokens: 0,
             contained_frequency: 0,
             cover_frequency,
             cover_terms: Vec::new(),
+            cover_pairs: Vec::new(),
             cover_probes: cover.cmp_cost,
             cover_points: cover.points,
             cover_ranges: cover.ranges,
             selectivity: None,
             column_rows: None,
             cut_candidates: None,
+            estimated_selectivity: None,
             candidate_selectivity: None,
             exact_rows: None,
         }
@@ -274,15 +259,6 @@ pub(crate) fn compact_u64(value: u64) -> String {
         format!("{:.1}k", value as f64 / 1_000.0)
     } else {
         value.to_string()
-    }
-}
-
-fn metric_label(metric: ProbeWeight) -> &'static str {
-    match metric {
-        ProbeWeight::TermFrequency => "term-frequency weighted",
-        ProbeWeight::ResidualTermFrequency => "residual-TF weighted",
-        ProbeWeight::RowFrequency => "row-frequency weighted",
-        ProbeWeight::ResidualRowFrequency => "residual-DF weighted",
     }
 }
 
@@ -622,32 +598,47 @@ fn terminal_boxes(
         rows.push(vec![rect]);
     }
     let mut boxes = HashMap::new();
-    for (offset, edge_id) in terminals {
-        let width = card_w(TERMINAL_W, &terminal_title(graph, edge_id));
-        let row_y = |row: usize| terminal_top + row as f64 * (TERMINAL_H + 24.0);
-        let candidate = |row: usize| Box2d {
-            x: state_x[&offset] - width / 2.0,
-            y: row_y(row),
-            w: width,
-            h: TERMINAL_H,
-        };
-        // Test the box where it would actually go. Testing it at row 0's height
-        // would clear every later row for free and pack collisions into row 1.
-        let row = (0..)
-            .find(|&row| {
-                rows.get(row).is_none_or(|placed| {
-                    placed
-                        .iter()
-                        .all(|other| !candidate(row).padded(8.0).overlaps(*other))
+    // Cards of one state sit side by side. They used to stack, every card centred
+    // on its state, and a column of them under one state reads as a chain through
+    // both — where two steps out of one state are alternatives. A lone card is
+    // still centred exactly where it was.
+    const CARD_GAP: f64 = 16.0;
+    for group in terminals.chunk_by(|a, b| a.0 == b.0) {
+        let offset = group[0].0;
+        let widths: Vec<f64> = group
+            .iter()
+            .map(|&(_, edge_id)| card_w(TERMINAL_W, &terminal_title(graph, edge_id)))
+            .collect();
+        let total = widths.iter().sum::<f64>() + CARD_GAP * (group.len() - 1) as f64;
+        let mut left = state_x[&offset] - total / 2.0;
+        for (&(_, edge_id), &width) in group.iter().zip(&widths) {
+            let row_y = |row: usize| terminal_top + row as f64 * (TERMINAL_H + 24.0);
+            let candidate = |row: usize| Box2d {
+                x: left,
+                y: row_y(row),
+                w: width,
+                h: TERMINAL_H,
+            };
+            // Test the box where it would actually go. Testing it at row 0's
+            // height would clear every later row for free and pack collisions
+            // into row 1.
+            let row = (0..)
+                .find(|&row| {
+                    rows.get(row).is_none_or(|placed| {
+                        placed
+                            .iter()
+                            .all(|other| !candidate(row).padded(8.0).overlaps(*other))
+                    })
                 })
-            })
-            .unwrap();
-        if row == rows.len() {
-            rows.push(Vec::new());
+                .unwrap();
+            if row == rows.len() {
+                rows.push(Vec::new());
+            }
+            let rect = candidate(row);
+            rows[row].push(rect);
+            boxes.insert(edge_id, rect);
+            left += width + CARD_GAP;
         }
-        let rect = candidate(row);
-        rows[row].push(rect);
-        boxes.insert(edge_id, rect);
     }
     boxes
 }
@@ -892,7 +883,7 @@ fn callout_leader(layout: PointLayout, class: &str) -> String {
 
 fn render_probe_anchor(layout: PointLayout, cut: CutMark, reachable: bool) -> String {
     let class = match cut {
-        CutMark::Probed => "probe-anchor selected",
+        CutMark::Probed | CutMark::Paired => "probe-anchor selected",
         CutMark::No if reachable => "probe-anchor",
         CutMark::No => "probe-anchor downstream",
     };
@@ -920,8 +911,14 @@ fn vertical_edge(a: Box2d, b: Box2d) -> String {
 }
 
 fn edge(path: &str, tone: EdgeTone, arrow: bool) -> String {
+    edge_classed(path, tone, arrow, "")
+}
+
+/// As [`edge`], with a class of its own. The whole-needle step is drawn dashed:
+/// it leaves state 0 beside the terminal range, and the two are alternatives.
+fn edge_classed(path: &str, tone: EdgeTone, arrow: bool, extra: &str) -> String {
     format!(
-        "<path d=\"{path}\" class=\"edge {}{}\"/>",
+        "<path d=\"{path}\" class=\"edge {}{}{extra}\"/>",
         tone.class(),
         if arrow { " arrow" } else { "" }
     )
@@ -942,23 +939,10 @@ fn row_share(graph: &PathGraph, frequency: u64) -> f64 {
     }
 }
 
-/// `TF … · DF … · …%`, with the `DF` field left out when no rows were counted.
-///
-/// Row frequency is not in OnPair's index, so it only exists when the weights came
-/// from a column ([`Weights::from_column`](crate::Weights::from_column), which the
-/// `df` metrics require). Under a `tf` metric the field would otherwise print the
-/// term frequency again, which reads as a measurement and is not one.
+/// `TF … · RF …%`.
 fn probe_frequency(graph: &PathGraph, probe: &Probe) -> String {
     let rf = row_share(graph, probe.term_frequency);
-    if graph.total_rows == 0 {
-        format!("TF {} · RF {rf:.4}%", compact_u64(probe.term_frequency))
-    } else {
-        format!(
-            "TF {} · DF {} · RF {rf:.4}%",
-            compact_u64(probe.term_frequency),
-            compact_u64(probe.row_frequency)
-        )
-    }
+    format!("TF {} · RF {rf:.4}%", compact_u64(probe.term_frequency))
 }
 
 fn token_preview(probe: &Probe) -> String {
@@ -1018,15 +1002,25 @@ fn token_list(graph: &PathGraph, ids: &[Token], budget: usize) -> String {
 /// conjunctive reading (*this* token **and** its continuation) belongs to a single
 /// path through the DAG, and relaxing it to a disjunction over paths is exactly
 /// what makes the cover one comparison per term instead of positional bookkeeping.
-pub fn predicate_text(graph: &PathGraph, terms: &[CoverTerm]) -> String {
-    if terms.is_empty() {
-        return "never — pruning left no probe, so no row can match".to_string();
+pub fn predicate_text(graph: &PathGraph, terms: &[CoverTerm], pairs: &[(Token, Token)]) -> String {
+    if terms.is_empty() && pairs.is_empty() {
+        return "never — the cover is empty, so no row can match".to_string();
     }
     terms
         .iter()
         .map(|term| predicate_term(graph, *term))
+        .chain(pairs.iter().map(|&pair| pair_term(graph, pair)))
         .collect::<Vec<_>>()
         .join(" ∨ ")
+}
+
+/// A pair term: two codes that have to stand next to each other.
+fn pair_term(graph: &PathGraph, (first, second): (Token, Token)) -> String {
+    format!(
+        "{} then {}",
+        token_span(graph, first, first),
+        token_span(graph, second, second)
+    )
 }
 
 /// One term: a token to equal, or a bracketed range to fall inside. The brackets
@@ -1037,6 +1031,16 @@ fn predicate_term(graph: &PathGraph, term: CoverTerm) -> String {
         token_span(graph, term.begin, term.begin)
     } else {
         format!("[{}]", token_span(graph, term.begin, term.last))
+    }
+}
+
+/// A term's ids, as the JSON and the dictionary table name them. A run prints
+/// its bounds: the ids between them are what makes it one comparison.
+fn term_ids(term: CoverTerm) -> String {
+    if term.begin == term.last {
+        format!("#{}", term.begin)
+    } else {
+        format!("#{}-{}", term.begin, term.last)
     }
 }
 
@@ -1053,10 +1057,13 @@ const PREDICATE_GLYPH_W: f64 = 6.65;
 /// An addition of upper bounds, so an upper bound itself, and above the measured
 /// share whenever a row holds more than one term.
 fn predicate_estimate_total(summary: &RenderSummary) -> String {
-    format!(
-        "= {} of rows, estimated",
-        row_share_text(summary.cover_frequency, summary.column_rows)
-    )
+    match summary.estimated_selectivity {
+        Some(share) => format!("= {:.4}% of rows, estimated", share * 100.0),
+        None => format!(
+            "= {} of rows, estimated",
+            row_share_text(summary.cover_frequency, summary.column_rows)
+        ),
+    }
 }
 
 /// The `= …` clause closing the measured line: what the prefilter really admits,
@@ -1091,6 +1098,7 @@ fn predicate_measured_total(summary: &RenderSummary) -> String {
 /// and the rows it really does.
 struct PredicateColumn {
     term: String,
+    ids: String,
     estimate: String,
     measured: String,
 }
@@ -1102,6 +1110,7 @@ impl PredicateColumn {
         self.term
             .chars()
             .count()
+            .max(self.ids.chars().count())
             .max(self.estimate.chars().count())
             .max(self.measured.chars().count())
     }
@@ -1128,21 +1137,17 @@ fn row_share_text(count: u64, rows: Option<u64>) -> String {
 fn predicate_columns(
     graph: &PathGraph,
     terms: &[CoverTerm],
+    pairs: &[(Token, Token)],
     rows: Option<u64>,
 ) -> Vec<PredicateColumn> {
-    let measured = |term: &CoverTerm| {
-        term.measured_rows
-            .map_or_else(|| "not measured".to_string(), |count| {
-                row_share_text(count, rows)
-            })
-    };
     let shown = terms.len().min(PREDICATE_TERM_CAP);
     let mut columns: Vec<PredicateColumn> = terms[..shown]
         .iter()
         .map(|term| PredicateColumn {
             term: predicate_term(graph, *term),
+            ids: term_ids(*term),
             estimate: row_share_text(term.term_frequency, rows),
-            measured: measured(term),
+            measured: String::new(),
         })
         .collect();
     if terms.len() > shown {
@@ -1152,10 +1157,20 @@ fn predicate_columns(
         // same row — so it is left blank rather than guessed at.
         columns.push(PredicateColumn {
             term: format!("… {} more term{}", hidden.len(), plural(hidden.len())),
+            // Scattered by definition — the cover's contiguous runs are the terms
+            // above — so there is no range to print for the tail.
+            ids: String::new(),
             estimate: row_share_text(frequency, rows),
             measured: String::new(),
         });
     }
+    // The log carries no frequency for a pair, so its estimate is left blank.
+    columns.extend(pairs.iter().map(|&(first, second)| PredicateColumn {
+        term: pair_term(graph, (first, second)),
+        ids: format!("#{first} #{second}"),
+        estimate: String::new(),
+        measured: String::new(),
+    }));
     columns
 }
 
@@ -1241,11 +1256,15 @@ enum CutMark {
     No,
     /// In the cut, so the cover probes for its set.
     Probed,
+    /// In the cut only paired with the code before it (FSST).
+    Paired,
 }
 
 impl CutMark {
-    fn of(edge: usize, selected: &HashSet<usize>) -> Self {
-        if selected.contains(&edge) {
+    fn of(edge: usize, selected: &HashSet<usize>, paired: &HashSet<usize>) -> Self {
+        if paired.contains(&edge) {
+            Self::Paired
+        } else if selected.contains(&edge) {
             Self::Probed
         } else {
             Self::No
@@ -1257,6 +1276,7 @@ impl CutMark {
         match self {
             Self::No => None,
             Self::Probed => Some(("CUT", 30.0, "cut-badge-bg")),
+            Self::Paired => Some(("PAIR", 36.0, "cut-badge-bg")),
         }
     }
 }
@@ -1310,38 +1330,55 @@ fn render_probe(
 ) -> String {
     let edge = &graph.edges[edge_id];
     let probe = edge.probe.as_ref().expect("a drawn probe card has a probe");
+    // The three accepting steps carry three different probe shapes, so each gets
+    // its own colour: a whole-needle step probes an explicit list of ids, a
+    // terminal step probes one dictionary prefix range, and a step is a point.
+    // Without that the reader has to read the card to tell a list from a range.
     let contained = matches!(edge.kind, EdgeKind::Contained { .. });
+    let terminal = if matches!(edge.kind, EdgeKind::Terminal) {
+        " terminal"
+    } else {
+        ""
+    };
     let class = match (cut, contained) {
         // The whole-needle step is on a path of its own, so a cut always takes it
         // — drawn in its own colour rather than as one more orange card.
-        (_, true) => "probe contained",
-        (CutMark::Probed, _) => "probe selected",
-        (CutMark::No, _) if reachable => "probe",
-        (CutMark::No, _) => "probe downstream",
+        (_, true) => "probe contained".to_string(),
+        (CutMark::Probed | CutMark::Paired, _) => format!("probe{terminal} selected"),
+        (CutMark::No, _) if reachable => format!("probe{terminal}"),
+        (CutMark::No, _) => format!("probe{terminal} downstream"),
     };
     let (title, detail) = match edge.kind {
         EdgeKind::Step { .. } => (
             token_preview(probe),
             format!("p{}→p{}", edge.from, edge.to),
         ),
+        // What the remaining needle is a prefix of. Contiguous in the dictionary
+        // — that is what `prefix_range` returns — so one range probe catches
+        // every one of them, however many there are.
         EdgeKind::Terminal => (
             terminal_title(graph, edge_id),
             format!(
-                "{} token{} · p{}→match",
+                "{} token{} start with p{} · range",
                 probe.set.len(),
                 plural(probe.set.len()),
                 edge.from
             ),
         ),
-        // The title names the tokens and the chip counts them, so all this line
-        // has to carry is the one thing that makes the step different.
+        // Tokens holding the needle away from their start, which sit wherever
+        // sorting put them: the probe is a list of ids rather than one interval,
+        // which is the whole reason the prefixed ones are not in it.
         EdgeKind::Contained { .. } => (
             terminal_title(graph, edge_id),
-            "no boundary → match".to_string(),
+            format!(
+                "{} token{} hold it inside · explicit",
+                probe.set.len(),
+                plural(probe.set.len())
+            ),
         ),
         EdgeKind::Escape => (
             terminal_title(graph, edge_id),
-            format!("no token starts p{} → match", edge.from),
+            format!("escaped last byte · p{} → match", edge.from),
         ),
         EdgeKind::Entry { .. } => (probe.label.clone(), probe.detail.clone()),
     };
@@ -1386,9 +1423,9 @@ fn render_alignment(
     let edge = entry.entry.map(|id| &graph.edges[id]);
     let cut = entry
         .entry
-        .map_or(CutMark::No, |id| CutMark::of(id, selected));
+        .map_or(CutMark::No, |id| CutMark::of(id, selected, &HashSet::new()));
     let class = match cut {
-        CutMark::Probed => "alignment selected",
+        CutMark::Probed | CutMark::Paired => "alignment selected",
         CutMark::No => "alignment",
     };
     let (detail, frequency) = match edge {
@@ -1399,7 +1436,7 @@ fn render_alignment(
             // The set was never materialized, so the step is entered free and the
             // cut pays for this lane further along its chain.
             (None, EdgeKind::Entry { qualifying, .. }) => (
-                format!("unprobed entry · {qualifying} tokens > cap {}", crate::graph::SET_CAP),
+                format!("unprobed entry · {qualifying} tokens, too many to probe"),
                 None,
             ),
             (None, _) => ("unprobed entry".to_string(), None),
@@ -1505,13 +1542,13 @@ fn summary_chip(x: f64, y: f64, width: f64, label: &str, value: &str) -> String 
 /// make room for.
 fn captions(summary: &RenderSummary, max_chars: usize) -> Vec<String> {
     let mut paragraphs: Vec<String> = Vec::new();
-    if summary.cover_probes == 0 {
+    if summary.cover_probes == 0 && summary.cover_pairs.is_empty() {
         paragraphs.push(
             "The cover is empty: no step of the graph reaches the accept position, so no row can \
              match and no scan is needed."
                 .to_string(),
         );
-    } else if summary.cut_value == 0 {
+    } else if summary.cut_value == 0 && summary.cover_pairs.is_empty() {
         paragraphs.push(
             "The cut weighs nothing: every step it takes is for a token this column never uses, \
              so the scan compares codes it will not find."
@@ -1525,11 +1562,18 @@ fn captions(summary: &RenderSummary, max_chars: usize) -> Vec<String> {
 }
 
 /// Render `graph` with `selected_cut` highlighted, as one self-contained SVG.
+/// `paired` are edges the cut takes only together with the code before them;
+/// they are drawn as cut, with a `PAIR` badge.
 ///
 /// # Panics
-/// If `graph` is not a DAG the builder could have produced — the layout asserts
-/// its structural invariants rather than drawing something misleading.
-pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSummary) -> String {
+/// If `graph` is not a DAG a planner could have produced: the layout asserts its
+/// structural invariants rather than drawing something misleading.
+pub fn render_svg(
+    graph: &PathGraph,
+    selected_cut: &[usize],
+    paired: &[usize],
+    summary: &RenderSummary,
+) -> String {
     // Width comes from the graph, so it is known before anything is placed — which
     // is what lets the captions wrap to it and the header size itself to the result.
     // A step's card sits between the two states it joins, so the columns have to
@@ -1570,7 +1614,8 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
     let states = state_boxes(graph, &state_x, &users, &entries);
     let main_bottom = header_h + LANE_TOP + 32.0 + entries.len().max(1) as f64 * lane_gap;
     let points = point_layouts(graph, &state_x, &states, &entries, header_h, main_bottom);
-    let selected: HashSet<usize> = selected_cut.iter().copied().collect();
+    let selected: HashSet<usize> = selected_cut.iter().chain(paired).copied().collect();
+    let paired: HashSet<usize> = paired.iter().copied().collect();
     let reachable = reachable_without_cut(graph, &selected);
 
     let terminal_y = main_bottom + 34.0;
@@ -1583,7 +1628,12 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
     // Predicate panel, between the accept rail and the footer caption: the terms
     // with the rows each is estimated to admit. The measured block sits below it,
     // on the same columns, so estimate and outcome read against each other.
-    let columns = predicate_columns(graph, &summary.cover_terms, summary.column_rows);
+    let columns = predicate_columns(
+        graph,
+        &summary.cover_terms,
+        &summary.cover_pairs,
+        summary.column_rows,
+    );
     let estimate_total = predicate_estimate_total(summary);
     let measured_total = predicate_measured_total(summary);
     let budget = (((width - 92.0) / PREDICATE_GLYPH_W) as usize).max(40);
@@ -1631,7 +1681,7 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
     let display_height = height / 2.0;
     let mut svg = format!(
         r##"<svg xmlns="http://www.w3.org/2000/svg" width="{display_width:.0}" height="{display_height:.0}" viewBox="0 0 {width:.0} {height:.0}" role="img" aria-labelledby="figure-title figure-desc">
-<title id="figure-title">OnPair global probe cut for {}</title>
+<title id="figure-title">Global probe cut for {}</title>
 <desc id="figure-desc">{}</desc>
 <defs>
   <marker id="arrow-active" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L0,7 L7,3.5 z" fill="#45666d"/></marker>
@@ -1662,6 +1712,7 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
   .edge.active.arrow {{ marker-end:url(#arrow-active); }}
   .edge.cut.arrow {{ marker-end:url(#arrow-cut); }}
   .edge.muted.arrow {{ marker-end:url(#arrow-muted); }}
+  .edge.alt {{ stroke-dasharray:7 5; }}
   .callout-leader {{ fill:none; stroke-width:1; stroke-dasharray:2.5 2.5; }}
   .callout-leader.active {{ stroke:#84999e; }}
   .callout-leader.cut {{ stroke:#d55e00; stroke-width:1.5; }}
@@ -1677,6 +1728,8 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
   .state.merge .state-label {{ fill:#ffffff; }}
   .merge-label {{ font-size:9px; font-weight:700; fill:#176f73; text-anchor:middle; }}
   .probe rect:first-of-type {{ fill:#ffffff; stroke:#84999e; stroke-width:1.2; }}
+  .probe.terminal rect:first-of-type {{ fill:#f4f4fb; stroke:#4c5fb0; stroke-width:2.2; }}
+  .probe.terminal .probe-title {{ fill:#33418a; }}
   .probe.selected rect:first-of-type {{ fill:#fff1e8; stroke:#d55e00; stroke-width:2.5; }}
   .probe.pruned rect:first-of-type {{ fill:#f4f6f6; stroke:#8d989c; stroke-width:2.4; stroke-dasharray:5 3.5; }}
   .probe.downstream {{ opacity:0.42; }}
@@ -1697,6 +1750,7 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
   .predicate rect {{ fill:#f5f8f8; stroke:#dce5e6; stroke-width:1; }}
   .predicate-lead {{ font-size:9.5px; fill:#718388; }}
   .predicate-term {{ font-family:"SFMono-Regular",Consolas,monospace; font-size:11px; font-weight:650; fill:#20363c; }}
+  .predicate-ids {{ font-family:"SFMono-Regular",Consolas,monospace; font-size:9.5px; fill:#93a3a8; font-variant-numeric:tabular-nums; }}
   .predicate-share {{ font-family:"SFMono-Regular",Consolas,monospace; font-size:10px; fill:#718388; font-variant-numeric:tabular-nums; }}
   .predicate-total {{ font-family:"SFMono-Regular",Consolas,monospace; font-size:10px; font-weight:650; fill:#45666d; font-variant-numeric:tabular-nums; }}
   .measured rect {{ fill:#ffffff; stroke:#c6d5d7; stroke-width:1; }}
@@ -1717,10 +1771,9 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
         .map(|value| format!(" · selectivity {:.6}%", value * 100.0))
         .unwrap_or_default();
     svg.push_str(&format!(
-        "<text x=\"28\" y=\"55\" class=\"meta\">{}{selectivity} · {} B needle · {}</text>",
+        "<text x=\"28\" y=\"55\" class=\"meta\">{}{selectivity} · {} B needle</text>",
         xml(&summary.subtitle),
-        graph.needle.len(),
-        xml(metric_label(summary.metric))
+        graph.needle.len()
     ));
     svg.push_str(&format!(
         "<text x=\"28\" y=\"79\" class=\"needle\">needle  “{}”</text>",
@@ -1732,7 +1785,7 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
     let mut chips = vec![
         (
             154.0,
-            "WHOLE-NEEDLE TOKENS",
+            "MID-TOKEN HITS",
             if summary.contained_tokens == 0 {
                 "none".to_string()
             } else {
@@ -1831,7 +1884,17 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
                 let source = states[&edge_data.from];
                 let terminal = terminal_boxes[&edge_data.id];
                 let tone = edge_tone(edge_data, &selected, &reachable);
-                svg.push_str(&edge(&vertical_edge(source, terminal), tone, true));
+                let alt = if matches!(edge_data.kind, EdgeKind::Contained { .. }) {
+                    " alt"
+                } else {
+                    ""
+                };
+                svg.push_str(&edge_classed(
+                    &vertical_edge(source, terminal),
+                    tone,
+                    true,
+                    alt,
+                ));
                 // Past the accepting card, the drop onto the rail is only live if
                 // nothing upstream stopped the lane.
                 let out = if selected.contains(&edge_data.id)
@@ -1846,7 +1909,7 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
                     terminal.cx(),
                     terminal.bottom()
                 );
-                svg.push_str(&edge(&path, out, false));
+                svg.push_str(&edge_classed(&path, out, false, alt));
             }
         }
     }
@@ -1878,7 +1941,7 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
     }
     for edge_data in &graph.edges {
         if matches!(edge_data.kind, EdgeKind::Step { .. }) {
-            let mark = CutMark::of(edge_data.id, &selected);
+            let mark = CutMark::of(edge_data.id, &selected, &paired);
             let live = reachable.contains(&edge_data.from);
             svg.push_str(&render_probe_anchor(points[&edge_data.id], mark, live));
             svg.push_str(&render_probe(
@@ -1899,13 +1962,13 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
     }
     for edge_data in &graph.edges {
         // Every step that accepts gets its card: a terminal range, the
-        // whole-needle step, or an escape.
+        // the whole-needle step, or an escaped last byte.
         if edge_data.to == graph.end() {
             svg.push_str(&render_probe(
                 graph,
                 edge_data.id,
                 terminal_boxes[&edge_data.id],
-                CutMark::of(edge_data.id, &selected),
+                CutMark::of(edge_data.id, &selected, &paired),
                 reachable.contains(&edge_data.from),
             ));
         }
@@ -1930,7 +1993,7 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
         width - ENTRY_X * 2.0
     ));
     svg.push_str(&format!(
-        "<text x=\"{:.1}\" y=\"{:.1}\" class=\"predicate-lead\">a row is a candidate if any of its codes is · under each term, the rows its frequency says it should admit</text>",
+        "<text x=\"{:.1}\" y=\"{:.1}\" class=\"predicate-lead\">a row is a candidate if any of its codes is · under each term, the ids it compares against and the rows its frequency says it should admit</text>",
         ENTRY_X + 16.0,
         predicate_top + 17.0
     ));
@@ -1939,7 +2002,8 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
     let mut column_x: Vec<f64> = vec![0.0; columns.len()];
     for (row_index, row) in rows.iter().enumerate() {
         let term_y = predicate_top + 36.0 + row_index as f64 * PREDICATE_ROW_H;
-        let share_y = term_y + 13.0;
+        let ids_y = term_y + 12.0;
+        let share_y = term_y + 26.0;
         let mut x = left;
         for (position, &column_index) in row.iter().enumerate() {
             let column = &columns[column_index];
@@ -1947,6 +2011,10 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
             svg.push_str(&format!(
                 "<text x=\"{x:.1}\" y=\"{term_y:.1}\" class=\"predicate-term\">{}</text>",
                 xml(&column.term)
+            ));
+            svg.push_str(&format!(
+                "<text x=\"{x:.1}\" y=\"{ids_y:.1}\" class=\"predicate-ids\">{}</text>",
+                xml(&column.ids)
             ));
             svg.push_str(&format!(
                 "<text x=\"{x:.1}\" y=\"{share_y:.1}\" class=\"predicate-share\">{}</text>",
@@ -2010,13 +2078,8 @@ pub fn render_svg(graph: &PathGraph, selected_cut: &[usize], summary: &RenderSum
         }
     }
     svg.push_str("</g>");
-    let row_frequency_note = if graph.total_rows == 0 {
-        ""
-    } else {
-        " DF sums per-token row frequencies, counted under a df metric."
-    };
     svg.push_str(&format!(
-        "<text x=\"28\" y=\"{:.1}\" class=\"caption\">p denotes a needle byte offset. TF counts token occurrences; RF is TF / rows, the share of rows a probe is priced as admitting — an upper bound, since a row can hold a token twice.{row_frequency_note} The measured panel counts those rows instead of estimating them.</text>",
+        "<text x=\"28\" y=\"{:.1}\" class=\"caption\">p denotes a needle byte offset. TF counts token occurrences; RF is TF / rows, the share of rows a probe is priced as admitting — an upper bound, since a row can hold a token twice. The measured line counts the rows the whole cover admits.</text>",
         height - 22.0
     ));
     svg.push_str("</svg>\n");

@@ -3,23 +3,13 @@ name = "onpair-graph-viz"
 version = "0.1.0"
 edition = "2024"
 publish = false
-description = "Render OnPair's substring-prefilter alignment DAG and its minimum vertex cut"
+description = "Draw a substring prefilter's alignment DAG and minimum cut from a plan log"
 
-# Own workspace: this crate has its own lockfile, so its OnPair can differ from
-# the benchmark candidates' without colliding with the repository lockfile.
+# Own workspace, so its lockfile stays out of the repository's.
 [workspace]
 
 [dependencies]
-# Local checkout, not the pinned rev the candidates use: the figures are being
-# developed against unreleased search changes. Nothing here is reproducible until
-# this goes back to `git`/`rev`, and moving it means re-reading the planner rules
-# `graph::live_cover` and `mincut` copy by hand.
-onpair = { path = "../../../onpair" }
-# Same version OnPair depends on, so one copy of the crate and one `Compressor`
-# type across the `--dict fsst` path.
-fsst-rs = "0.6"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+csv = "1"
 
 [profile.release]
 debug = true

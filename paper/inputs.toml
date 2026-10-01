@@ -1,0 +1,43 @@
+# The inputs of every paper figure, and the only place they are named. Each
+# plot script reads its section by default; `--run`, `--data` or `--log` on
+# the command line override it for a one-off drawing.
+#
+#   uv run paper/check_inputs.py            # missing, stale or mixed inputs
+#   uv run paper/check_inputs.py --update   # move each entry to its newest run
+#   paper/make-figures.sh                   # check, then redraw every figure
+#
+# Run names are the directory names under results/, loaded into
+# results/bench.duckdb; paths are relative to paper/ or, for plan logs, to the
+# repository root.
+
+# plot_micro.py: one run per machine, in panel order. The micro figures cover
+# NEON and AVX-512 only; AVX2 is measured for the matcher kernels alone.
+[micro]
+"ARM, NEON" = "micro-1mi-fast-neon-2026-09-30"
+"x86, AVX-512" = "micro-1mi-fast-avx512-2026-09-30"
+
+# plot_micro.py's micro-breakdown: the JIT backend's bar. It has its own spec,
+# micro-llvm-1mi*.toml, and is drawn beside the x86, AVX-512 micro run.
+[breakdown]
+jit = "micro-llvm-1mi-fast-avx512-2026-09-30"
+
+# plot_verify_selectivity.py: the split CSV must cover the run's needles.
+[verify]
+run = "verify-1mi-fast-neon-2026-09-30"
+split = "data/verify_split_1mi_fast_m4pro_2026-09-30.csv"
+
+# plot_matcher.py and plot_resolver.py: sweeps pinned in paper/data.
+[kernel]
+matcher = [
+  "data/matcher_m4pro_2026-09-21.csv",
+  "data/matcher_x86_64_2026-09-21.csv",
+  "data/matcher_x86_64_avx512_2026-09-21.csv",
+  "data/matcher_fsst_m4pro_2026-09-21.csv",
+  "data/matcher_fsst_x86_64_2026-09-21.csv",
+  "data/matcher_fsst_x86_64_avx512_2026-09-21.csv",
+]
+resolver = "data/resolver_c7a_2026-09-15.csv"
+
+# plot_plan.py
+[plan]
+log = "results/plan-log/micro-1mi-fast-2026-09-23"

@@ -1,0 +1,14 @@
+{
+  "format_version": 1,
+  "id": "clickbench-url-128k-literals",
+  "description": "Same eight curated URL literals as clickbench-url-1m-literals, over the first 131072 rows of the same column, so the two runs are comparable literal-for-literal at two column sizes. Selectivities differ from the 1m suite: this prefix is not a uniform sample.",
+  "dataset": {
+    "id": "clickbench-url-128k",
+    "checksum": "xxh3:d5750498531960cb"
+  },
+  "provenance": {
+    "curated_by": "literals copied from clickbench-url-1m-literals; truth re-blessed on the 128k column"
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-08-31T08:38:08Z"
+}

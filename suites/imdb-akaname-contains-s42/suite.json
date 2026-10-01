@@ -1,0 +1,21 @@
+{
+  "format_version": 1,
+  "id": "imdb-akaname-contains-s42",
+  "description": "Generated sweep over dataset imdb-akaname (901343 rows): 78 queries across ops [\"contains\"] (DESIGN.md §14; 11/63 grid points filled). Regenerate with `bench gen --seed 42 --profile full`.",
+  "dataset": {
+    "id": "imdb-akaname",
+    "checksum": "xxh3:b55dd01e0f8f053e"
+  },
+  "provenance": {
+    "generator": {
+      "name": "gen1",
+      "ops": [
+        "contains"
+      ],
+      "profile": "full",
+      "seed": 42
+    }
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-09-09T19:04:27Z"
+}
