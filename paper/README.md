@@ -89,7 +89,10 @@ harness run instead, see below. The batched nibble kernel was also renamed
 `nibble_n_8k` -> `nibble_n8k`; `plot_matcher.py` folds the old spelling into
 the new one so pre-refactor CSVs still draw.
 
-Regenerating the sweeps from a clone takes the two kernel repos as siblings
+`reproduce-kernel.sh` does the whole kernel block from a clone: it fetches
+the two kernel repos at their pins when missing, runs both gen scripts (twice
+on an AVX-512 host, native build first) and draws the figure into
+`paper/out/kernel-<date>/`. By hand, regenerating the sweeps takes the two kernel repos as siblings
 of this one, `../onpair` at `ONPAIR_SHA` and `../duckdb/third_party/fsst/upstream`
 (or any checkout, passed as the first argument) at `FSST_SHA`, both from
 `pins.env`; each gen script stops on a checkout that is not clean at its pin.

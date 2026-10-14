@@ -28,3 +28,5 @@ analysis/*.log
 analysis/*.out
 analysis/__marimo__/
 .idea
+paper/out/
+
