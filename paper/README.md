@@ -95,8 +95,11 @@ of this one, `../onpair` at `ONPAIR_SHA` and `../duckdb/third_party/fsst/upstrea
 `pins.env`; each gen script stops on a checkout that is not clean at its pin.
 The matcher sweeps read one stream, `ch/hits/URL_1m`, which the scripts build
 when missing: `gen-kernel.sh` runs onpair's `bench_corpus ch` over
-`~/ch.duckdb` (the ClickBench `hits` table, `e2e/data.sh` writes it; the
-`duckdb` CLI on `PATH`) and `bench_needles` over the OnPair streams,
+`~/ch.duckdb` (the `duckdb` CLI on `PATH`) and `bench_needles` over the
+OnPair streams. A missing `~/ch.duckdb` it builds itself from the first two
+ClickBench parquet files, 300 MB downloaded to `~/raw/hits`, which hold the
+corpus's 2^20 rows in table order; the streams come out byte-identical to the
+ones from `e2e/data.sh`'s full table. Then
 `gen-kernel-fsst.sh` then encodes onpair's raw `URL_1m.csv` with
 `prefilter_corpus` and draws its catalog with the same `bench_needles`. Run
 `gen-kernel.sh` first. The resolver sweeps also read

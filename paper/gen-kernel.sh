@@ -3,7 +3,10 @@
 # CSV into paper/data under a stable name. The checkout must be clean at
 # ONPAIR_SHA in pins.env. The URL corpus and its needle catalogs are built
 # first when missing: bench_corpus over ~/ch.duckdb (the duckdb CLI on PATH),
-# then bench_needles over each OnPair stream. The stage-two sweep, which no
+# then bench_needles over each OnPair stream. A missing ~/ch.duckdb is built
+# from the first two ClickBench parquet files, downloaded to ~/raw/hits where
+# e2e/data.sh with E2E_DATA=$HOME would put them: the corpus is the first
+# 2^20 rows, which those two files hold in table order. The stage-two sweep, which no
 # figure draws, runs only when its IMDb stream exists (bench_corpus imdb, over
 # ~/imdb.duckdb, then bench_needles over imdb/name/name_1m.onpair16.csv).
 #
@@ -23,6 +26,19 @@ DATE=$(date +%F)
 DATA="$ONPAIR/bench/data/ch/hits"
 
 if [ ! -f "$DATA/URL_1m.onpair16.csv" ]; then
+  if [ ! -e "$HOME/ch.duckdb" ]; then
+    url=https://datasets.clickhouse.com/hits_compatible/athena_partitioned
+    mkdir -p "$HOME/raw/hits"
+    for i in 0 1; do
+      [ -s "$HOME/raw/hits/hits_$i.parquet" ] || {
+        curl --fail --location --retry 3 --continue-at - --output "$HOME/raw/hits/hits_$i.parquet.part" "$url/hits_$i.parquet"
+        mv "$HOME/raw/hits/hits_$i.parquet.part" "$HOME/raw/hits/hits_$i.parquet"
+      }
+    done
+    rm -f "$HOME/ch.duckdb.tmp"
+    duckdb "$HOME/ch.duckdb.tmp" -c "CREATE TABLE hits AS SELECT * FROM read_parquet(['$HOME/raw/hits/hits_0.parquet', '$HOME/raw/hits/hits_1.parquet'], binary_as_string = true)"
+    mv "$HOME/ch.duckdb.tmp" "$HOME/ch.duckdb"
+  fi
   (cd "$ONPAIR" && cargo run --release --example bench_corpus -- ch)
 fi
 for enc in onpair12 onpair16; do
