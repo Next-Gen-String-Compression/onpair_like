@@ -38,5 +38,5 @@ if [ -n "$AVX512" ]; then
 fi
 
 OUT="$HERE/out/kernel-$DATE"
-(cd "$ROOT" && uv run paper/plot_matcher.py --data paper/data/matcher_*_"$DATE".csv --out "$OUT")
+(cd "$ROOT" && uv run paper/plot_matcher.py --data paper/data/matcher_"$MACHINE"_*"$DATE".csv paper/data/matcher_*_"$MACHINE"_*"$DATE".csv --out "$OUT")
 echo "-> $OUT/kernel-matcher/"
