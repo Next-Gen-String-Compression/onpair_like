@@ -568,7 +568,7 @@ def fp_panel(loaded, out):
     ax.set_xlim(min(xs) / 1.25, max(xs) * 1.25)
     ax.set_xlabel("share of rows matching the needle")
     pf.y_axis(ax, [0.7, hi * 2], [1, 10, 100, 1000, 10000], "{:g}$\\times$", figure="false-positives")
-    ax.set_ylabel("rows passed per match")
+    ax.set_ylabel("candidates per match")
     ax.legend(loc="upper right", handlelength=1.4)
     pf.save(fig, "false-positives", out)
     pf.plt.close(fig)
