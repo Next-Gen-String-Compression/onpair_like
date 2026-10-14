@@ -117,7 +117,9 @@ pub fn vtable() -> &'static LbScanner {
 // and never gets a runway; the haystack pass keeps the SIMD kernel saturated
 // for the whole column. A match is attributed only if it lies wholly within
 // one row (`gpos + m <= offsets[r+1]`), which rejects the false positives
-// that a needle straddling a row boundary would otherwise produce.
+// that a needle straddling a row boundary would otherwise produce. After a
+// hit the search resumes at the next row's start, so a row costs at most one
+// hit, and the row is found by galloping forward from the previous one.
 //
 // `contains` only: prefix/suffix are position-anchored (no haystack win) and
 // contains_any is the multi-pattern engines' territory.
@@ -165,22 +167,34 @@ unsafe extern "C" fn scan_hay(
         return 0;
     }
     let m = p.needle_len;
-    // Advance by 1 after each hit (not by m): a match that straddles a row
-    // boundary is rejected but may overlap a *valid* within-row occurrence
-    // of a periodic needle (e.g. "aa" across `...a|a...`); skipping by m
-    // would drop it. Advancing by 1 enumerates every occurrence; the SIMD
-    // kernel still scans the gaps between hits.
+    let mut r = 0usize;
     let mut start = 0usize;
     while let Some(rel) = p.finder.find(&payload[start..]) {
         let gpos = start + rel;
-        // Row containing byte gpos: first offset strictly greater, minus one.
-        let r = offsets.partition_point(|&o| (o as usize) <= gpos) - 1;
-        if gpos + m <= offsets[r + 1] as usize {
+        r = row_at(offsets, r, gpos);
+        let row_end = offsets[r + 1] as usize;
+        if gpos + m <= row_end {
             set_bit(words, r);
+            start = row_end;
+        } else {
+            // Straddles a row boundary. Advance by 1, not m: a periodic
+            // needle ("aa" across `...a|a...`) may still occur inside the
+            // next row, overlapping this hit.
+            start = gpos + 1;
         }
-        start = gpos + 1;
     }
     0
+}
+
+/// The row holding byte `gpos`, searched forward from row `from`
+/// (`offsets[from] <= gpos`): gallop to a bound, then binary search below it.
+fn row_at(offsets: &[u64], from: usize, gpos: usize) -> usize {
+    let rest = &offsets[from + 1..];
+    let mut bound = 1;
+    while bound < rest.len() && rest[bound - 1] as usize <= gpos {
+        bound *= 2;
+    }
+    from + rest[..bound.min(rest.len())].partition_point(|&o| o as usize <= gpos)
 }
 
 unsafe extern "C" fn release_hay(prepared: *mut c_void) {

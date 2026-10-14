@@ -104,6 +104,7 @@ static VTABLE: LbCandidate = LbCandidate {
     view: None,
     decode: Some(decode),
     destroy: Some(destroy),
+    decode_selected: None,
 };
 
 pub fn vtable() -> &'static LbCandidate {

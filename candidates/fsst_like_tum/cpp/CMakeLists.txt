@@ -15,22 +15,26 @@ cmake_minimum_required(VERSION 3.21)
 project(lb_fsst_like_tum C CXX)
 
 include(FetchContent)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../common/pins.cmake)
+lb_pin(FMT_TAG)
+lb_pin(TUM_FSST_SHA)
+lb_pin(TUM_FSST_LIKE_SHA)
 # All three populated source-only (SOURCE_SUBDIR points at a nonexistent dir so
 # MakeAvailable does not add_subdirectory their CMakeLists); we pick the sources.
 FetchContent_Declare(fmt_ext
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-    GIT_TAG        12.1.0
+    GIT_TAG        ${FMT_TAG}
     SOURCE_SUBDIR  __lb_no_configure__)
 FetchContent_Declare(fsst_fork
     GIT_REPOSITORY https://github.com/calin2110/fsst.git
-    GIT_TAG        1755328b61f4e48ab7f53b315bbb20e8130059f2
+    GIT_TAG        ${TUM_FSST_SHA}
     SOURCE_SUBDIR  __lb_no_configure__)
 # PATCH_COMMAND: two small source deviations from the pin — see
 # fsst_like_src_patches.cmake (LLVM 14 compat + a cosmetic codegen-kernel
 # warning fix); a no-op for anything neither patch touches.
 FetchContent_Declare(fsst_like_src
     GIT_REPOSITORY https://github.com/calin2110/FSST-LIKE-Matching.git
-    GIT_TAG        b1eb3ab9c63ea0199a381b92371a3154190b4406
+    GIT_TAG        ${TUM_FSST_LIKE_SHA}
     PATCH_COMMAND  ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/fsst_like_src_patches.cmake
     SOURCE_SUBDIR  __lb_no_configure__)
 FetchContent_MakeAvailable(fmt_ext fsst_fork fsst_like_src)

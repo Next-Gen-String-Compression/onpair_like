@@ -1,0 +1,11 @@
+# lb_pin(KEY): set KEY to its value in pins.env at the repository root.
+set(LB_PINS_FILE "${CMAKE_CURRENT_LIST_DIR}/../../pins.env")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${LB_PINS_FILE}")
+function(lb_pin key)
+    file(STRINGS "${LB_PINS_FILE}" line REGEX "^${key}=")
+    string(REGEX REPLACE "^${key}=" "" value "${line}")
+    if(value STREQUAL "")
+        message(FATAL_ERROR "pins.env has no ${key}")
+    endif()
+    set(${key} "${value}" PARENT_SCOPE)
+endfunction()

@@ -114,10 +114,12 @@ static STRATEGIES: [LbStrategy; 2] = [
     LbStrategy {
         name: c"ok".as_ptr(),
         supported_ops: LB_ALL_OPS,
+        flags: 0,
     },
     LbStrategy {
         name: c"wrong".as_ptr(),
         supported_ops: LB_ALL_OPS,
+        flags: 0,
     },
 ];
 
@@ -134,6 +136,7 @@ static VTABLE: LbCandidate = LbCandidate {
     view: None,
     decode: None,
     destroy: Some(destroy),
+    decode_selected: None,
 };
 
 pub fn vtable() -> &'static LbCandidate {

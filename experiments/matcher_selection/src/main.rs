@@ -1,5 +1,7 @@
 //! Experiment policy lives here; substring discovery and selection live in the
-//! harness. This command prepares suites, not fitted coefficients or timings.
+//! harness. This command prepares suites, not fitted coefficients or timings:
+//! per dataset a CONTAINS suite and a PREFIX + SUFFIX suite on the same grid,
+//! generating whichever of the two is missing.
 
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -152,69 +154,74 @@ fn run(args: Args) -> suite::Result<()> {
         let mut request = gen::BalancedRequest::new(ds.num_rows(), args.seed);
         request.per_cell = args.per_cell.unwrap_or(config.per_cell);
         request.negative_attempts = config.negative_attempts;
-        let key = request.suite_key(&ds.manifest.checksum)?;
-        let out = output.join(&entry.id).join(&key);
-        if out.join(suite::QUERIES_FILE).exists() && !args.force {
-            return Err(format!(
-                "{} already generated; pass --force to replace",
+        let suites = [
+            gen::SUBSTRING_GENERATOR_VERSION,
+            gen::PREFIX_SUFFIX_GENERATOR_VERSION,
+        ];
+        for generator in suites {
+            let key = request.suite_key_of(generator, &ds.manifest.checksum)?;
+            let out = output.join(&entry.id).join(&key);
+            // An existing suite is kept, so a script can ask for every suite of
+            // a size and get only the missing ones generated.
+            if out.join(suite::QUERIES_FILE).exists() && !args.force {
+                println!("{}: {} exists", entry.id, out.display());
+                continue;
+            }
+            eprintln!(
+                "{}: indexing {} rows, {} payload bytes for {generator}",
+                entry.id,
+                ds.num_rows(),
+                ds.manifest.payload_bytes
+            );
+            let start = Instant::now();
+            let parts = if generator == gen::SUBSTRING_GENERATOR_VERSION {
+                let index = gen::SubstringIndex::cached(
+                    ds.payload(),
+                    ds.offsets_u64(),
+                    limits,
+                    &base.join(&config.cache_root),
+                )?;
+                vec![index.generate(&request)?]
+            } else {
+                let prefixes = gen::SubstringIndex::prefixes(ds.payload(), ds.offsets_u64(), limits)?;
+                let prefix = prefixes.generate(&request)?;
+                drop(prefixes);
+                let suffixes = gen::SubstringIndex::suffixes(ds.payload(), ds.offsets_u64(), limits)?;
+                vec![prefix, suffixes.generate(&request)?]
+            };
+            let generation_seconds = start.elapsed().as_secs_f64();
+            gen::write_balanced_suite(
+                &parts,
+                &ds,
+                &out,
+                &format!("{}.{key}", entry.id),
+                args.force,
+            )?;
+            let start = Instant::now();
+            if args.bless {
+                suite::bless(&out, &ds, args.force)?;
+                gen::verify_balanced_suite(&out, &ds)?;
+            }
+            let cells: Vec<_> = parts.iter().flat_map(|g| &g.cells).collect();
+            let queries: usize = parts.iter().map(|g| g.needles.len()).sum();
+            let filled = cells.iter().filter(|c| c.status == "filled").count();
+            println!(
+                "{}: {queries} unique needles, {filled}/{} cells filled; generation {generation_seconds:.3}s -> {}",
+                entry.id,
+                cells.len(),
                 out.display()
-            )
-            .into());
+            );
+            let report = serde_json::json!({"id": entry.id,
+                "suite_key": key,
+                "index_memory_mib": index_memory_mib,
+                "checksum": ds.manifest.checksum, "queries": queries, "cells": cells,
+                "generation_seconds": generation_seconds,
+                "oracle_seconds": args.bless.then(|| start.elapsed().as_secs_f64()), "blessed": args.bless});
+            std::fs::write(
+                out.join("preparation.json"),
+                serde_json::to_vec_pretty(&report)?,
+            )?;
         }
-        eprintln!(
-            "{}: indexing {} rows, {} payload bytes",
-            entry.id,
-            ds.num_rows(),
-            ds.manifest.payload_bytes
-        );
-        let start = Instant::now();
-        let index = gen::SubstringIndex::cached(
-            ds.payload(),
-            ds.offsets_u64(),
-            limits,
-            &base.join(&config.cache_root),
-        )?;
-        let index_seconds = start.elapsed().as_secs_f64();
-        let start = Instant::now();
-        let generated = index.generate(&request)?;
-        let generation_seconds = start.elapsed().as_secs_f64();
-        drop(index);
-        gen::write_balanced_suite(
-            &generated,
-            &ds,
-            &out,
-            &format!("{}.{key}", entry.id),
-            args.force,
-        )?;
-        let start = Instant::now();
-        if args.bless {
-            suite::bless(&out, &ds, args.force)?;
-            gen::verify_balanced_suite(&out, &ds)?;
-        }
-        let filled = generated
-            .cells
-            .iter()
-            .filter(|c| c.status == "filled")
-            .count();
-        println!(
-            "{}: {} unique needles, {filled}/{} cells filled; index {:.3}s, generation {:.3}s -> {}",
-            entry.id,
-            generated.needles.len(),
-            generated.cells.len(),
-            index_seconds,
-            generation_seconds,
-            out.display()
-        );
-        let report = serde_json::json!({"id": entry.id,
-            "suite_key": key,
-            "index_memory_mib": index_memory_mib,
-            "checksum": ds.manifest.checksum, "queries": generated.needles.len(), "cells": generated.cells,
-            "index_seconds": index_seconds, "generation_seconds": generation_seconds,
-            "oracle_seconds": args.bless.then(|| start.elapsed().as_secs_f64()), "blessed": args.bless});
-        std::fs::write(
-            out.join("preparation.json"),
-            serde_json::to_vec_pretty(&report)?,
-        )?;
     }
     Ok(())
 }
@@ -251,6 +258,7 @@ mod tests {
         let mut paths: Vec<_> = std::fs::read_dir(base.join(output).join(id))
             .unwrap()
             .map(|entry| entry.unwrap().path())
+            .filter(|path| path.file_name().unwrap().to_string_lossy().starts_with("sa-lcp"))
             .collect();
         paths.sort();
         paths
@@ -348,7 +356,11 @@ mod tests {
             bytes,
             std::fs::read(original.join("queries.jsonl")).unwrap()
         );
-        // An exact repeat requires explicit permission to replace its own files.
-        assert!(generate(alone, 42, None).is_err());
+        // An exact repeat keeps the suites it finds.
+        generate(alone, 42, None).unwrap();
+        assert_eq!(
+            bytes,
+            std::fs::read(original.join("queries.jsonl")).unwrap()
+        );
     }
 }

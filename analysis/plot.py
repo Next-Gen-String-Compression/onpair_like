@@ -204,27 +204,37 @@ class Figure:
         self.series = []
         self.categories = None
 
-    def add(self, label, points, *, style=None, line=True, markers=True, cloud=()):
+    def add(self, label, points, *, style=None, line=True, markers=True, cloud=(),
+            band=(), legend=True):
         """Add one series, drawn in palette order unless `style` overrides it.
 
         `points` are the `(x, y)` the line connects; `cloud` are raw `(x, y)`
-        drawn as faint dots behind it, for showing the spread an aggregate hid.
-        An x may be a number or a string — strings make the axis categorical.
+        drawn as faint dots behind it, for showing the spread an aggregate hid;
+        `band` are `(x, lo, hi)` filled behind the line, for showing it as a
+        range rather than a scatter. An x may be a number or a string — strings
+        make the axis categorical.
+
+        `legend=False` keeps the series off the legend, for the extra lines that
+        belong to a series already named there — a dashed min/max around its
+        median, say.
         """
         base = PALETTE[len(self.series) % len(PALETTE)]
         self.series.append({
             "label": label,
             "points": list(points),
             "cloud": list(cloud),
+            "band": list(band),
             "style": {**base, **(style or {})},
             "line": line,
             "markers": markers,
+            "legend": legend,
         })
         return self
 
     def _resolve_x(self):
         """Map every x to a number, inventing positions for categorical labels."""
-        values = [p[0] for s in self.series for p in list(s["points"]) + list(s["cloud"])]
+        values = [p[0] for s in self.series
+                  for p in list(s["points"]) + list(s["cloud"]) + list(s["band"])]
         if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values):
             self.categories = None
             return
@@ -241,11 +251,18 @@ class Figure:
         for entry in self.series:
             entry["points"] = [(index[x], y) for x, y in entry["points"]]
             entry["cloud"] = [(index[x], y) for x, y in entry["cloud"]]
+            entry["band"] = [(index[x], lo, hi) for x, lo, hi in entry["band"]]
 
     def _drop_nonpositive(self):
         """Log axes cannot draw a zero; say which points went and why."""
         dropped = 0
         for entry in self.series:
+            kept_band = [
+                (x, lo, hi) for x, lo, hi in entry["band"]
+                if (self.xscale != "log" or x > 0) and (self.yscale != "log" or lo > 0)
+            ]
+            dropped += len(entry["band"]) - len(kept_band)
+            entry["band"] = kept_band
             for key in ("points", "cloud"):
                 kept = [
                     (x, y) for x, y in entry[key]
@@ -259,6 +276,9 @@ class Figure:
 
     def _bounds(self, index, scale, limit):
         values = [p[index] for s in self.series for p in list(s["points"]) + list(s["cloud"])]
+        for entry in self.series:
+            for x, lo, hi in entry["band"]:
+                values.extend([x] if index == 0 else [lo, hi])
         if self.hline is not None and index == 1:
             values.append(self.hline)
         if not values:
@@ -280,6 +300,8 @@ class Figure:
         """Pack legend entries into rows, each an entry list and its total width."""
         rows, row, used = [], [], 0.0
         for entry in self.series:
+            if not entry["legend"]:
+                continue
             span = 52 + CHAR_PX * len(entry["label"])
             if row and used + span > available:
                 rows.append(row)
@@ -402,6 +424,17 @@ class Figure:
         out.append(f'<defs><clipPath id="panel"><rect x="{left:.1f}" y="{top:.1f}" '
                    f'width="{panel_w:.1f}" height="{panel_h:.1f}"/></clipPath></defs>')
         out.append('<g clip-path="url(#panel)">')
+        for entry in self.series:
+            band = sorted(entry["band"])
+            if len(band) > 1:
+                color = entry["style"]["color"]
+                top_edge = " ".join(("M" if i == 0 else "L")
+                                    + f' {x_pos(x):.2f} {y_pos(hi):.2f}'
+                                    for i, (x, _, hi) in enumerate(band))
+                bottom_edge = " ".join(f'L {x_pos(x):.2f} {y_pos(lo):.2f}'
+                                       for x, lo, _ in reversed(band))
+                out.append(f'<path d="{top_edge} {bottom_edge} Z" fill="{color}" '
+                           f'fill-opacity="0.15" stroke="none"/>')
         for entry in self.series:
             style = entry["style"]
             for x, y in entry["cloud"]:

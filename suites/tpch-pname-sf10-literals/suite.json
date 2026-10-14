@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "tpch-pname-sf10-literals",
+  "description": "Eight-rung selectivity ladder for tpch-pname-sf10, picked from tpch-pname-sf10-contains-s42 to be even in log-selectivity (92.23% down to 0.00090%). Truth embedded per-query; binding via dataset checksum only. Extended with a second eight-rung ladder of curated TPC-H Q9 colour predicates: four single colours (all ~0.054, needle lengths 4-10, so needle length varies at fixed selectivity), two colour pairs (~5e-4) and two colour triples (4.5e-6, 1.0e-6).",
+  "dataset": {
+    "id": "tpch-pname-sf10",
+    "checksum": "xxh3:ea4860e177003f58"
+  },
+  "provenance": {
+    "generator": {
+      "name": "gen1",
+      "ops": [
+        "prefix",
+        "suffix",
+        "contains",
+        "multi_contains",
+        "contains_any"
+      ],
+      "profile": "full",
+      "seed": 42
+    }
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-09-10T13:29:25Z"
+}

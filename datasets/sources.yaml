@@ -147,6 +147,38 @@ datasets:
     approx: { rows: 31805022, payload_bytes: 450471429 }
     notes: Author names — short, low alphabet diversity, heavy repetition.
 
+  - id: imdb-keyword
+    default: false
+    source:
+      # JOB benchmark IMDB snapshot (Leis et al., VLDB'15), CWI mirror.
+      # One download serves every imdb-* entry (same raw file, per-id copy).
+      url: https://event.cwi.nl/da/job/imdb.tgz
+      sha256: 25f9d893c54f903366e0c263f88db0d429dbc2b159d4987ebc1e203242a7e988
+      license: IMDb data, distributed for the JOB benchmark (research use)
+      download_bytes: 1263193115
+    kind: tgz-csv-column
+    params: { member: keyword.csv, column_index: 1 }
+    expected_checksum: "xxh3:0bce8a4b9edab222"
+    approx: { rows: 134170, payload_bytes: 2700000 }
+    notes: >
+      Movie keywords ("based-on-novel"), short low-entropy tags. Target of the
+      most-used column in like_predicates.csv (71 of 324 predicate uses).
+
+  - id: imdb-akaname
+    default: false
+    source:
+      url: https://event.cwi.nl/da/job/imdb.tgz
+      sha256: 25f9d893c54f903366e0c263f88db0d429dbc2b159d4987ebc1e203242a7e988
+      license: IMDb data, distributed for the JOB benchmark (research use)
+      download_bytes: 1263193115
+    kind: tgz-csv-column
+    params: { member: aka_name.csv, column_index: 2 }
+    expected_checksum: "xxh3:b55dd01e0f8f053e"
+    approx: { rows: 901343, payload_bytes: 16000000 }
+    notes: >
+      Alternative person names ("Marilyn Monroe"), the second-most-used column
+      in like_predicates.csv (50 uses; Smith/Chris/John needles really match).
+
   - id: tpch-lcomment-sf10
     default: false
     source:
@@ -172,3 +204,131 @@ datasets:
     expected_checksum: "xxh3:59aba237e90e0a5d"
     approx: { rows: 1500000, payload_bytes: 37501213 }
     notes: Random-character addresses — the low-redundancy adversary.
+
+  # The next three columns exist for the FSST-LIKE-Matching (DaMoN'26) paper
+  # workload — datasets/fsst-like-tum/make_suites.py. Together with the
+  # default tpch-pname-sf10 they cover all four TPC-H columns it queries.
+  - id: tpch-ptype-sf10
+    default: false
+    source:
+      url: "duckdb-extension:tpch"
+      sha256: n/a
+      license: TPC (academic/benchmark use)
+      download_bytes: 0
+    kind: tpch-duckdb
+    params: { sf: 10, table: part, column: p_type }
+    expected_checksum: "xxh3:f969f8bc7b093f83"
+    approx: { rows: 2000000, payload_bytes: 41000000 }
+    notes: 150 distinct three-word type strings — the categorical extreme.
+
+  - id: tpch-ocomment-sf10
+    default: false
+    source:
+      url: "duckdb-extension:tpch"
+      sha256: n/a
+      license: TPC (academic/benchmark use)
+      download_bytes: 0
+    kind: tpch-duckdb
+    params: { sf: 10, table: orders, column: o_comment }
+    expected_checksum: "xxh3:a978f31c1c1ba50b"
+    approx: { rows: 15000000, payload_bytes: 730000000 }
+    notes: Grammar-generated comment text at 10x the c_comment row count.
+
+  - id: tpch-scomment-sf10
+    default: false
+    source:
+      url: "duckdb-extension:tpch"
+      sha256: n/a
+      license: TPC (academic/benchmark use)
+      download_bytes: 0
+    kind: tpch-duckdb
+    params: { sf: 10, table: supplier, column: s_comment }
+    expected_checksum: "xxh3:306741a5d5c088fe"
+    approx: { rows: 100000, payload_bytes: 6300000 }
+    notes: Grammar-generated comment text, small enough for quick runs.
+
+  # ---------------------------------------------------------------------
+  # The 2^20-row roster for the SA/LCP needle suites. One row count for
+  # every column, so a needle grid means the same thing across them.
+  # The originals above keep their row counts and checksums; nothing that
+  # already ran against them is invalidated.
+
+  - id: clickbench-url-1mi
+    default: false
+    source:
+      url: https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_0.parquet
+      sha256: fa134fe101e68324e0de851146fda69624f5cbb707d387141d1c2a88a219a16d
+      license: ClickBench (Yandex Metrica sample, published for benchmarking)
+      download_bytes: 122446530
+      extra:
+        # hits_0 holds exactly 1,000,000 rows, so 2^20 needs the next partition.
+        - url: https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_1.parquet
+          sha256: 04f5af123af25d9a6e65584b8fd166fb9b651da11c777ed51379a79bcd52bee3
+    kind: parquet
+    params: { column: URL, limit: 1048576 }
+    expected_checksum: "xxh3:faf3c2a733082cea"
+    approx: { rows: 1048576, payload_bytes: 93000000 }
+    notes: hits_0 followed by the first 48,576 rows of hits_1.
+
+  - id: amazon-title-1mi
+    default: false
+    source:
+      url: https://mcauleylab.ucsd.edu/public_datasets/data/amazon_2023/raw/meta_categories/meta_Books.jsonl.gz
+      sha256: d41f2348d3e0f3099d2a7ee45b304970282199f92a7ccdfe8ba4b1f753009a10
+      license: Amazon Reviews 2023 (McAuley lab, research use)
+      download_bytes: 4942125770
+    kind: jsonl-field
+    params: { field: title, limit: 1048576 }
+    expected_checksum: "xxh3:3fc94f5ae9752e41"
+    approx: { rows: 1048576, payload_bytes: 55000000 }
+    notes: The first 2^20 book titles of the full 4.45M-row column.
+
+  - id: dbpedia-abstract-1mi
+    default: false
+    source:
+      url: https://databus.dbpedia.org/dbpedia/text/short-abstracts/2022.12.01/short-abstracts_lang=en.ttl.bz2
+      sha256: e4793027fabd922948763794c4643b07729d207bb537fc766a15961aa711efdd
+      license: CC-BY-SA-4.0
+      download_bytes: 500000000
+    kind: ttl-en-literal
+    params: { limit: 1048576 }
+    expected_checksum: "xxh3:4b92a22bd44315ca"
+    approx: { rows: 1048576, payload_bytes: 354000000 }
+    notes: The 1M-row entry above plus 48,576 more abstracts.
+
+  - id: imdb-mcnote-1mi
+    default: false
+    source:
+      url: https://event.cwi.nl/da/job/imdb.tgz
+      sha256: 25f9d893c54f903366e0c263f88db0d429dbc2b159d4987ebc1e203242a7e988
+      license: IMDb data, distributed for the JOB benchmark (research use)
+      download_bytes: 1263193115
+    kind: tgz-csv-column
+    params: { member: movie_companies.csv, column_index: 4, keep_empty: true,
+              offset: 750000, limit: 1048576 }
+    expected_checksum: "xxh3:c3379090f966eef0"
+    approx: { rows: 1048576, payload_bytes: 12500000 }
+    notes: >
+      movie_companies.note, the only sparse column in the roster: 48.8% of the
+      2.61M rows are NULL and keep_empty preserves them as empty rows, which
+      stay in the selectivity denominator and match nothing. The column is
+      ordered with the notes first (2-8% NULL over the first 1.2M rows, ~89%
+      after), so the window starts at row 750,000, where it is 49.3% empty and
+      so matches the whole column's own 48.75%. A prefix would have been 5.7%.
+
+  - id: imdb-charname-1mi
+    default: false
+    source:
+      url: https://event.cwi.nl/da/job/imdb.tgz
+      sha256: 25f9d893c54f903366e0c263f88db0d429dbc2b159d4987ebc1e203242a7e988
+      license: IMDb data, distributed for the JOB benchmark (research use)
+      download_bytes: 1263193115
+    kind: tgz-csv-column
+    params: { member: char_name.csv, column_index: 1, limit: 1048576 }
+    expected_checksum: "xxh3:dbb30c37f9e29394"
+    approx: { rows: 1048576, payload_bytes: 15817550 }
+    notes: >
+      char_name.name, the first 2^20 of 3.14M character names in CSV order
+      ("U.S.S. Soldier", "Chris Teigler"), each name stored once: 0.02%
+      duplicates, 15.0 B per row, no NULLs. The CSV is in neither id nor
+      name order, so the prefix is the window.

@@ -1,0 +1,12 @@
+machine,cpu,kib,seq_gbs,rand_ns,rand_gbs
+c8id.4xlarge,Intel(R) Xeon(R) 6975P-C,64,173.1,4.1,249.6
+c8id.4xlarge,Intel(R) Xeon(R) 6975P-C,256,173.1,4.1,249.1
+c8id.4xlarge,Intel(R) Xeon(R) 6975P-C,1024,173.0,5.3,194.7
+c8id.4xlarge,Intel(R) Xeon(R) 6975P-C,2048,69.2,15.0,67.0
+c8id.4xlarge,Intel(R) Xeon(R) 6975P-C,4096,30.8,35.1,29.1
+c8id.4xlarge,Intel(R) Xeon(R) 6975P-C,8192,30.1,36.5,28.1
+c8id.4xlarge,Intel(R) Xeon(R) 6975P-C,16384,30.1,39.7,25.8
+c8id.4xlarge,Intel(R) Xeon(R) 6975P-C,65536,30.1,43.0,23.9
+c8id.4xlarge,Intel(R) Xeon(R) 6975P-C,262144,27.1,129.4,15.9
+c8id.4xlarge,Intel(R) Xeon(R) 6975P-C,524288,20.7,153.4,8.4
+c8id.4xlarge,Intel(R) Xeon(R) 6975P-C,1048576,19.1,172.6,8.1

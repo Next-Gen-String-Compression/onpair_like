@@ -9,6 +9,8 @@ cmake_minimum_required(VERSION 3.21)
 project(lb_onpair CXX)
 
 include(FetchContent)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../common/pins.cmake)
+lb_pin(ONPAIR_CPP_SHA)
 if(DEFINED ENV{ONPAIR_SOURCE_DIR})
     set(FETCHCONTENT_SOURCE_DIR_ONPAIR "$ENV{ONPAIR_SOURCE_DIR}")
     message(STATUS "lb_onpair: using local OnPair checkout $ENV{ONPAIR_SOURCE_DIR}")
@@ -16,7 +18,7 @@ endif()
 FetchContent_Declare(
     onpair
     GIT_REPOSITORY https://github.com/gargiulofrancesco/onpair_cpp.git
-    GIT_TAG        f8ecc64fa7786cfa6fc46d46564135ee99a8ba49
+    GIT_TAG        ${ONPAIR_CPP_SHA}
 )
 # OnPair's own .cpp files (trainer/parser — the build()-time hot path) get
 # host-native codegen; the query-time hot path is header-only and is

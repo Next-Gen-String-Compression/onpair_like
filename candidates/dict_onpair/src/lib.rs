@@ -7,7 +7,7 @@
 //! runs the inner once per unique value into a small unique-bitmap, then
 //! scatters that verdict to the row bitmap through the codes. The inner is any
 //! registered candidate reached through its C-ABI vtable — here the Rust
-//! `onpair` (compressed-domain token automaton) and `onpair_spiral` (pf_kmp)
+//! `onpair` (compressed-domain token automaton) and `onpair_spiral` (pf_walk)
 //! candidates — so `dict_<inner>` composes with no language barrier.
 //!
 //! Encoded domain: a `LIKE '%x%'` predicate is evaluated n_unique times, not
@@ -21,7 +21,11 @@ use lb_abi::*;
 
 struct Handle {
     inner_vt: &'static LbCandidate,
-    inner_strat: u32,
+    /// Inner strategy index per exposed strategy, positionally: outer strategy
+    /// `i` runs `inner_strats[i]`. A list rather than one value because a
+    /// wrapper may expose several of the inner's strategies (`dict+pf_walk` and
+    /// `dict+pf_memmem` over the same build).
+    inner_strats: Vec<u32>,
     inner_handle: *mut c_void,
     // Unique dictionary + per-row codes. `blob`/`offsets` back the LbChunkView
     // handed to the inner build; they must outlive `inner_handle`, so the Handle
@@ -33,26 +37,32 @@ struct Handle {
     num_unique: u32,
 }
 
-/// Index of the first strategy whose name is in `preferred` (in order), else the
-/// first strategy supporting CONTAINS, else 0.
-unsafe fn resolve_strategy(vt: &LbCandidate, preferred: &[&str]) -> u32 {
+/// Index of the inner strategy named `want`, or `None` if it has none.
+///
+/// Exact, with no fallback: an exposed strategy is named after the inner one it
+/// runs (`dict+pf_memmem` runs `pf_memmem`), so silently substituting a
+/// different one would mislabel every row it produced.
+unsafe fn resolve_strategy(vt: &LbCandidate, want: &str) -> Option<u32> {
     if vt.strategies.is_null() || vt.strategy_count == 0 {
-        return 0;
+        return None;
     }
     let strats = core::slice::from_raw_parts(vt.strategies, vt.strategy_count as usize);
-    for want in preferred {
-        for (i, s) in strats.iter().enumerate() {
-            if CStr::from_ptr(s.name).to_str().unwrap_or("") == *want {
-                return i as u32;
-            }
-        }
+    strats
+        .iter()
+        .position(|s| CStr::from_ptr(s.name).to_str().unwrap_or("") == want)
+        .map(|i| i as u32)
+}
+
+unsafe fn write_err(err_buf: *mut c_char, err_cap: u64, msg: &str) {
+    if err_buf.is_null() || err_cap == 0 {
+        return;
     }
-    for (i, s) in strats.iter().enumerate() {
-        if s.supported_ops & op_bit(LB_CONTAINS) != 0 {
-            return i as u32;
-        }
-    }
-    0
+    let cap = err_cap as usize;
+    let dst = core::slice::from_raw_parts_mut(err_buf as *mut u8, cap);
+    let bytes = msg.as_bytes();
+    let n = bytes.len().min(cap - 1);
+    dst[..n].copy_from_slice(&bytes[..n]);
+    dst[n] = 0;
 }
 
 /// ceil(log2(n_unique)) bits, minimum 1 — the per-row code width.
@@ -64,14 +74,30 @@ fn code_bits(num_unique: u32) -> u64 {
     bits
 }
 
+/// `inner_names[i]` is the inner strategy the wrapper's strategy `i` runs.
 unsafe fn dict_build(
     inner_vt: &'static LbCandidate,
-    preferred: &[&str],
+    inner_names: &[&str],
     view: *const LbChunkView,
     config: *const c_char,
     err_buf: *mut c_char,
     err_cap: u64,
 ) -> *mut c_void {
+    let mut inner_strats = Vec::with_capacity(inner_names.len());
+    for want in inner_names {
+        match resolve_strategy(inner_vt, want) {
+            Some(i) => inner_strats.push(i),
+            None => {
+                let inner = CStr::from_ptr(inner_vt.name).to_string_lossy();
+                write_err(
+                    err_buf,
+                    err_cap,
+                    &format!("inner candidate {inner} has no strategy {want:?}"),
+                );
+                return core::ptr::null_mut();
+            }
+        }
+    }
     let v = &*view;
     let offsets = v.offsets_slice();
     let payload = v.payload();
@@ -96,7 +122,6 @@ unsafe fn dict_build(
         codes.push(code);
     }
     let num_unique = (uoffsets.len() - 1) as u32;
-    let inner_strat = resolve_strategy(inner_vt, preferred);
 
     // Build the inner over the unique values. Moving blob/uoffsets into the
     // Handle afterwards does not relocate their heap buffers, so pointers the
@@ -112,7 +137,7 @@ unsafe fn dict_build(
     }
     Box::into_raw(Box::new(Handle {
         inner_vt,
-        inner_strat,
+        inner_strats,
         inner_handle,
         _blob: blob,
         _offsets: uoffsets,
@@ -152,15 +177,15 @@ unsafe extern "C" fn run(
     out_bitmap_words: *mut u64,
     stats_or_null: *mut LbRunStats,
 ) -> i32 {
-    if strategy_index != 0 {
-        return 10;
-    }
     let h = &*(this as *mut Handle);
+    let Some(&inner_strat) = h.inner_strats.get(strategy_index as usize) else {
+        return 10;
+    };
     // Evaluate the inner over the unique values into a unique-bitmap.
     let mut ubits = vec![0u64; lb_abi::bitmap_words(h.num_unique as u64)];
     let rc = (h.inner_vt.run.unwrap())(
         h.inner_handle,
-        h.inner_strat,
+        inner_strat,
         query,
         ubits.as_mut_ptr(),
         stats_or_null,
@@ -170,17 +195,21 @@ unsafe extern "C" fn run(
     }
     // Scatter: row i matches iff its unique value matched.
     let words = core::slice::from_raw_parts_mut(out_bitmap_words, lb_abi::bitmap_words(h.num_rows));
-    for i in 0..h.num_rows as usize {
-        let c = h.codes[i];
-        if (ubits[(c >> 6) as usize] >> (c & 63)) & 1 == 1 {
-            set_bit(words, i);
+    for (w, codes) in h.codes.chunks(64).enumerate() {
+        let mut acc = 0u64;
+        for (j, &c) in codes.iter().enumerate() {
+            acc |= ((ubits[(c >> 6) as usize] >> (c & 63)) & 1) << j;
         }
+        words[w] |= acc;
     }
     // Instrumented mode: declare the reduced evaluation domain (SEMANTICS
     // rule 10). The inner ran once per UNIQUE value, so anything it counted is
     // unique-domain and the harness needs the matching denominator.
     // Unconditional — the domain is a property of the dictionary, not of
-    // whether the inner prefilters (neither onpair nor onpair_spiral does).
+    // whether the inner prefilters. onpair_spiral's pf_* strategies do, and
+    // report `prefilter_candidates` through the same stats pointer we passed
+    // down, so their survivor counts are already unique-domain and score
+    // against the denominator set here.
     if !stats_or_null.is_null() {
         (*stats_or_null).eval_domain = h.num_unique as u64;
         (*stats_or_null).eval_domain_matches =
@@ -206,10 +235,13 @@ unsafe extern "C" fn build_onpair(
     dict_build(lb_cand_onpair::vtable(), &["compressed"], view, config, err_buf, err_cap)
 }
 
+
+
 static ONPAIR_STRATS: [LbStrategy; 1] = [LbStrategy {
     name: c"dict+compressed".as_ptr(),
     supported_ops: op_bit(LB_CONTAINS),
-}];
+        flags: 0,
+    }];
 
 static ONPAIR_VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
@@ -224,6 +256,7 @@ static ONPAIR_VTABLE: LbCandidate = LbCandidate {
     view: None,
     decode: None,
     destroy: Some(destroy),
+    decode_selected: None,
 };
 
 pub fn vtable() -> &'static LbCandidate {
@@ -240,7 +273,7 @@ unsafe extern "C" fn build_onpair_spiral(
 ) -> *mut c_void {
     dict_build(
         lb_cand_onpair_spiral::vtable(),
-        &["pf_kmp", "pf_memmem", "kmp"],
+        &["pf_walk"],
         view,
         config,
         err_buf,
@@ -248,10 +281,17 @@ unsafe extern "C" fn build_onpair_spiral(
     )
 }
 
+// The inner's one prefiltered strategy, over the unique values. It verifies
+// inside its own scan — hence `pf_walk`, not `pf_kmp` — so there is no second
+// verifier to expose (the `dict+pf_memmem` line went with `pf_memmem`). The inner's `kmp`
+// (no prefilter) is not exposed either; the dictionary already collapses the
+// row domain, so an unprefiltered scan over the unique values is a different
+// question from the one this wrapper asks.
 static SPIRAL_STRATS: [LbStrategy; 1] = [LbStrategy {
-    name: c"dict+pf_kmp".as_ptr(),
+    name: c"dict+pf_walk".as_ptr(),
     supported_ops: op_bit(LB_CONTAINS),
-}];
+        flags: 0,
+    }];
 
 static SPIRAL_VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
@@ -266,8 +306,57 @@ static SPIRAL_VTABLE: LbCandidate = LbCandidate {
     view: None,
     decode: None,
     destroy: Some(destroy),
+    decode_selected: None,
 };
 
 pub fn vtable_spiral() -> &'static LbCandidate {
     &SPIRAL_VTABLE
+}
+
+// ------------------------------------------------------------- dict_fsst_rs
+
+#[cfg(feature = "fsst-rs")]
+unsafe extern "C" fn build_fsst_rs(
+    view: *const LbChunkView,
+    config: *const c_char,
+    err_buf: *mut c_char,
+    err_cap: u64,
+) -> *mut c_void {
+    dict_build(
+        lb_cand_fsst_rs::vtable(),
+        &["pf_memmem"],
+        view,
+        config,
+        err_buf,
+        err_cap,
+    )
+}
+
+#[cfg(feature = "fsst-rs")]
+static FSST_RS_STRATS: [LbStrategy; 1] = [LbStrategy {
+    name: c"dict+pf_memmem".as_ptr(),
+    supported_ops: op_bit(LB_CONTAINS),
+        flags: 0,
+    }];
+
+#[cfg(feature = "fsst-rs")]
+static FSST_RS_VTABLE: LbCandidate = LbCandidate {
+    abi_version: LB_ABI_VERSION,
+    name: c"dict_fsst_rs".as_ptr(),
+    version: c"0.1.0".as_ptr(),
+    cpu_features: core::ptr::null(),
+    strategies: FSST_RS_STRATS.as_ptr(),
+    strategy_count: 1,
+    build: Some(build_fsst_rs),
+    footprint: Some(footprint),
+    run: Some(run),
+    view: None,
+    decode: None,
+    destroy: Some(destroy),
+    decode_selected: None,
+};
+
+#[cfg(feature = "fsst-rs")]
+pub fn vtable_fsst_rs() -> &'static LbCandidate {
+    &FSST_RS_VTABLE
 }

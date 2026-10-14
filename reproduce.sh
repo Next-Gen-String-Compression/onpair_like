@@ -11,6 +11,10 @@
 #   suites     deterministic query generation: `bench gen --seed 42`
 #              + `bench bless` for every materialised dataset     (~5 min each)
 #   run        every spec in specs/paper/ -> results/paper/<name> (~10 min each)
+#   e2e        e2e/build.sh, e2e/data.sh, e2e/run.py: ClickBench and JOB on
+#              DuckDB and Vortex, with and without the compressed search ->
+#              results/e2e/e2e-<arch>-<date>; E2E_DATA names a directory that
+#              already holds the data files               (builds ~30 min, run ~17 min)
 #   all        everything above, in order
 #
 # Reproducibility contract:
@@ -86,14 +90,20 @@ stage_run() {
   done
 }
 
+stage_e2e() {
+  e2e/build.sh
+  e2e/data.sh
+  python3 e2e/run.py
+}
+
 case "${1:-}" in
-  build|datasets|suites|run)
+  build|datasets|suites|run|e2e)
     "stage_$1" ;;
   all)
-    for s in build datasets suites run; do
+    for s in build datasets suites run e2e; do
       echo "===== reproduce: $s ====="
       "stage_$s"
     done ;;
   *)
-    sed -n '2,27p' "$0"; exit 1 ;;
+    sed -n '2,31p' "$0"; exit 1 ;;
 esac

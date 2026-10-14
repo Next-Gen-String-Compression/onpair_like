@@ -1,0 +1,42 @@
+# rows/rowgroup.toml for the JIT-compiled pattern automaton alone, down to
+# 32k rows. It compiles once per row group and run, about 80 ms a compile, so
+# 2k rows would be 512 compiles per query; 32k keeps the sweep under an hour.
+#
+#   paper/gen-rows.sh
+
+strategies = ["llvm-simd"]
+
+[[datasets]]
+path = "../../../datasets/clickbench-url-1mi"
+
+[[datasets]]
+path = "../../../datasets/amazon-title-1mi"
+
+[[datasets]]
+path = "../../../datasets/dbpedia-abstract-1mi"
+
+# char_name.name: short, nearly every row distinct.
+[[datasets]]
+path = "../../../datasets/imdb-charname-1mi"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/clickbench-url-1mi/sa-lcp-v1-s42-n1-b006c9544343c139"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/amazon-title-1mi/sa-lcp-v1-s42-n1-fbad68395e05e8ae"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa-lcp-v1-s42-n1-05988707fed4b1ef"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/sa-lcp-v1-s42-n1-5205012fad43b02d"
+
+[[candidates]]
+name = "fsst_like_tum"
+
+[measure]
+chunk_rows = [0, 524288, 131072, 32768]
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

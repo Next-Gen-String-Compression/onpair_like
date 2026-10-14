@@ -11,45 +11,62 @@ use crate::dataset::PreparedDataset;
 use crate::suite::{self, DatasetBinding, NeedleJson, QueryRecord, Result, Suite, SuiteManifest};
 
 /// Write an unblessed suite and its complete coverage report. The generator's
-/// counts are claims to verify, not benchmark truth.
+/// counts are claims to verify, not benchmark truth. `parts` are generations
+/// of one dataset and request, one per op, e.g. prefix and suffix.
 pub fn write_balanced_suite(
-    generated: &GeneratedNeedles,
+    parts: &[GeneratedNeedles],
     dataset: &PreparedDataset,
     directory: &Path,
     id: &str,
     force: bool,
 ) -> Result<()> {
-    if generated.dataset_checksum != dataset.manifest.checksum
-        || generated.total_rows != dataset.num_rows()
-    {
-        return Err("generated needles belong to a different dataset".into());
+    let first = parts.first().ok_or("nothing generated")?;
+    for generated in parts {
+        if generated.dataset_checksum != dataset.manifest.checksum
+            || generated.total_rows != dataset.num_rows()
+        {
+            return Err("generated needles belong to a different dataset".into());
+        }
     }
     if directory.join(suite::QUERIES_FILE).exists() && !force {
         return Err("suite already exists; pass --force to replace it".into());
     }
     let mut unique = HashSet::new();
-    for needle in &generated.needles {
-        if !unique.insert(&needle.bytes) {
-            return Err("duplicate needle bytes in generation result".into());
+    for generated in parts {
+        for needle in &generated.needles {
+            if !unique.insert((generated.op, &needle.bytes)) {
+                return Err("duplicate needle bytes in generation result".into());
+            }
         }
     }
+    let ops: Vec<_> = parts.iter().map(|g| g.op.as_str()).collect();
     let manifest = SuiteManifest {
         format_version: 1,
         id: id.into(),
-        description: "SA + LCP length/selectivity-stratified CONTAINS needles".into(),
+        description: format!(
+            "{} length/selectivity-stratified {} needles",
+            match first.op {
+                super::NeedleOp::Contains => "SA + LCP",
+                _ => "Sorted-row",
+            },
+            ops.join(" and ").to_uppercase()
+        ),
         dataset: DatasetBinding {
             id: dataset.manifest.id.clone(),
             checksum: None,
         },
-        provenance: Some(serde_json::json!({"generator": generated.generator,
-            "dataset_checksum": generated.dataset_checksum, "request": generated.request,
+        provenance: Some(serde_json::json!({"generator": first.generator, "ops": ops,
+            "dataset_checksum": first.dataset_checksum, "request": first.request,
             "selection": "interval-span reservoir followed by balanced byte lengths"})),
         truth_algo: None,
         blessed_at: None,
     };
     std::fs::create_dir_all(directory)?;
     let mut queries = BufWriter::new(std::fs::File::create(directory.join(suite::QUERIES_FILE))?);
-    for (i, needle) in generated.needles.iter().enumerate() {
+    let needles = parts
+        .iter()
+        .flat_map(|generated| generated.needles.iter().map(move |n| (generated, n)));
+    for (i, (generated, needle)) in needles.enumerate() {
         let encoded = match std::str::from_utf8(&needle.bytes) {
             Ok(text) => NeedleJson::Text(text.into()),
             Err(_) => NeedleJson::B64 {
@@ -58,7 +75,7 @@ pub fn write_balanced_suite(
         };
         let record = QueryRecord {
             id: format!("{id}.{i:06}"),
-            op: "contains".into(),
+            op: generated.op.as_str().into(),
             needles: vec![encoded],
             truth: None,
             derived: None,
@@ -77,10 +94,18 @@ pub fn write_balanced_suite(
         directory.join(suite::SUITE_FILE),
         serde_json::to_vec_pretty(&manifest)?,
     )?;
-    let report = serde_json::json!({"generator": generated.generator,
-        "dataset_checksum": generated.dataset_checksum, "total_rows": generated.total_rows,
-        "request": generated.request, "queries": generated.needles.len(),
-        "cells": generated.cells});
+    let report = if let [generated] = parts {
+        serde_json::json!({"generator": generated.generator,
+            "dataset_checksum": generated.dataset_checksum, "total_rows": generated.total_rows,
+            "request": generated.request, "queries": generated.needles.len(),
+            "cells": generated.cells})
+    } else {
+        serde_json::json!({"generator": first.generator,
+            "dataset_checksum": first.dataset_checksum, "total_rows": first.total_rows,
+            "request": first.request,
+            "parts": parts.iter().map(|g| serde_json::json!({"op": g.op,
+                "queries": g.needles.len(), "cells": g.cells})).collect::<Vec<_>>()})
+    };
     std::fs::write(
         directory.join("gen-report.json"),
         serde_json::to_vec_pretty(&report)?,
@@ -102,11 +127,13 @@ pub fn verify_balanced_suite(directory: &Path, dataset: &PreparedDataset) -> Res
     }
     let mut seen = HashSet::new();
     for q in &suite.queries {
-        if q.op != lb_abi::LB_CONTAINS || q.needles.len() != 1 {
-            return Err("expected single-needle CONTAINS queries".into());
+        if ![lb_abi::LB_CONTAINS, lb_abi::LB_PREFIX, lb_abi::LB_SUFFIX].contains(&q.op)
+            || q.needles.len() != 1
+        {
+            return Err("expected single-needle CONTAINS, PREFIX or SUFFIX queries".into());
         }
         let bytes = &q.needles[0];
-        if !seen.insert(bytes) {
+        if !seen.insert((q.op, bytes)) {
             return Err(format!("duplicate needle in {}", q.record.id).into());
         }
         let meta = q
@@ -151,6 +178,14 @@ pub fn verify_balanced_suite(directory: &Path, dataset: &PreparedDataset) -> Res
             .partition_point(|&p| p <= source as u64);
         if row >= dataset.offsets_u64().len() || end as u64 > dataset.offsets_u64()[row] {
             return Err("witness crosses row boundary".into());
+        }
+        let anchored = match q.op {
+            lb_abi::LB_PREFIX => dataset.offsets_u64()[row - 1] == source as u64,
+            lb_abi::LB_SUFFIX => dataset.offsets_u64()[row] == end as u64,
+            _ => true,
+        };
+        if !anchored {
+            return Err(format!("{}: witness is not at the row's start or end", q.record.id).into());
         }
         match meta["mutation_position"].as_u64() {
             Some(p) => {

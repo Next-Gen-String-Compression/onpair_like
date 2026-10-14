@@ -13,6 +13,8 @@ fn main() {
     }
     println!("cargo:rerun-if-changed=cpp/onpair_candidate.cpp");
     println!("cargo:rerun-if-changed=cpp/CMakeLists.txt");
+    println!("cargo:rerun-if-changed=../../pins.env");
+    println!("cargo:rerun-if-changed=../common/pins.cmake");
     println!("cargo:rerun-if-changed=../../contract/lb_candidate.h");
     // Local-checkout override for OnPair development (see cpp/CMakeLists.txt).
     println!("cargo:rerun-if-env-changed=ONPAIR_SOURCE_DIR");

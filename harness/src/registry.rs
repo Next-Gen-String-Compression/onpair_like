@@ -37,6 +37,8 @@ pub fn candidates() -> Vec<Candidate> {
     {
         v.push(lb_cand_dict_onpair::vtable());
         v.push(lb_cand_dict_onpair::vtable_spiral());
+        #[cfg(feature = "cand-fsst-rs")]
+        v.push(lb_cand_dict_onpair::vtable_fsst_rs());
     }
     #[cfg(feature = "cand-gate-canary")]
     v.push(lb_cand_gate_canary::vtable());
@@ -51,6 +53,15 @@ pub fn candidates() -> Vec<Candidate> {
     }
     #[cfg(feature = "cand-onpair-spiral")]
     v.push(lb_cand_onpair_spiral::vtable());
+    // The same candidate built against the pinned upstream revision rather than
+    // the local checkout, so a spec can put the two side by side.
+    #[cfg(feature = "cand-onpair-spiral-pinned")]
+    v.push(lb_cand_onpair_spiral_pinned::vtable());
+    // And against the `codex/prefilter-scan-refactor` branch, a third line.
+    #[cfg(feature = "cand-onpair-spiral-refactor")]
+    v.push(lb_cand_onpair_spiral_refactor::vtable());
+    #[cfg(feature = "cand-onpair-spiral-substring")]
+    v.push(lb_cand_onpair_spiral_substring::vtable());
     #[cfg(feature = "cand-lz4")]
     v.push(lb_cand_lz4::vtable());
     #[cfg(feature = "cand-zstd")]
@@ -137,6 +148,8 @@ pub struct StrategyInfo {
     pub index: u32,
     pub name: String,
     pub supported_ops: u32,
+    /// `LB_STRATEGY_*` bits (ABI v7).
+    pub flags: u32,
 }
 
 #[derive(Clone)]
@@ -182,6 +195,7 @@ impl Candidate {
                 index: i,
                 name: sname,
                 supported_ops: s.supported_ops,
+                flags: s.flags,
             });
         }
         if !strategies.is_empty() && vt.run.is_none() {
@@ -307,6 +321,28 @@ impl BuiltChunk {
     }
 }
 
+impl BuiltChunk {
+    pub fn has_decode_selected(&self) -> bool {
+        self.vt.decode_selected.is_some()
+    }
+
+    /// `decode` of the rows in `rows` only, packed (ABI v8); `offsets_out`
+    /// has `rows.len() + 1` slots.
+    pub fn decode_selected(&self, rows: &[u32], bytes_out: &mut [u8], offsets_out: &mut [u64]) -> i32 {
+        debug_assert!(offsets_out.len() == rows.len() + 1);
+        unsafe {
+            (self.vt.decode_selected.unwrap())(
+                self.handle,
+                rows.as_ptr(),
+                rows.len() as u64,
+                bytes_out.as_mut_ptr(),
+                bytes_out.len() as u64,
+                offsets_out.as_mut_ptr(),
+            )
+        }
+    }
+}
+
 impl Drop for BuiltChunk {
     fn drop(&mut self) {
         unsafe { (self.vt.destroy.unwrap())(self.handle) }
@@ -421,10 +457,20 @@ impl QueryFfi {
             op,
             needles: descriptors.as_ptr(),
             needle_count: descriptors.len() as u32,
+            selection: core::ptr::null(),
         };
         QueryFfi {
             _needles: descriptors,
             query,
         }
+    }
+
+    /// Hand the next run() call this chunk's selection (ABI v7).
+    pub fn set_selection(&mut self, sel: &lb_abi::LbSelection) {
+        self.query.selection = sel;
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.query.selection = core::ptr::null();
     }
 }

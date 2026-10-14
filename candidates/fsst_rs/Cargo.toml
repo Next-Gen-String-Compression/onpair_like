@@ -9,6 +9,14 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+# The candidate's source needs `onpair::fsst`, `prefilter_candidates_sequences`
+# and `PrefilterAnalysis::sequence_*`, none of which the local onpair still has.
+# Until it is ported the crate compiles to an empty lib: it stays a workspace
+# member so its manifest resolves, and nothing links it.
+[features]
+default = []
+enabled = []
+
 [dependencies]
 lb-abi = { workspace = true }
 memchr = { workspace = true }

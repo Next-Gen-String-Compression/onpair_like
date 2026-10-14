@@ -4,12 +4,17 @@
 //! This preserves binary data and prevents matches across rows. SA + LCP
 //! intervals describe whole ranges of lengths with identical occurrences;
 //! visiting those families avoids materializing every distinct substring.
+//! The prefix and suffix indexes run the same traversal over the nonempty
+//! rows sorted by their bytes, or by their reversed bytes for suffixes, with
+//! the LCP of adjacent rows.
 
+use std::cmp::Ordering;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
 
 use libsais_rs::libsais16::{libsais16, libsais16_plcp_gsa};
+use serde::{Deserialize, Serialize};
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::suite::Result;
@@ -48,21 +53,45 @@ impl IndexLimits {
     }
 }
 
+/// Where a needle must occur in a row, and the query op it is written as.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NeedleOp {
+    Contains,
+    Prefix,
+    Suffix,
+}
+
+impl NeedleOp {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            NeedleOp::Contains => "contains",
+            NeedleOp::Prefix => "prefix",
+            NeedleOp::Suffix => "suffix",
+        }
+    }
+}
+
 /// Index construction is independent of sampling seed, buckets, and quota.
 pub struct SubstringIndex<'a> {
     pub(super) payload: &'a [u8],
     pub(super) offsets: &'a [u64],
     pub(super) max_len: usize,
     pub(super) checksum: String,
-    // SA includes separator suffixes first, one per row. Keeping them avoids
-    // copying the large array just to remove that prefix.
+    pub(super) op: NeedleOp,
+    // Contains: the SA, separator suffixes first, one per row; keeping them
+    // avoids copying the large array just to remove that prefix. Prefix and
+    // suffix: the nonempty rows' indices in sorted order.
     sa: Vec<i32>,
+    // Rank of the first entry that is not a separator.
+    first: usize,
     lcp: Vec<u16>,
     boundaries: RowBoundaries,
 }
 
 /// One distinct substring at each length in min_len..=max_len. All share the
 /// same occurrence interval and hence the same distinct matching-row count.
+/// A suffix family's `position` is the row end its needles end at.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Family {
     pub position: usize,
@@ -75,6 +104,20 @@ impl<'a> SubstringIndex<'a> {
     pub fn new(payload: &'a [u8], offsets: &'a [u64], limits: IndexLimits) -> Result<Self> {
         let mut index = Self::empty(payload, offsets, limits)?;
         index.build()?;
+        Ok(index)
+    }
+
+    /// The rows' prefixes up to the indexed length, for PREFIX needles.
+    pub fn prefixes(payload: &'a [u8], offsets: &'a [u64], limits: IndexLimits) -> Result<Self> {
+        let mut index = Self::empty(payload, offsets, limits)?;
+        index.build_rows(NeedleOp::Prefix);
+        Ok(index)
+    }
+
+    /// The rows' suffixes up to the indexed length, for SUFFIX needles.
+    pub fn suffixes(payload: &'a [u8], offsets: &'a [u64], limits: IndexLimits) -> Result<Self> {
+        let mut index = Self::empty(payload, offsets, limits)?;
+        index.build_rows(NeedleOp::Suffix);
         Ok(index)
     }
 
@@ -150,7 +193,9 @@ impl<'a> SubstringIndex<'a> {
             offsets,
             max_len: limits.max_needle_len,
             checksum: format!("xxh3:{:016x}", hash.digest()),
+            op: NeedleOp::Contains,
             sa: Vec::new(),
+            first: offsets.len() - 1,
             lcp: Vec::new(),
             boundaries: RowBoundaries::new(offsets, n),
         })
@@ -188,19 +233,83 @@ impl<'a> SubstringIndex<'a> {
         Ok(())
     }
 
-    /// Byte offset and row of a non-separator suffix at a rank in the full SA.
-    fn location(&self, rank: usize) -> (usize, usize) {
-        let encoded = self.sa[rank] as usize;
-        let row = self.boundaries.row(encoded);
-        (encoded - row, row)
+    fn row(&self, row: usize) -> &[u8] {
+        &self.payload[self.offsets[row] as usize..self.offsets[row + 1] as usize]
     }
 
+    fn build_rows(&mut self, op: NeedleOp) {
+        let mut rows: Vec<i32> = (0..self.num_rows() as usize)
+            .filter(|&r| !self.row(r).is_empty())
+            .map(|r| r as i32)
+            .collect();
+        let common = |a: &[u8], b: &[u8]| match op {
+            NeedleOp::Suffix => a.iter().rev().zip(b.iter().rev()).take_while(|(x, y)| x == y).count(),
+            _ => a.iter().zip(b).take_while(|(x, y)| x == y).count(),
+        };
+        rows.sort_unstable_by(|&a, &b| self.order(self.row(a as usize), self.row(b as usize), op));
+        let mut lcp = vec![0u16; rows.len()];
+        for i in 1..rows.len() {
+            let depth = common(self.row(rows[i - 1] as usize), self.row(rows[i] as usize));
+            lcp[i] = depth.min(self.max_len) as u16;
+        }
+        self.op = op;
+        self.sa = rows;
+        self.lcp = lcp;
+        self.first = 0;
+    }
+
+    /// The index's sort order: suffixes compare their reversed bytes.
+    fn order(&self, a: &[u8], b: &[u8], op: NeedleOp) -> Ordering {
+        match op {
+            NeedleOp::Suffix => a.iter().rev().cmp(b.iter().rev()),
+            _ => a.cmp(b),
+        }
+    }
+
+    /// Family position and row of the entry at a rank: a byte offset in the
+    /// payload, the row's start for a prefix and its end for a suffix.
+    fn location(&self, rank: usize) -> (usize, usize) {
+        match self.op {
+            NeedleOp::Contains => {
+                let encoded = self.sa[rank] as usize;
+                let row = self.boundaries.row(encoded);
+                (encoded - row, row)
+            }
+            NeedleOp::Prefix => {
+                let row = self.sa[rank] as usize;
+                (self.offsets[row] as usize, row)
+            }
+            NeedleOp::Suffix => {
+                let row = self.sa[rank] as usize;
+                (self.offsets[row + 1] as usize, row)
+            }
+        }
+    }
+
+    /// Bytes of the entry at a rank, in payload order.
     fn suffix(&self, rank: usize) -> &[u8] {
         let (p, row) = self.location(rank);
-        &self.payload[p..self.offsets[row + 1] as usize]
+        match self.op {
+            NeedleOp::Suffix => self.row(row),
+            _ => &self.payload[p..self.offsets[row + 1] as usize],
+        }
     }
 
-    /// Exact existence check, including row boundaries, without scanning rows.
+    /// Where the needle of `len` bytes from a family position starts.
+    pub(super) fn needle_start(&self, position: usize, len: usize) -> usize {
+        match self.op {
+            NeedleOp::Suffix => position - len,
+            _ => position,
+        }
+    }
+
+    pub(super) fn needle(&self, position: usize, len: usize) -> &[u8] {
+        let start = self.needle_start(position, len);
+        &self.payload[start..start + len]
+    }
+
+    /// Whether some row holds the needle as the index's op asks, a substring,
+    /// prefix or suffix, without scanning rows.
     pub fn contains(&self, needle: &[u8]) -> bool {
         self.first_occurrence(needle).is_some()
     }
@@ -209,16 +318,21 @@ impl<'a> SubstringIndex<'a> {
         if needle.is_empty() {
             return Some(0);
         }
-        let (mut lo, mut hi) = (self.num_rows() as usize, self.sa.len());
+        let (mut lo, mut hi) = (self.first, self.sa.len());
         while lo < hi {
             let mid = lo + (hi - lo) / 2;
-            if self.suffix(mid) < needle {
+            if self.order(self.suffix(mid), needle, self.op) == Ordering::Less {
                 lo = mid + 1;
             } else {
                 hi = mid;
             }
         }
-        (lo < self.sa.len() && self.suffix(lo).starts_with(needle)).then_some(lo)
+        let found = lo < self.sa.len()
+            && match self.op {
+                NeedleOp::Suffix => self.suffix(lo).ends_with(needle),
+                _ => self.suffix(lo).starts_with(needle),
+            };
+        found.then_some(lo)
     }
 
     /// Visit every nonempty substring family once, up to the indexed length.
@@ -234,14 +348,14 @@ impl<'a> SubstringIndex<'a> {
             left: usize,
             base: i64,
         }
-        let first = self.num_rows() as usize;
+        let first = self.first;
         let mut stack = vec![Interval {
             depth: 0,
             left: first,
             base: 0,
         }];
         let mut counts = SuffixCounts(vec![0; self.max_len + 2]);
-        let mut previous = vec![-1i32; first];
+        let mut previous = vec![-1i32; self.num_rows() as usize];
         let mut previous_len = 0;
         for i in first..=self.sa.len() {
             let depth = if i == self.sa.len() {
@@ -289,7 +403,12 @@ impl<'a> SubstringIndex<'a> {
             let from = stack.partition_point(|node| node.left as i64 <= already_seen as i64);
             counts.increment_from(from);
             previous[row] = i as i32;
-            previous_len = (self.offsets[row + 1] as usize - position).min(self.max_len);
+            let end = self.offsets[row + 1] as usize;
+            let key_len = match self.op {
+                NeedleOp::Suffix => end - self.offsets[row] as usize,
+                _ => end - position,
+            };
+            previous_len = key_len.min(self.max_len);
         }
     }
 

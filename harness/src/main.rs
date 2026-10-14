@@ -207,7 +207,7 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
                 if max_needle_len > 256 { request.lengths.push(LengthBucket { min: 257, max: max_needle_len }); }
                 eprintln!("selecting up to {per_cell} unique needles per cell");
                 let generated = index.generate(&request)?;
-                lb_harness::gen::write_balanced_suite(&generated, &ds, &out, &suite_id, force)?;
+                lb_harness::gen::write_balanced_suite(std::slice::from_ref(&generated), &ds, &out, &suite_id, force)?;
                 let filled = generated.cells.iter().filter(|c| c.status == "filled").count();
                 println!("generated {} unique queries; {filled}/{} cells filled; coverage: {}",
                     generated.needles.len(), generated.cells.len(), out.join("gen-report.json").display());
@@ -586,6 +586,17 @@ fn run_parent(loaded: &LoadedSpec, out_dir: &std::path::Path, fail_fast: bool) -
         serde_json::to_string_pretty(&manifest)?,
     )?;
     println!("results: {}", results_path.display());
+    let payload_bytes = manifest
+        .datasets
+        .iter()
+        .filter_map(|ds| {
+            let id = ds.get("id")?.as_str()?.to_string();
+            Some((id, ds.get("payload_bytes")?.as_u64()?))
+        })
+        .collect();
+    if let Err(e) = print_run_summary(&results_path, &payload_bytes) {
+        eprintln!("warn: could not summarize {}: {e}", results_path.display());
+    }
 
     if let Err(e) = ingest_into_db(out_dir) {
         eprintln!("error: {e}");
@@ -602,4 +613,156 @@ fn run_parent(loaded: &LoadedSpec, out_dir: &std::path::Path, fail_fast: bool) -
         return Ok(ExitCode::from(EXIT_ERROR));
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// One measured cell, as the run summary prints it.
+struct CellRow {
+    candidate: String,
+    config: String,
+    strategy: String,
+    gbps_raw: f64,
+    median_ns: u64,
+    /// Self-reported phase splits, absent for candidates that do not report them.
+    prefilter_ns: Option<u64>,
+    verify_ns: Option<u64>,
+    setup_ns: Option<u64>,
+    /// Code-stream bytes of the build this cell ran over, and payload bytes per
+    /// one of them: `gbps_raw` is over the payload, so this is the factor
+    /// between what the engine touched and what it is credited with.
+    code_bytes: Option<u64>,
+    payload_per_code_byte: Option<f64>,
+}
+
+/// Print what the run measured, fastest first, straight from the
+/// `results.jsonl` just written.
+///
+/// One table per (dataset, chunk_rows, selection, query), because those are
+/// the things a row is not comparable across: a table then holds one row per
+/// system, which is the comparison worth reading.
+///
+/// The point of the last two columns is that `logical GB/s` is over the
+/// *payload*, so two systems are only comparable through how much payload each
+/// of their codes carries — a narrower dictionary can win on time per code and
+/// still lose the cell because it needs more codes to say the same bytes.
+fn print_run_summary(
+    results_path: &std::path::Path,
+    payload_bytes: &std::collections::BTreeMap<String, u64>,
+) -> std::io::Result<()> {
+    use std::collections::BTreeMap;
+    use std::io::BufRead;
+
+    let phase = |row: &serde_json::Value, name: &str| {
+        row.pointer(&format!("/prefilter/{name}/ns"))
+            .and_then(serde_json::Value::as_u64)
+    };
+    let text = |row: &serde_json::Value, name: &str| {
+        row[name].as_str().unwrap_or("?").to_string()
+    };
+    let group_of = |row: &serde_json::Value| {
+        (
+            text(row, "dataset"),
+            row["chunk_rows"].as_u64().unwrap_or(0),
+            row["selection"].as_str().unwrap_or("all").to_string(),
+            text(row, "query_id"),
+        )
+    };
+
+    let mut builds: BTreeMap<String, Option<u64>> = BTreeMap::new();
+    let mut groups: BTreeMap<(String, u64, String, String), Vec<CellRow>> = BTreeMap::new();
+
+    let file = std::io::BufReader::new(std::fs::File::open(results_path)?);
+    let rows: Vec<serde_json::Value> = file
+        .lines()
+        .map_while(Result::ok)
+        .filter(|line| !line.trim().is_empty())
+        .filter_map(|line| serde_json::from_str(&line).ok())
+        .collect();
+
+    // Builds first: a query row names its build only by the same key fields.
+    let build_key = |row: &serde_json::Value| {
+        format!(
+            "{}\u{1}{}\u{1}{}\u{1}{}",
+            text(row, "candidate"),
+            text(row, "config"),
+            text(row, "dataset"),
+            row["chunk_rows"].as_u64().unwrap_or(0)
+        )
+    };
+    for row in rows.iter().filter(|row| row["kind"] == "build") {
+        builds.insert(
+            build_key(row),
+            row["footprint_components"]["codes"].as_u64(),
+        );
+    }
+
+    for row in rows
+        .iter()
+        .filter(|row| row["kind"] == "query" && row["status"] == "ok")
+    {
+        let code_bytes = builds.get(&build_key(row)).copied().flatten();
+        let payload = payload_bytes.get(&text(row, "dataset")).copied();
+        groups.entry(group_of(row)).or_default().push(CellRow {
+            candidate: text(row, "candidate"),
+            config: text(row, "config"),
+            strategy: text(row, "strategy"),
+            gbps_raw: row["gbps_raw"].as_f64().unwrap_or(0.0),
+            median_ns: row
+                .pointer("/latency/median_ns")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0),
+            prefilter_ns: phase(row, "prefilter_ns"),
+            verify_ns: phase(row, "verify_ns"),
+            setup_ns: phase(row, "setup_ns"),
+            code_bytes,
+            payload_per_code_byte: match (payload, code_bytes) {
+                (Some(payload), Some(codes)) if codes != 0 => {
+                    Some(payload as f64 / codes as f64)
+                }
+                _ => None,
+            },
+        });
+    }
+
+    for ((dataset, chunk_rows, selection, query), mut cells) in groups {
+        cells.sort_by(|a, b| b.gbps_raw.total_cmp(&a.gbps_raw));
+        let chunk = if chunk_rows == 0 {
+            "whole column".to_string()
+        } else {
+            format!("{chunk_rows} rows/chunk")
+        };
+        println!("\n{query} · {dataset} · {chunk} · {selection} · {} systems", cells.len());
+        println!(
+            "{:<22} {:<24} {:<11} {:>12} {:>11} {:>10} {:>10} {:>9} {:>11} {:>8}",
+            "candidate",
+            "config",
+            "strategy",
+            "logical GB/s",
+            "median ns",
+            "prefilter",
+            "verify",
+            "setup",
+            "code bytes",
+            "payload/code"
+        );
+        let ns = |value: Option<u64>| {
+            value.map_or_else(|| "-".to_string(), |ns| ns.to_string())
+        };
+        for cell in cells {
+            println!(
+                "{:<22} {:<24} {:<11} {:>12.2} {:>11} {:>10} {:>10} {:>9} {:>11} {:>8}",
+                cell.candidate,
+                cell.config,
+                cell.strategy,
+                cell.gbps_raw,
+                cell.median_ns,
+                ns(cell.prefilter_ns),
+                ns(cell.verify_ns),
+                ns(cell.setup_ns),
+                ns(cell.code_bytes),
+                cell.payload_per_code_byte
+                    .map_or_else(|| "-".to_string(), |factor| format!("{factor:.3}")),
+            );
+        }
+    }
+    Ok(())
 }

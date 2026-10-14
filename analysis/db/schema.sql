@@ -154,6 +154,11 @@ CREATE TABLE IF NOT EXISTS result (
     -- both values in one run -- so it is part of the key, and filtering it to a
     -- single value is what keeps a median from spanning two configurations.
     chunk_rows             BIGINT NOT NULL,
+    -- the selection vector the cell ran under (ABI v7): `all`, or a name like
+    -- `uniform-f0.1-s7`, and how many rows it admits (NULL for `all`). Part
+    -- of the key, as one run measures every cell under every selection.
+    selection              VARCHAR NOT NULL DEFAULT 'all',
+    selection_rows         BIGINT,
 
     status                 VARCHAR NOT NULL,   -- ok|unsupported|gate_failed|error
     -- false rather than null for unsupported/failed cells, so WHERE NOT gate_ok
@@ -213,9 +218,22 @@ CREATE TABLE IF NOT EXISTS result (
     setup_ns               BIGINT,
     decode_ns              BIGINT,
     scan_ns                BIGINT,
+    -- The prefilter/verify split, for a module that reports it: how much of a
+    -- cell went into finding candidate rows and how much into checking them.
+    -- A cover that admits too much shows up here as a verify that dwarfs its
+    -- prefilter, which no other column says.
+    prefilter_ns           BIGINT,
+    verify_ns              BIGINT,
 
-    PRIMARY KEY (run_id, system_id, dataset_id, chunk_rows, query_pk)
+    PRIMARY KEY (run_id, system_id, dataset_id, chunk_rows, selection, query_pk)
 );
+
+-- Columns added after the first DBs were built. `CREATE TABLE IF NOT EXISTS`
+-- leaves an existing table alone, so a new column has to be added here too or
+-- the loader inserts into a table that does not have it. Idempotent, and the
+-- README's "delete the file and rebuild" stays the other way out.
+ALTER TABLE result ADD COLUMN IF NOT EXISTS prefilter_ns BIGINT;
+ALTER TABLE result ADD COLUMN IF NOT EXISTS verify_ns    BIGINT;
 
 -- ----------------------------------------------------------------- the view
 
@@ -253,6 +271,8 @@ SELECT
     q.selectivity,
     q.match_count,
     res.chunk_rows,
+    res.selection,
+    res.selection_rows,
     res.status,
     res.gate_ok,
     res.total_ns,
@@ -279,12 +299,15 @@ SELECT
     res.compressed_bytes,
     res.raw_bytes,
     res.compression_ratio,
+    res.footprint_components,
     res.build_ns,
     res.prune_rate,
     res.false_positive_rate,
     res.setup_ns,
     res.decode_ns,
     res.scan_ns,
+    res.prefilter_ns,
+    res.verify_ns,
     res.run_id,
     res.system_id,
     res.dataset_id,

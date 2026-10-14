@@ -399,6 +399,8 @@ def load_run(con, run_dir: Path) -> str:
         setup_ns = phase(prefilter, "setup_ns")
         decode_ns = phase(prefilter, "decode_ns")
         scan_ns = phase(prefilter, "scan_ns")
+        prefilter_ns = phase(prefilter, "prefilter_ns")
+        verify_ns = phase(prefilter, "verify_ns")
         dataset_id = datasets[row["dataset_checksum"]]
         suite = suite_of[row["dataset_checksum"]][0]
         footprint = build["footprint_total_bytes"]
@@ -417,6 +419,8 @@ def load_run(con, run_dir: Path) -> str:
                 dataset_id,
                 queries[f"{suite}|{row['query_id']}"],
                 row["chunk_rows"],
+                row.get("selection", "all"),
+                row.get("selection_rows"),
                 row["status"],
                 bool(
                     row["status"] == "ok"
@@ -451,11 +455,14 @@ def load_run(con, run_dir: Path) -> str:
                 setup_ns,
                 decode_ns,
                 scan_ns,
+                prefilter_ns,
+                verify_ns,
             )
         )
     # Placeholders are generated from the column list: hand-counting them is
     # how a column added here silently shifts every value one to the left.
     columns = """run_id, system_id, dataset_id, query_pk, chunk_rows,
+                 selection, selection_rows,
                  status, gate_ok, error,
                  total_ns, min_ns, p25_ns, p75_ns, p99_ns, max_ns, mean_ns,
                  stddev_ns, samples, gbps,
@@ -464,7 +471,7 @@ def load_run(con, run_dir: Path) -> str:
                  footprint_components,
                  prefilter_candidates, prune_rate, false_positive_rate,
                  verify_ns_per_survivor,
-                 setup_ns, decode_ns, scan_ns"""
+                 setup_ns, decode_ns, scan_ns, prefilter_ns, verify_ns"""
     marks = ", ".join(["?"] * len(columns.split(",")))
     if rows and len(rows[0]) != len(columns.split(",")):
         raise SystemExit(
@@ -503,7 +510,19 @@ def main(argv):
     else:
         dirs = [Path(a).resolve() for a in argv]
     con = duckdb.connect(DB_PATH)
+    # A DB from before selections keys `result` without one; DuckDB cannot
+    # alter a primary key, so the table is rebuilt with every row under `all`.
+    old = con.execute(
+        "SELECT count(*) FROM information_schema.columns WHERE table_name = 'result'"
+        " AND column_name = 'selection'"
+    ).fetchone()[0] == 0 and con.execute(
+        "SELECT count(*) FROM information_schema.tables WHERE table_name = 'result'"
+    ).fetchone()[0] == 1
+    if old:
+        con.execute("DROP VIEW IF EXISTS v; ALTER TABLE result RENAME TO result_pre_selection")
     con.execute(SCHEMA_PATH.read_text())
+    if old:
+        con.execute("INSERT INTO result BY NAME SELECT * FROM result_pre_selection; DROP TABLE result_pre_selection")
     for run_dir in dirs:
         print(load_run(con, run_dir))
     con.close()

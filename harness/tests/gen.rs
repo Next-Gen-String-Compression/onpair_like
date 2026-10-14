@@ -268,8 +268,8 @@ fn suffix_array_suite_survives_independent_bless_and_verification() {
     assert!(generated.needles.iter().any(|n| n.matching_rows == 0));
     assert!(generated.needles.iter().any(|n| n.bytes.len() >= 129));
     let out = tmp.path().join("sa-suite");
-    gen::write_balanced_suite(&generated, &ds, &out, "sa-fixture", false).unwrap();
-    assert!(gen::write_balanced_suite(&generated, &ds, &out, "sa-fixture", false).is_err());
+    gen::write_balanced_suite(std::slice::from_ref(&generated), &ds, &out, "sa-fixture", false).unwrap();
+    assert!(gen::write_balanced_suite(std::slice::from_ref(&generated), &ds, &out, "sa-fixture", false).is_err());
     suite::bless(&out, &ds, false).unwrap();
     gen::verify_balanced_suite(&out, &ds).unwrap();
     // The independent check also detects corrupted claims, even when the

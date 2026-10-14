@@ -1,0 +1,437 @@
+{
+  "TPCH": {
+    "0": {
+      "part": {
+        "p_type": [
+          { "query": 2, "pattern": "%BRASS%" },
+          { "query": 14, "pattern": "%PROMO%" },
+          { "query": 16, "pattern": "MEDIUM POLISHED%" },
+          { "query": null, "pattern": "%BRASS" },
+          { "query": null, "pattern": "%STEEL%" },
+          { "query": null, "pattern": "PROMO %" },
+          { "query": null, "pattern": "%NICKEL" },
+          { "query": null, "pattern": "STANDARD %" }
+        ],
+        "p_name": [
+          { "query": 9, "pattern": "%green%" },
+          { "query": 20, "pattern": "%forest%" },
+          { "query": null, "pattern": "%blue%" },
+          { "query": null, "pattern": "dark %" },
+          { "query": null, "pattern": "%sky%blue%" },
+          { "query": null, "pattern": "%firebrick%" }
+        ]
+      },
+      "orders": {
+        "o_comment": [
+          { "query": 13, "pattern": "%special%requests%" },
+          { "query": null, "pattern": "%regular%deposits%" },
+          { "query": null, "pattern": "%unusual%packages%" },
+          { "query": null, "pattern": "%pending%" }
+        ]
+      },
+      "supplier": {
+        "s_comment": [
+          { "query": 16, "pattern": "%Customer%Complaints" },
+          { "query": null, "pattern": "Customer%Complaints%" },
+          { "query": null, "pattern": "%usual%packages%" },
+          { "query": null, "pattern": "%Recommends%" },
+          { "query": null, "pattern": "Customer%Account%"}
+        ]
+      }
+    },
+    "1": {
+      "part": {
+        "p_type": [
+          { "query": 2, "pattern": "%BR_SS%" },
+          { "query": 2, "pattern": "%BRA_S%" },
+          { "query": 14, "pattern": "%PRO_O%" },
+          { "query": 16, "pattern": "MED_UM POLISHED%" },
+          { "query": 16, "pattern": "_EDIUM POLISHED%" },
+          { "query": null, "pattern": "%B_ASS" },
+          { "query": null, "pattern": "%STE_L%" },
+          { "query": null, "pattern": "PROMO_%" },
+          { "query": null, "pattern": "%NIC_EL" },
+          { "query": null, "pattern": "ST_NDARD %" }
+        ],
+        "p_name": [
+          { "query": 9, "pattern": "%g_een%" },
+          { "query": 9, "pattern": "%_reen%" },
+          { "query": 20, "pattern": "%fo_est%" },
+          { "query": null, "pattern": "%blu_%" },
+          { "query": null, "pattern": "dar_ %" },
+          { "query": null, "pattern": "%sky%b_ue%" },
+          { "query": null, "pattern": "%firebri_k%" }
+        ]
+      },
+      "orders": {
+        "o_comment": [
+          { "query": 13, "pattern": "%speci_l%requests%" },
+          { "query": null, "pattern": "%regular%dep_sits%" },
+          { "query": null, "pattern": "%unusua_%packages%" },
+          { "query": null, "pattern": "%pendin_%" }
+        ]
+      },
+      "supplier": {
+        "s_comment": [
+          { "query": 16, "pattern": "%Customer%Compl_ints" },
+          { "query": 16, "pattern": "%Cu_tomer%Complaints" },
+          { "query": null, "pattern": "Customer%Co_plaints%" },
+          { "query": null, "pattern": "%usual%pack_ges%" },
+          { "query": null, "pattern": "%Recomm_nds%" },
+          { "query": null, "pattern": "Customer%Acc_unt%" }
+        ]
+      }
+    },
+    ">=2": {
+      "part": {
+        "p_type": [
+          { "query": 2, "pattern": "%BR_S_%" },
+          { "query": 2, "pattern": "%BRA__%" },
+          { "query": 14, "pattern": "%PRO__%" },
+          { "query": 16, "pattern": "MED_UM POLISH_D%" },
+          { "query": 16, "pattern": "_EDIUM POLI__ED%" },
+          { "query": null, "pattern": "%B_AS_" },
+          { "query": null, "pattern": "%STE__%" },
+          { "query": null, "pattern": "PROM__%" },
+          { "query": null, "pattern": "%NIC___" },
+          { "query": null, "pattern": "ST__DARD %" }
+        ],
+        "p_name": [
+          { "query": 9, "pattern": "%g_ee_%" },
+          { "query": 9, "pattern": "%__een%" },
+          { "query": 20, "pattern": "%fo___t%" },
+          { "query": null, "pattern": "%bl__%" },
+          { "query": null, "pattern": "da__ %" },
+          { "query": null, "pattern": "%sk_%b_ue%" },
+          { "query": null, "pattern": "%fir_bri_k%" }
+        ]
+      },
+      "orders": {
+        "o_comment": [
+          { "query": 13, "pattern": "%speci_l%reque__s%" },
+          { "query": 13, "pattern": "%speci_l%requ_sts%" },
+          { "query": null, "pattern": "%regular%dep_s_ts%" },
+          { "query": null, "pattern": "%unusua_%package_%" },
+          { "query": null, "pattern": "%pendi__%" }
+        ]
+      },
+      "supplier": {
+        "s_comment": [
+          { "query": 16, "pattern": "%Customer%Compl__nts" },
+          { "query": 16, "pattern": "%Cu_tomer%Complai_ts" },
+          { "query": null, "pattern": "Custom__%Co_plaints%" },
+          { "query": null, "pattern": "%usu_l%pack_ges%" },
+          { "query": null, "pattern": "%Recomm__ds%" },
+          { "query": null, "pattern": "Custom_r%Acc_unt%" }
+        ]
+      }
+    }
+  },
+
+  "StackOverflow": {
+    "0": {
+      "PostHistory": [
+        "%php%is%shit%",
+        "I love%C++%but%",
+        "%sometimes%know.",
+        "%SELECT *%LIMIT 1%",
+        "WITH RECURSIVE%SQL",
+        "%define%then%double%"
+      ],
+      "Posts": [
+        "<p>I have tried%",
+        "%cannot%fathom%C++%",
+        "%why%happening%",
+        "%what%is%there",
+        "<p>We%try%"
+      ],
+      "Comments": [
+        "Why do%you%?",
+        "%do we%actually%",
+        "%why%C++%",
+        "%how is%this%",
+        "%cannot%."
+      ]
+    },
+    "1": {
+      "PostHistory": [
+        "%php%is%sh_t%",
+        "I love%C++%b_t%",
+        "_ love%C++%but%",
+        "%SELECT *%LIMIT _%",
+        "WITH RECURSIVE%SQ_",
+        "%define%then%dou_le%"
+      ],
+      "Posts": [
+        "_p>I have tried%",
+        "%cannot%fathom%Cp_%",
+        "%why%happenin_%",
+        "%what%is%th_re",
+        "<p>We%_ry%"
+      ],
+      "Comments": [
+        "Why_do%you%?",
+        "%do we%a_tually%",
+        "%_o we%actually%",
+        "%can_ot%."
+      ]
+    },
+    ">=2": {
+      "PostHistory": [
+        "%p_p%is%sh_t%",
+        "%php%_s%shi_%",
+        "%p_p%i_%sh_t%",
+        "I lo_e%C__%but%",
+        "%some_ime_%know.",
+        "%SELECT _%LIMIT _%",
+        "WITH_RECURSIVE%SQ_",
+        "%de_ine%th_n%dou_le%"
+      ],
+      "Posts": [
+        "<p>_ have tri_d%",
+        "<p>I _ave_tr_ed%",
+        "%cannot%fathom%C__%",
+        "%wh_%hap_enin_%",
+        "%w_at%is%th_re"
+      ],
+      "Comments": [
+        "Why do%y__%?",
+        "W_y do%yo_%?",
+        "%_o we%a_tually%",
+        "%w_y%C_+%",
+        "%ho_ _s%this%"
+      ]
+    }
+  },
+  "IMDB": {
+    "0": {
+      "films": [
+        "The %", "Episode #1.%", "Blacksmith %", "Le clown %",
+        "B96 - Roadtrip % (1) %", "% (1) - % Berlin", "% Scene",
+        "% Rome", "% Survival", "% of a Train", "%Donaukreuzfahrt%",
+        "%Roadtrip%Straße%", "%King%of%The%", "%Love%and%",
+        "%Episode%#%.%", "%Känguruh%", "%(1)%Berlin%", "%auf%der%",
+        "%:%", "%Ages:%"
+      ],
+      "actors": [
+        "Fred %", "Marlon %", "J. % R%", "Gillian %", "Tomás S%",
+        "% Astaire", "% Bogart", "% Brando", "% de Havilland",
+        "%-Stahl", "%Lauren%", "%Humphrey%", "%James %",
+        "%Audrey%Hepburn%", "%Alan % M%", "%de %", "%Gillian%Anderson%",
+        "%Richard % P%", "% Scott%", "% B. %"
+      ],
+      "quotes": [
+        "I don't know %", "What is % she %", "Inspector Gadget % alone.",
+        "She records % videos %", "Dr. Claw: %", "% Michael J. Fox?",
+        "% hustl-in'!", "% always on duty!", "% are you alright?",
+        "% I put up with him?", "%Harvey%It's just%",
+        "%I'm % and I'm in % school.", "%Go, go gadget%", "%M.A.D. Cat%",
+        "%worry, Chief. I'm always%", "%fucking time lord%", "%you alright?%",
+        "%suspicious situation%suspicious group%", "%useless fuzzball%", "%[repeated line]%"
+      ],
+      "plot": [
+        "This week, %", "All of the women are %", "Inseparable friends %",
+        "To heed love's call %", "Strange seems to be %", "% relationship work.",
+        "% rejection?", "% out of her comfort zone?", "% ruin the brotherhood %",
+        "% a gay \"stepmother\"?", "%YouTube celebrities%", "%social%media%",
+        "%goes on her first date%", "%comfort zone%", "%successful relationship%",
+        "%love%and%relationship%", "%struggling with%", "%gay lover%",
+        "%fall for % instead", "%friendship%develops%"
+      ]
+    },
+    "1": {
+      "films": [
+        "_he %", "_pisode #1.%", "_lacksmith %", "_e clown %",
+        "_96 - Roadtrip % (1) %", "%  (_) - % Berlin", "% Sc_ne",
+        "% R_me", "% Surviv_l", "% of _ Train", "%_onaukreuzfahrt%",
+        "%_oadtrip%Straße%", "%_ing%of%The%", "%_ove%and%",
+        "%_pisode%#%.%", "%_änguruh%", "%_(1)%Berlin%", "%_uf%der%",
+        "%_:%", "%_ges:%"
+      ],
+      "actors": [
+        "_red %", "_arlon %", "_. % R%", "_illian %", "_omás S%",
+        "% As_aire", "% B_gart", "% Br_ndo", "% de_Havilland",
+        "% St_hl", "%_auren%", "%_umphrey%", "%_ames %",
+        "%_udrey%Hepburn%", "%_lan % M%", "%_e %", "%_illian%Anderson%",
+        "%_ichard % P%", "%_Scott%", "%_B. %"
+      ],
+      "quotes": [
+        "_ don't know %", "_hat is % she %", "_nspector Gadget % alone.",
+        "_he records % videos %", "_r. Claw: %", "% Michael _. Fox?",
+        "% hustl-in'_", "% always on duty_", "% are you alright_",
+        "% _ put up with him?", "%_arvey%It's just%",
+        "%_'m % and I'm in % school.", "%_o, go gadget%", "%.A.D. Cat%",
+        "%_orry, Chief. I'm always%", "%_ucking time lord%", "%_ou alright?%",
+        "%_uspicious situation%suspicious group%", "%_seless fuzzball%", "%_repeated line]%"
+      ],
+      "plot": [
+        "_his week, %", "_ll of the women are %", "_nseparable friends %",
+        "_o heed love's call %", "_trange seems to be %", "% relationship work_",
+        "% rejection_", "% out o_ her comfort zone?", "%_ruin the brotherhood %",
+        "% a g_y \"stepmother\"?", "%_ouTube celebrities%", "%_ocial%media%",
+        "%_oes on her first date%", "%_omfort zone%", "%_uccessful relationship%",
+        "%_ove%and%relationship%", "%_truggling with%", "%_ay lover%",
+        "% all_for % instead", "%_riendship%develops%"
+      ]
+    },
+    ">=2": {
+      "films": [
+        "__e %", "_pisode #_.%", "_lacksmith_%", "_e_clown %",
+        "__6 - Roadtrip % (1) %", "% _1) _ % Berlin", "% ___ne",
+        "% __me", "% s__vival", "% __ a Train", "%_onaukreuzfahr_%",
+        "%_oadtrip%Stra_e%", "%_ing%of%_he%", "%_ove%a_d%",
+        "%_piso_e%#%.%", "__nguruh%", "%_1)%Berl_n%", "%_uf%d_r%",
+        "%_ges:%"
+      ],
+      "actors": [
+        "_r_d %", "_a_lon %", "_._ % R%", "_i_lian %", "_o_ás S%",
+        "% _s_aire", "% _o_art", "% _r_ndo", "% _e_Havilland",
+        "%-__ahl", "%_a_ren%", "%_u_phrey%", "%_a_es %",
+        "%_u_rey%Hepburn%", "_l_n % M%", "%_e_ %", "%_i_lian%Anderson%",
+        "%_i_hard % P%", "% _c_tt%", "% _._ %"
+      ],
+      "quotes": [
+        "_ don_t know %", "_hat is_% she %", "_nspector_Gadget % alone.",
+        "__e records % videos %", "_r_ Claw: %", "% _ichael J. Fox_",
+        "% _ustl-in_!", "% _lways _n duty!", "% _re you alright?",
+        "% _ put up with him_", "%_arvey%It_s just%",
+        "%_'m % and I__ in % school.", "%_o_ go gadget%", "%_._.D. Cat%",
+        "%_orry, Chief_ I'm always%", "%____ing time lord%", "%_ou alright_%",
+        "%_uspicious situation%suspici_s gr_up%", "%_seless fuzzba_l%", "%_repeat_d l_ne]%"
+      ],
+      "plot": [
+        "_h_s week, %", "_l_ of the women are %", "_n_eparable friends %",
+        "_o_heed love's call %", "_t_ange seems to be %", "% _e_ationship work.",
+        "% _e_ection?", "% _u_ of her comfort zone?", "% _u_n the brotherhood %",
+        "% _ _ay \"stepmother\"?", "%_o_Tube celebrities%", "%_o_ial%media%",
+        "%_o_s on her first date%", "%_o_fort zone%", "%_u_cessful relationship%",
+        "%_o_e%and%rela_ions_ip%", "%_t_uggling with%", "%_a_ lover%",
+        "%a__ for % instead", "%_r_endship%develops%"
+      ]
+    }
+  },
+  "PublicBI": {
+    "0": {
+      "HashTags": {
+        "HashTags_1": {
+          "interaction#content": [
+            "RT %@% #%",
+            "% #% #GreysAnatomy",
+            "%#Scandal%#%",
+            "%#GreysAnatomy%#%",
+            "Watching #% tonight %",
+            "% #% #Scandal",
+            "%#SharkTank%#%",
+            "%#Nashville%#%",
+            "I am watching #% on % %",
+            "% tonight % tonight",
+            "%#ModernFamily%#%",
+            "%#ABC%#%",
+            "%#tvtag%http%",
+            "%#ScandalThursday%#%",
+            "%#OnceUponATime%#%",
+            "%#Castle%#%"
+          ],
+          "twitter#user#location": [
+            "New York% NY %",
+            "% % Ohio",
+            "%UT% % %",
+            "% % , % %",
+            "Chicago% IL %",
+            "% % Texas",
+            "% % - % %",
+            "% % . % %",
+            "Los Angeles% CA %",
+            "% % California",
+            "% Nashville % TN %",
+            "% San % Francisco %",
+            "% New % York %",
+            "% Atlanta % GA %",
+            "% % 757 %",
+            "% % & % %"
+          ]
+        }
+      },
+      "CommonGovernment": {
+        "CommonGovernment_1": {
+          "prod_or_serv_code": [
+            "J0% %0%",
+            "% % 1%KF",
+            "%A%1%",
+            "%B%5%",
+            "R4% %1%",
+            "% % 2%44",
+            "%C%1%",
+            "%D%3%",
+            "Z1% %N%",
+            "% % 0%30",
+            "%E%1%",
+            "%J%0%",
+            "%M%1%",
+            "%R%4%",
+            "%Y%1%",
+            "%Z%2%"
+          ],
+          "vend_vendorname": [
+            "DEPARTMENT % OF % HEALTH",
+            "% % INC.",
+            "%SERVICES%INC%",
+            "%TECHNOLOGIES%LLC%",
+            "UNIVERSITY % OF % MISSOURI",
+            "% % LLC",
+            "%SYSTEMS%CORPORATION%",
+            "%MANAGEMENT%SERVICES%",
+            "COUNTY % OF % SHELBY",
+            "% % CORPORATION",
+            "%CONSTRUCTION%INC%",
+            "%HEALTH%CARE%",
+            "%INTERNATIONAL%INC%",
+            "%COMMUNICATIONS%INC%",
+            "%GENERAL%DYNAMICS%",
+            "%LOCKHEED%MARTIN%"
+          ]
+        }
+      },
+      "CityMaxCapita": {
+        "CityMaxCapita_1": {
+          "User Bio": [
+            "Senior % at %",
+            "% IG% NATHANN",
+            "%love%peace%",
+            "%music%art%",
+            "Student % at % University",
+            "% im % kitty",
+            "%founder%ceo%",
+            "%born%raised%",
+            "Live % life % it",
+            "% akron % 2019",
+            "%business%marketing%",
+            "%social%justice%",
+            "%university%graduate%",
+            "%travel%photography%",
+            "%food%wine%",
+            "%digital%media%"
+          ],
+          "First Link in Tweet": [
+            "http% instagram.com %",
+            "% status % 600",
+            "%instagram.com%p%",
+            "%twitter.com%status%",
+            "https% instagram.com %",
+            "% p % taken",
+            "%swarmapp.com%c%",
+            "%bit.ly%1%",
+            "http% bit.ly %",
+            "% 2015 % story.html",
+            "%youtube.com%watch%",
+            "%huffingtonpost.com%2015%",
+            "%nytimes.com%2015%",
+            "%washingtonpost.com%2015%",
+            "%facebook.com%status%",
+            "%youtu.be%Jk%"
+          ]
+        }
+      }
+    }
+  }
+}

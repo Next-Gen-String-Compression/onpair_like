@@ -219,6 +219,20 @@ int onpair_decode(void* self, uint8_t* bytes_out, uint64_t bytes_cap,
   return 0;
 }
 
+// decode() of the selected rows only, one random-access decompress per row.
+// Each call over-copies up to DECOMPRESS_BUFFER_PADDING bytes past its row,
+// which the next row overwrites and the contract's pad covers at the end.
+int onpair_decode_selected(void* self, const uint32_t* rows, uint64_t count,
+                           uint8_t* bytes_out, uint64_t /*bytes_cap*/,
+                           uint64_t* offsets_out) {
+  const onpair::OnPairColumnView v = static_cast<Handle*>(self)->col.view();
+  offsets_out[0] = 0;
+  for (uint64_t k = 0; k < count; k++)
+    offsets_out[k + 1] =
+        offsets_out[k] + v.decompress(rows[k], reinterpret_cast<char*>(bytes_out + offsets_out[k]));
+  return 0;
+}
+
 // The "compressed" strategy: compile the needles into a token automaton
 // against this chunk's dictionary, then drive it over the packed stream.
 // Compilation happens inside every call — it is per-query work, exactly
@@ -305,6 +319,7 @@ const lb_candidate kVtable = {
     /*view=*/nullptr,  // stored form is not the canonical layout
     /*decode=*/onpair_decode,
     /*destroy=*/onpair_destroy,
+    /*decode_selected=*/onpair_decode_selected,
 };
 
 }  // namespace

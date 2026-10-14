@@ -16,12 +16,15 @@ members = [
     "candidates/cpp_identity",
     "candidates/onpair",
     "candidates/onpair_spiral",
+    "candidates/onpair_spiral_pinned",
+    "candidates/onpair_spiral_refactor",
+    "candidates/onpair_spiral_substring",
     "candidates/lz4",
     "candidates/zstd",
     "candidates/fsst",
-    "candidates/fsst_rs",
     "candidates/fsst_like_tum",
     "candidates/fsst_like_utn",
+    "candidates/fsst_rs",
     "candidates/llm_token_tum",
     "candidates/llm_token_prefilter",
     "scanners/memmem",
@@ -36,8 +39,9 @@ members = [
 # Parked, not built: the author's C++ Aho-Corasick. Benchmarked (2026-07-09)
 # and dropped as a contender — it only roughly matches the public
 # `aho-corasick` crate and loses to `teddy` at small k. Source kept for
-# reference; excluded so the workspace never compiles it.
-exclude = ["scanners/ac_cpp"]
+# reference; excluded so the workspace never compiles it. e2e/builds holds
+# cloned repositories with their own manifests.
+exclude = ["scanners/ac_cpp", "e2e/builds"]
 
 [workspace.package]
 version = "0.1.0"

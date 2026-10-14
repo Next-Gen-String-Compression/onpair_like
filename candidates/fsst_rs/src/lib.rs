@@ -1,3 +1,9 @@
+#![cfg(feature = "enabled")]
+// Off by default: this candidate has not been ported to the local onpair, whose
+// `fsst` module, `prefilter_candidates_sequences` and `PrefilterAnalysis`
+// sequence accessors it still calls. Turn on `enabled` once it is, and re-enable
+// `cand-fsst-rs` in the harness and `fsst-rs` in `dict_onpair`.
+
 //! FSST (the Rust `fsst-rs` port) as a query-axis candidate: OnPair's substring
 //! prefilter planned over an FSST symbol table, verified by decompressing the
 //! survivors.
@@ -49,13 +55,13 @@
 use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
 
-use fsst::{Compressor, ESCAPE_CODE};
+use fsst::{Compressor, Decompressor, ESCAPE_CODE, Symbol};
 use onpair::DictionaryView;
 use lb_abi::*;
 use onpair::CompactDictionary;
 use onpair::fsst::transcode_fsst_to_onpair;
 use onpair::search::index::{TokenFrequencyIndex, build_token_frequency_index};
-use onpair::search::{analyze_prefilter, prefilter_candidates};
+use onpair::search::{analyze_prefilter, prefilter_candidates, prefilter_candidates_sequences};
 use onpair::{Dictionary, Token};
 
 /// FSST's escape marker, as a token id. It is not a dictionary token: it names a
@@ -89,7 +95,61 @@ struct Handle {
     frequencies: TokenFrequencyIndex,
     /// Longest row after decompression, so the verify buffer is sized once.
     widest_row: usize,
+    /// Plaintext row boundaries — what `decode()` hands back.
+    plain_offsets: Vec<u64>,
+    /// The sorted symbol table in `fsst`'s own layout, so the library's
+    /// decompressor can read the transcoded stream. See [`sorted_symbol_table`].
+    symbols: Box<[Symbol; MAX_SYMBOLS]>,
+    lengths: Box<[u8; MAX_SYMBOLS]>,
     num_rows: u64,
+}
+
+/// Buffer size `decompress_into` needs to decode a row of `plain_len` bytes: it
+/// stores a fixed [`Symbol`] per code whatever the symbol's true length, so the
+/// last one can reach `size_of::<Symbol>() - 1` bytes past the row's end. Its
+/// blocked fast path wants a further eight symbols of headroom before it will
+/// engage — undersize the buffer and it silently falls back to the scalar tail.
+fn decode_capacity(plain_len: usize) -> usize {
+    plain_len + 9 * core::mem::size_of::<Symbol>()
+}
+
+/// Codes an FSST stream can name a symbol with: 255 is the escape marker, so the
+/// table holds ids `0..=254` and `fsst`'s decompressor is typed on the full 255.
+const MAX_SYMBOLS: usize = 255;
+
+/// Re-express the transcoded dictionary as an FSST symbol table.
+///
+/// `transcode_fsst_to_onpair` sorts the symbols and renumbers the stream, which
+/// is what makes the column unreadable to the decompressor `Compressor::train`
+/// handed back — that one still indexes the *unsorted* table. But the sorting is
+/// the only thing that changed: token `i` of the dictionary is the symbol code
+/// `i` now names, so reading the dictionary back out in id order reconstructs a
+/// symbol table the stream *is* valid against, and `Decompressor::new` takes an
+/// arbitrary one. Dedup can leave the table shorter than 255; the unused tail is
+/// never addressed by a code, so what it holds does not matter.
+///
+/// Lengths are carried separately because `Symbol::len` undercounts a symbol
+/// ending in `0x00` — the same reason the transcode trusts `symbol_lengths()`.
+fn sorted_symbol_table<V: DictionaryView>(
+    dict: V,
+) -> Result<(Box<[Symbol; MAX_SYMBOLS]>, Box<[u8; MAX_SYMBOLS]>), String> {
+    let n = dict.num_tokens();
+    if n > MAX_SYMBOLS {
+        return Err(format!("{n} symbols exceeds FSST's {MAX_SYMBOLS}"));
+    }
+    let mut symbols = Box::new([Symbol::ZERO; MAX_SYMBOLS]);
+    let mut lengths = Box::new([0u8; MAX_SYMBOLS]);
+    for id in 0..n {
+        let token = dict.token(id as Token);
+        if token.is_empty() || token.len() > core::mem::size_of::<Symbol>() {
+            return Err(format!("token {id} is {} bytes, not 1..=8", token.len()));
+        }
+        let mut padded = [0u8; 8];
+        padded[..token.len()].copy_from_slice(token);
+        symbols[id] = Symbol::from_slice(&padded);
+        lengths[id] = token.len() as u8;
+    }
+    Ok((symbols, lengths))
 }
 
 unsafe fn write_err(err_buf: *mut c_char, err_cap: u64, msg: &str) {
@@ -145,6 +205,7 @@ fn build_inner(v: &LbChunkView, cfg_json: &str) -> Result<Handle, String> {
     // of which appear in the stream as codes of their own. A code the index does
     // not cover cannot be weighed.
     let code_space = dict.num_tokens().max(ESCAPE as usize + 1);
+    let (symbols, lengths) = sorted_symbol_table(dict.as_view())?;
     let frequencies = build_token_frequency_index(&codes, code_space)
         .map_err(|e| format!("frequency index failed: {e}"))?;
 
@@ -154,6 +215,9 @@ fn build_inner(v: &LbChunkView, cfg_json: &str) -> Result<Handle, String> {
         row_offsets,
         frequencies,
         widest_row,
+        plain_offsets: offsets.to_vec(),
+        symbols,
+        lengths,
         num_rows: v.num_rows,
     })
 }
@@ -204,50 +268,127 @@ unsafe extern "C" fn footprint(
     components.len() as u32
 }
 
+/// What one `contains` cost, split where the candidate can see the split.
+#[derive(Default)]
+struct Timings {
+    setup_ns: u64,
+    prefilter_ns: u64,
+    verify_ns: u64,
+    /// The decompression *inside* `verify_ns`, from a second pass over the same
+    /// survivors that decodes without searching. Instrumented mode only — the
+    /// timed path never runs it, so `verify_ns` stays a clean total either way.
+    decode_ns: u64,
+}
+
 /// Plan the cover, run it, decompress what survives and search it.
+///
+/// `timings` is `Some` only in instrumented mode. Reading the clock four times
+/// per call would be noise against a 100 ms scan, but DESIGN.md rule 4 is that
+/// instrumentation must never taint timing, so the timed path does not read it
+/// at all.
 ///
 /// The empty needle matches every row and has no cover to plan — `analyze_prefilter`
 /// asserts on it — so it short-circuits.
-fn contains_rows(h: &Handle, needle: &[u8]) -> Result<(Vec<usize>, usize), String> {
+fn contains_rows(
+    h: &Handle,
+    needle: &[u8],
+    timings: Option<&mut Timings>,
+) -> Result<(Vec<usize>, usize), String> {
     let n = h.num_rows as usize;
     if needle.is_empty() {
         return Ok(((0..n).collect(), n));
     }
+    let clock = || timings.is_some().then(std::time::Instant::now);
+    let mark = |start: Option<std::time::Instant>| start.map_or(0, |t| t.elapsed().as_nanos() as u64);
 
-    let analysis = analyze_prefilter(needle, h.dict.as_view(), &h.frequencies, Some(ESCAPE));
+    // Planning the cover: one dictionary pass and a min cut. Row count feeds the
+    // scan cost model, but the work itself scales with the dictionary, not the
+    // column, which is why it is worth reporting apart from the scan.
+    let started = clock();
+    let analysis = analyze_prefilter(needle, h.dict.as_view(), &h.frequencies, Some(ESCAPE), n);
+    let setup_ns = mark(started);
+
+    let started = clock();
     let mut survivors = Vec::new();
-    prefilter_candidates(&h.codes, &h.row_offsets, &analysis, &mut survivors)
-        .map_err(|e| format!("prefilter failed: {e}"))?;
+    // Sequence probes are adjacent code runs every match contains one of;
+    // their estimated frequency decides between them and the point cover,
+    // and when even the better option would admit most rows, the prefilter
+    // is skipped and every row goes straight to verification.
+    // This candidate's verifier costs about what bulk decoding does per row
+    // (decode one row + memmem), so prefiltering pays until it admits most
+    // rows — the library default of 0.10 assumes a far pricier verifier.
+    // Breakeven measured on clickbench-url-1m: prefilter at 0.57 coverage
+    // still beat decode-everything, 0.96 lost.
+    const MAX_PREFILTER_FRACTION: f64 = 0.65;
+    let sequences = analysis.sequence_probes();
+    let use_sequences =
+        !sequences.is_empty() && analysis.sequence_frequency() < analysis.covered_frequency();
+    let expected_fraction = if use_sequences {
+        f64::from(analysis.sequence_frequency()) / n as f64
+    } else {
+        analysis.expected_candidate_row_fraction(n)
+    };
+    if expected_fraction >= MAX_PREFILTER_FRACTION {
+        survivors.extend(0..n);
+    } else if use_sequences {
+        prefilter_candidates_sequences(&h.codes, &h.row_offsets, sequences, &mut survivors);
+    } else {
+        prefilter_candidates(&h.codes, &h.row_offsets, h.dict.as_view(), &analysis, &mut survivors)
+            .map_err(|e| format!("prefilter failed: {e}"))?;
+    }
+    let prefilter_ns = mark(started);
     let candidates = survivors.len();
 
-    // Verify by decoding each survivor: a code is its token's bytes, an escape
-    // marker means the byte after it stands for itself. One buffer, reused —
-    // a row decodes to exactly the bytes it was built from.
-    let dict = h.dict.as_view();
+    // Verify with FSST's own decompressor. The stream is renumbered, so the
+    // decompressor `Compressor::train` handed back cannot read it — but sorting
+    // is the only thing that changed, and `Decompressor::new` takes whichever
+    // table the caller has, so the sorted one makes the library's loop correct
+    // here. Escapes it already understands, which is the whole reason this is
+    // shorter than the loop it replaces.
+    let decompressor = Decompressor::new(&h.symbols, &h.lengths);
+    let mut decoded: Vec<u8> = Vec::with_capacity(decode_capacity(h.widest_row));
+
+    let started = clock();
     let finder = memchr::memmem::Finder::new(needle);
-    let mut decoded = Vec::with_capacity(h.widest_row);
     let mut rows = Vec::with_capacity(candidates);
     for &row in &survivors {
         let (from, to) = (h.row_offsets[row] as usize, h.row_offsets[row + 1] as usize);
-        decoded.clear();
-        let mut at = from;
-        while at < to {
-            let code = h.codes[at];
-            if code == ESCAPE_CODE {
-                let literal = *h
-                    .codes
-                    .get(at + 1)
-                    .ok_or("code stream ends mid-escape")?;
-                decoded.push(literal);
-                at += 2;
-            } else {
-                decoded.extend_from_slice(dict.token(Token::from(code)));
-                at += 1;
-            }
-        }
+        let len = decompressor.decompress_into(&h.codes[from..to], decoded.spare_capacity_mut());
+        // SAFETY: `decompress_into` initialised the first `len` bytes of the
+        // spare capacity, and `decode_capacity` reserved the slack its fixed
+        // 8-byte stores need past them.
+        unsafe { decoded.set_len(len) };
         if finder.find(&decoded).is_some() {
             rows.push(row);
         }
+        decoded.clear();
+    }
+    let verify_ns = mark(started);
+
+    // Instrumented only: decode the survivors again and throw the bytes away, so
+    // the verify above can be attributed between decompressing and searching.
+    // Same rows, same buffer, same order — only the `find` is missing. It runs
+    // *after* the real pass so that pass is the cold one, as it is when timed.
+    let started = clock();
+    if timings.is_some() {
+        for &row in &survivors {
+            let (from, to) = (h.row_offsets[row] as usize, h.row_offsets[row + 1] as usize);
+            let len = decompressor.decompress_into(&h.codes[from..to], decoded.spare_capacity_mut());
+            // SAFETY: as in the verify pass above.
+            unsafe { decoded.set_len(len) };
+            core::hint::black_box(decoded.as_ptr());
+            decoded.clear();
+        }
+    }
+    let decode_ns = mark(started);
+
+    if let Some(out) = timings {
+        *out = Timings {
+            setup_ns,
+            prefilter_ns,
+            verify_ns,
+            decode_ns,
+        };
     }
     Ok((rows, candidates))
 }
@@ -277,8 +418,12 @@ unsafe extern "C" fn run(
     // The prefilter can panic on a genuinely malformed column — impossible for one
     // we just built — and the catch_unwind keeps any panic from crossing the FFI
     // boundary, turning it into an errored cell instead.
+    let mut timings = Timings::default();
+    let want_timings = (!stats.is_null()).then_some(&mut timings);
     let (rows, candidates) =
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| contains_rows(h, needle))) {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            contains_rows(h, needle, want_timings)
+        })) {
             Ok(Ok(pair)) => pair,
             Ok(Err(_)) | Err(_) => return 13,
         };
@@ -288,11 +433,54 @@ unsafe extern "C" fn run(
     // so timed and instrumented runs do identical work either way.
     if !stats.is_null() {
         (*stats).prefilter_candidates = candidates as u64;
+        (*stats).setup_ns = timings.setup_ns;
+        (*stats).prefilter_ns = timings.prefilter_ns;
+        (*stats).verify_ns = timings.verify_ns;
+        (*stats).decode_ns = timings.decode_ns;
+        (*stats).setup_ns = timings.setup_ns;
+        (*stats).prefilter_ns = timings.prefilter_ns;
+        (*stats).verify_ns = timings.verify_ns;
     }
     let bm = core::slice::from_raw_parts_mut(out_bitmap_words, bitmap_words(h.num_rows));
     for &r in &rows {
         set_bit(bm, r);
     }
+    0
+}
+
+/// Decompress the whole column, so the harness can compose its own scanners over
+/// the plaintext — the same `decode` strategy it already runs over the C++ `fsst`
+/// candidate, which makes the two a like-for-like on the decompressor alone.
+///
+/// One call for the column rather than one per row: the transcode is code-for-code,
+/// so the concatenation of the rows' code streams decodes to the concatenation of
+/// their plaintexts, exactly as it does before the transcode.
+unsafe extern "C" fn decode(
+    this: *mut c_void,
+    bytes_out: *mut u8,
+    bytes_cap: u64,
+    offsets_out: *mut u64,
+) -> i32 {
+    let h = &*(this as *const Handle);
+    let payload = h.plain_offsets[h.num_rows as usize];
+    // The contract guarantees LB_DECODE_PAD past the payload, which is what the
+    // fixed-width stores over-run into; short of that, refuse rather than trust it.
+    if bytes_cap < payload + LB_DECODE_PAD as u64 {
+        return 1;
+    }
+    let out = core::slice::from_raw_parts_mut(
+        bytes_out as *mut core::mem::MaybeUninit<u8>,
+        bytes_cap as usize,
+    );
+    let decompressor = Decompressor::new(&h.symbols, &h.lengths);
+    if decompressor.decompress_into(&h.codes, out) as u64 != payload {
+        return 3;
+    }
+    core::ptr::copy_nonoverlapping(
+        h.plain_offsets.as_ptr(),
+        offsets_out,
+        h.plain_offsets.len(),
+    );
     0
 }
 
@@ -303,7 +491,8 @@ unsafe extern "C" fn destroy(this: *mut c_void) {
 static STRATEGIES: [LbStrategy; 1] = [LbStrategy {
     name: c"pf_memmem".as_ptr(),
     supported_ops: op_bit(LB_CONTAINS),
-}];
+        flags: 0,
+    }];
 
 static VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
@@ -318,8 +507,9 @@ static VTABLE: LbCandidate = LbCandidate {
     footprint: Some(footprint),
     run: Some(run),
     view: None,
-    decode: None,
+    decode: Some(decode),
     destroy: Some(destroy),
+    decode_selected: None,
 };
 
 pub fn vtable() -> &'static LbCandidate {

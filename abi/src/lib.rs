@@ -8,7 +8,7 @@
 
 use core::ffi::c_char;
 
-pub const LB_ABI_VERSION: u32 = 5;
+pub const LB_ABI_VERSION: u32 = 8;
 
 /// Guaranteed writable headroom past the decoded payload in `decode()`
 /// output buffers (mirrors `LB_DECODE_PAD`; SEMANTICS.md rule 8).
@@ -92,12 +92,32 @@ impl LbChunkView {
     }
 }
 
+/// The rows of one chunk an upstream predicate already selected (ABI v7):
+/// chunk-local, ascending, without repeats.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct LbSelection {
+    pub rows: *const u32,
+    pub count: u64,
+}
+
+impl LbSelection {
+    /// # Safety
+    /// `rows` must be valid for `count` entries for the returned lifetime.
+    pub unsafe fn rows_slice<'a>(&self) -> &'a [u32] {
+        core::slice::from_raw_parts(self.rows, self.count as usize)
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct LbQuery {
     pub op: u32,
     pub needles: *const LbBytes,
     pub needle_count: u32,
+    /// NULL = every row. Non-NULL only for a strategy declaring
+    /// `LB_STRATEGY_TAKES_SELECTION`, set per chunk by the harness.
+    pub selection: *const LbSelection,
 }
 
 impl LbQuery {
@@ -156,6 +176,10 @@ pub struct LbRunStats {
     /// Per-query setup (pattern/automaton compilation) before any row or
     /// token is examined (ABI v3).
     pub setup_ns: u64,
+    /// The pass over the rows, for a strategy that owns its scan (ABI v6).
+    /// The harness times this joint itself for the strategies it composes,
+    /// and ignores the field there.
+    pub scan_ns: u64,
     /// The column values this strategy actually evaluated (ABI v5). UNSET
     /// means one per row; a reduced domain (a dictionary front-end
     /// evaluating once per unique value) declares its size here, and it is
@@ -174,6 +198,7 @@ impl LbRunStats {
             prefilter_ns: LB_STAT_UNSET,
             verify_ns: LB_STAT_UNSET,
             setup_ns: LB_STAT_UNSET,
+            scan_ns: LB_STAT_UNSET,
             eval_domain: LB_STAT_UNSET,
             eval_domain_matches: LB_STAT_UNSET,
         }
@@ -182,11 +207,15 @@ impl LbRunStats {
 
 // ----------------------------------------------------------- strategies
 
+/// `LbStrategy::flags`: `run()` honours `LbQuery::selection`.
+pub const LB_STRATEGY_TAKES_SELECTION: u32 = 1;
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct LbStrategy {
     pub name: *const c_char,
     pub supported_ops: u32,
+    pub flags: u32,
 }
 
 // ------------------------------------------------------------ candidate
@@ -217,6 +246,14 @@ pub type DecodeFn = unsafe extern "C" fn(
     bytes_cap: u64,
     offsets_out: *mut u64,
 ) -> i32;
+pub type DecodeSelectedFn = unsafe extern "C" fn(
+    this: *mut core::ffi::c_void,
+    rows: *const u32,
+    count: u64,
+    bytes_out: *mut u8,
+    bytes_cap: u64,
+    offsets_out: *mut u64,
+) -> i32;
 pub type DestroyFn = unsafe extern "C" fn(this: *mut core::ffi::c_void);
 
 #[repr(C)]
@@ -233,6 +270,8 @@ pub struct LbCandidate {
     pub view: Option<ViewFn>,
     pub decode: Option<DecodeFn>,
     pub destroy: Option<DestroyFn>,
+    /// `decode` of the listed rows only, packed (ABI v8).
+    pub decode_selected: Option<DecodeSelectedFn>,
 }
 
 // -------------------------------------------------------------- scanner

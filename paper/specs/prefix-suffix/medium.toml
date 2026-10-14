@@ -1,0 +1,66 @@
+# PREFIX and SUFFIX on the micro-benchmark's roster: the four columns of
+# micro/medium.toml, the sorted-row needles of experiments/matcher_selection
+# (10 per grid cell, 3,294 needles, on the contains grid), 512k-row row groups, NEON.
+# A spec of its own because memmem-hay is contains-only; the baselines compare
+# each row at its start or end with the memmem scanner.
+#
+#   paper/gen-prefix-suffix.sh medium
+#
+# gen-prefix-suffix.sh generates and blesses any missing suite first.
+
+strategies = ["pf_walk", "fsst-prefilter", "interp", "decode", "direct"]
+
+[[datasets]]
+path = "../../../datasets/clickbench-url-1mi"
+
+[[datasets]]
+path = "../../../datasets/amazon-title-1mi"
+
+[[datasets]]
+path = "../../../datasets/dbpedia-abstract-1mi"
+
+[[datasets]]
+path = "../../../datasets/imdb-charname-1mi"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/clickbench-url-1mi/prefix-suffix-v1-s42-n10-9317925fe4f35851"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/amazon-title-1mi/prefix-suffix-v1-s42-n10-b5f3955a0a3ac7a2"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/prefix-suffix-v1-s42-n10-5235146f8a98b0e6"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/prefix-suffix-v1-s42-n10-4b724f829da64c04"
+
+[[candidates]]
+name = "onpair_spiral"
+configs = ['{"bits":12,"prune":1.0}', '{"bits":16,"prune":1.0}']
+
+# OnPair as a codec: decode the chunk, then compare each row.
+[[candidates]]
+name = "onpair"
+
+[[candidates]]
+name = "fsst_like_tum"
+
+[[candidates]]
+name = "fsst"
+
+[[candidates]]
+name = "fsst_prefilter"
+
+# The raw view (`direct`), no codec at all.
+[[candidates]]
+name = "uncompressed"
+
+[[scanners]]
+name = "memmem"
+
+[measure]
+chunk_rows = [524288]
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

@@ -1,0 +1,73 @@
+# The micro-benchmark on the 2^20-row roster: four columns of 1,048,576 rows,
+# the SA + LCP needles of experiments/matcher_selection (10 per grid cell, 2,053 needles),
+# 512k-row row groups. NEON and AVX-512. `llvm-simd` registers only on an x86
+# build against LLVM 14-16 and yields nothing on arm64.
+#
+#   paper/gen-micro.sh medium [neon|avx512]
+#
+# The suites are generated, not committed. Rebuild them with
+#   ./target/release/matcher-selection --config experiments/matcher_selection/config-1mi.toml --per-cell 10 --bless
+
+strategies = ["pf_walk", "decode", "interp", "llvm-simd", "fsst-prefilter", "direct", "dict+pf_walk"]
+
+[[datasets]]
+path = "../../../datasets/clickbench-url-1mi"
+
+[[datasets]]
+path = "../../../datasets/amazon-title-1mi"
+
+[[datasets]]
+path = "../../../datasets/dbpedia-abstract-1mi"
+
+# char_name.name: short, nearly every row distinct.
+[[datasets]]
+path = "../../../datasets/imdb-charname-1mi"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/clickbench-url-1mi/sa-lcp-v1-s42-n10-76a1cfeaf7ff8fbe"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/amazon-title-1mi/sa-lcp-v1-s42-n10-9355081547f10caf"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa-lcp-v1-s42-n10-2862fe216f2b674b"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/sa-lcp-v1-s42-n10-9adc88e9eb33e0eb"
+
+[[candidates]]
+name = "onpair_spiral"
+configs = ['{"bits":12,"prune":1.0}', '{"bits":16,"prune":1.0}']
+
+# onpair_spiral over the chunk's unique values, verdicts scattered through per-row codes.
+[[candidates]]
+name = "dict_onpair_spiral"
+configs = ['{"bits":12,"prune":1.0}', '{"bits":16,"prune":1.0}']
+
+# OnPair as a codec: decode the chunk, then one memmem-hay pass over it.
+[[candidates]]
+name = "onpair"
+
+[[candidates]]
+name = "fsst_like_tum"
+
+[[candidates]]
+name = "fsst"
+
+[[candidates]]
+name = "fsst_prefilter"
+
+# memmem-hay over the raw view (`direct`), no codec at all.
+[[candidates]]
+name = "uncompressed"
+
+# Bulk scan: one pass over the chunk's payload, hits mapped back to rows.
+[[scanners]]
+name = "memmem-hay"
+
+[measure]
+chunk_rows = [524288]
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

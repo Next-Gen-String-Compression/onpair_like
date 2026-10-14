@@ -93,6 +93,119 @@ fn catalogue_equals_exhaustive_row_oracle() {
     }
 }
 
+fn exact_ends(rows: &[Vec<u8>], max_len: usize, op: NeedleOp) -> BTreeMap<Vec<u8>, u64> {
+    let mut result = BTreeMap::new();
+    for row in rows {
+        for len in 1..=max_len.min(row.len()) {
+            let end = match op {
+                NeedleOp::Suffix => row[row.len() - len..].to_vec(),
+                _ => row[..len].to_vec(),
+            };
+            *result.entry(end).or_default() += 1;
+        }
+    }
+    result
+}
+
+fn ends_index<'a>(
+    payload: &'a [u8],
+    offsets: &'a [u64],
+    max_len: usize,
+    op: NeedleOp,
+) -> SubstringIndex<'a> {
+    let limits = IndexLimits {
+        max_needle_len: max_len,
+        ..IndexLimits::default()
+    };
+    match op {
+        NeedleOp::Suffix => SubstringIndex::suffixes(payload, offsets, limits),
+        _ => SubstringIndex::prefixes(payload, offsets, limits),
+    }
+    .unwrap()
+}
+
+fn check_ends(rows: &[Vec<u8>], max_len: usize, op: NeedleOp) {
+    let (payload, offsets) = flatten(rows);
+    let index = ends_index(&payload, &offsets, max_len, op);
+    let mut observed = BTreeMap::new();
+    index.visit(|f| {
+        for len in f.min_len..=f.max_len {
+            let bytes = index.needle(f.position, len).to_vec();
+            assert!(index.contains(&bytes));
+            assert!(
+                observed.insert(bytes, f.matching_rows).is_none(),
+                "family overlap"
+            );
+        }
+    });
+    let exact = exact_ends(rows, max_len, op);
+    assert_eq!(observed, exact, "{op:?} rows={rows:?}");
+    for needle in exact_substrings(rows, max_len).keys() {
+        assert_eq!(index.contains(needle), exact.contains_key(needle));
+    }
+}
+
+#[test]
+fn prefix_and_suffix_catalogues_equal_exhaustive_row_oracle() {
+    let cases = [
+        vec![vec![]],
+        vec![
+            b"apple apple".to_vec(),
+            b"apple".to_vec(),
+            vec![],
+            b"pear".to_vec(),
+        ],
+        vec![b"appappapple".to_vec(), b"appapple".to_vec()],
+        vec![b"aaaaaa".to_vec(), b"aaaaaa".to_vec(), b"aa".to_vec()],
+        vec![vec![0, 255, 0, 128], vec![], vec![255, 0], vec![0]],
+    ];
+    let mut rng = Rng::from_seed(43);
+    let random = (0..150).map(|_| {
+        (0..1 + rng.below(10))
+            .map(|_| {
+                (0..rng.below(24))
+                    .map(|_| [0, b'a', b'b', 255][rng.below(4) as usize])
+                    .collect()
+            })
+            .collect::<Vec<Vec<u8>>>()
+    });
+    for rows in cases.into_iter().chain(random.collect::<Vec<_>>()) {
+        for op in [NeedleOp::Prefix, NeedleOp::Suffix] {
+            for max_len in [1, 4, 12, 256] {
+                check_ends(&rows, max_len, op);
+            }
+        }
+    }
+}
+
+#[test]
+fn prefix_and_suffix_generation_is_exact() {
+    let rows = vec![
+        b"apple banana apple".to_vec(),
+        b"apple banana".to_vec(),
+        b"banana pear".to_vec(),
+        vec![],
+    ];
+    let (payload, offsets) = flatten(&rows);
+    for op in [NeedleOp::Prefix, NeedleOp::Suffix] {
+        let index = ends_index(&payload, &offsets, 256, op);
+        let mut request = BalancedRequest::new(rows.len() as u64, 7);
+        request.negative_attempts = 200;
+        let generated = index.generate(&request).unwrap();
+        assert_eq!(generated.op, op);
+        let oracle = exact_ends(&rows, 256, op);
+        assert!(!generated.needles.is_empty());
+        for n in &generated.needles {
+            assert_eq!(n.matching_rows, oracle.get(&n.bytes).copied().unwrap_or(0));
+            let witness = &payload[n.source_position..n.source_position + n.bytes.len()];
+            assert!(oracle.contains_key(witness));
+            if n.mutation_position.is_none() {
+                assert_eq!(witness, &n.bytes[..]);
+            }
+        }
+    }
+}
+
 #[test]
 fn generation_is_unique_balanced_exact_and_reproducible() {
     let rows = vec![

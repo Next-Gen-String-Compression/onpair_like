@@ -1,0 +1,17 @@
+# SpiralDB's OnPair on the `codex/prefilter-scan-refactor` branch, a third copy
+# of the crate alongside the local checkout (`onpair_spiral`) and the pinned
+# upstream rev (`onpair_spiral_pinned`). Nothing crosses between the three.
+[package]
+name = "lb-cand-onpair-spiral-refactor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lb-abi = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# branch = "codex/prefilter-scan-refactor", head 78f53c6 at time of integration.
+# Pinned by rev, not tracked by branch: a measurement has to name the code it
+# measured, and the branch moves.
+onpair = { git = "https://github.com/spiraldb/onpair.git", rev = "78f53c696475eb2c67ad1c3737791a714feb06c8" }

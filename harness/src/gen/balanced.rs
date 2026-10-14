@@ -10,10 +10,12 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 
 use super::sampled::Rng;
-use super::substrings::{Family, SubstringIndex};
+use super::substrings::{Family, NeedleOp, SubstringIndex};
 use crate::suite::Result;
 
 pub const SUBSTRING_GENERATOR_VERSION: &str = "sa-lcp-v1";
+/// The same selection over the rows sorted by their bytes or reversed bytes.
+pub const PREFIX_SUFFIX_GENERATOR_VERSION: &str = "prefix-suffix-v1";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LengthBucket {
@@ -42,12 +44,14 @@ impl BalancedRequest {
     /// Stable output name for one dataset and generation configuration. Other
     /// datasets, experiment order, cache location and timings do not enter it.
     pub fn suite_key(&self, dataset_checksum: &str) -> Result<String> {
-        let identity = serde_json::to_vec(&(SUBSTRING_GENERATOR_VERSION, dataset_checksum, self))?;
+        self.suite_key_of(SUBSTRING_GENERATOR_VERSION, dataset_checksum)
+    }
+
+    /// `suite_key` for the suite of another generator version.
+    pub fn suite_key_of(&self, generator: &str, dataset_checksum: &str) -> Result<String> {
+        let identity = serde_json::to_vec(&(generator, dataset_checksum, self))?;
         let hash = xxhash_rust::xxh3::xxh3_64(&identity);
-        Ok(format!(
-            "{SUBSTRING_GENERATOR_VERSION}-s{}-n{}-{hash:016x}",
-            self.seed, self.per_cell
-        ))
+        Ok(format!("{generator}-s{}-n{}-{hash:016x}", self.seed, self.per_cell))
     }
 
     /// 1–256 bytes, 20 per cell. Zero and one row are separate buckets;
@@ -152,6 +156,7 @@ pub struct CellReport {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GeneratedNeedles {
     pub generator: String,
+    pub op: NeedleOp,
     pub dataset_checksum: String,
     pub total_rows: u64,
     pub request: BalancedRequest,
@@ -212,7 +217,12 @@ impl SubstringIndex<'_> {
         });
 
         let mut result = GeneratedNeedles {
-            generator: SUBSTRING_GENERATOR_VERSION.into(),
+            generator: match self.op {
+                NeedleOp::Contains => SUBSTRING_GENERATOR_VERSION,
+                _ => PREFIX_SUFFIX_GENERATOR_VERSION,
+            }
+            .into(),
+            op: self.op,
             dataset_checksum: self.checksum.clone(),
             total_rows: self.num_rows(),
             request: request.clone(),
@@ -254,7 +264,7 @@ impl SubstringIndex<'_> {
                         };
                         let pick = rng.below(choices[len].len() as u64) as usize;
                         let family = pools[cell].items[choices[len].swap_remove(pick)];
-                        let bytes = self.payload[family.position..family.position + len].to_vec();
+                        let bytes = self.needle(family.position, len).to_vec();
                         if !used.insert(bytes.clone()) {
                             return Err(
                                 "duplicate positive needle: catalogue invariant violated".into()
@@ -267,7 +277,7 @@ impl SubstringIndex<'_> {
                             bytes,
                             matching_rows: family.matching_rows,
                             cell,
-                            source_position: family.position,
+                            source_position: self.needle_start(family.position, len),
                             mutation_position: None,
                         });
                     }
@@ -327,7 +337,7 @@ impl SubstringIndex<'_> {
             report.attempts += 1;
             usage[len] += 1;
             let parent = parents[choices[len][rng.below(choices[len].len() as u64) as usize]];
-            let mut bytes = self.payload[parent.position..parent.position + len].to_vec();
+            let mut bytes = self.needle(parent.position, len).to_vec();
             let position = rng.below(len as u64) as usize;
             let original = bytes[position];
             let mut replacement = alphabet[rng.below(alphabet.len() as u64) as usize];
@@ -345,7 +355,7 @@ impl SubstringIndex<'_> {
                 bytes,
                 matching_rows: 0,
                 cell: report.cell,
-                source_position: parent.position,
+                source_position: self.needle_start(parent.position, len),
                 mutation_position: Some(position),
             });
         }

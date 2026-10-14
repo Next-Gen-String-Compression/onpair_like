@@ -1,33 +1,52 @@
 # Author-owned build for fsst_prefilter + dict_fsst_prefilter: the gropaul/fsst
-# fork (branch search/prefilter: whole-string compression, codes written in
+# fork (branch search/prefilter-simple: whole-string compression, codes written in
 # byte order, and the header-only min-cut prefilter under search/prefilter)
 # plus the Matcher core. A further FSST copy in the harness, so all FSST
 # symbols are localized at link, leaving only the two lb_candidate_* entry
 # points exported (cf. fsst_decode_prefilter/CMakeLists.txt).
 #
-# The fork is fetched pinned. To develop against a local checkout instead:
-#   FSST_SOURCE_DIR=/path/to/fsst cargo build --release
+# Built from the fork at FSST_SHA in pins.env. The DuckDB checkout beside this
+# repository, ../duckdb/third_party/fsst/upstream, the one working copy of the
+# fork, is used when it is clean at the pin, else the pin is fetched.
+# FSST_SOURCE_DIR=/path/to/fsst overrides both.
 cmake_minimum_required(VERSION 3.21)
 project(lb_fsst_prefilter CXX)
 
 include(FetchContent)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../common/pins.cmake)
+lb_pin(FSST_SHA)
+set(LB_FSST_LOCAL "${CMAKE_CURRENT_SOURCE_DIR}/../../../../duckdb/third_party/fsst/upstream")
+# FetchContent keeps this as a cache entry, so a plain set() would lose to the
+# empty value an earlier configure cached.
 if(DEFINED ENV{FSST_SOURCE_DIR})
-    set(FETCHCONTENT_SOURCE_DIR_FSST_FORK "$ENV{FSST_SOURCE_DIR}")
-    message(STATUS "lb_fsst_prefilter: using local FSST checkout $ENV{FSST_SOURCE_DIR}")
+    set(FETCHCONTENT_SOURCE_DIR_FSST_FORK "$ENV{FSST_SOURCE_DIR}" CACHE PATH "" FORCE)
+else()
+    execute_process(COMMAND git -C "${LB_FSST_LOCAL}" describe --always --dirty --abbrev=40
+                    OUTPUT_VARIABLE LB_FSST_LOCAL_HEAD OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if(LB_FSST_LOCAL_HEAD STREQUAL "${FSST_SHA}")
+        set(FETCHCONTENT_SOURCE_DIR_FSST_FORK "${LB_FSST_LOCAL}" CACHE PATH "" FORCE)
+    else()
+        unset(FETCHCONTENT_SOURCE_DIR_FSST_FORK CACHE)
+    endif()
+endif()
+if(FETCHCONTENT_SOURCE_DIR_FSST_FORK)
+    message(STATUS "lb_fsst_prefilter: using local FSST checkout ${FETCHCONTENT_SOURCE_DIR_FSST_FORK}")
 endif()
 FetchContent_Declare(
     fsst_fork
     GIT_REPOSITORY https://github.com/gropaul/fsst.git
-    GIT_TAG        1db200f102f4fc3716afaf0dc9325747a25d3b21
+    GIT_TAG        ${FSST_SHA}
     SOURCE_SUBDIR  __lb_no_configure__
 )
 FetchContent_MakeAvailable(fsst_fork)
 
 include(CheckCXXCompilerFlag)
-check_cxx_compiler_flag("-march=native" LB_FSST_MARCH_NATIVE)
-# The prefilter kernels are NEON, AVX-512BW or AVX2 by what -march=native
-# defines on the build host, which is the machine that runs the result; the
-# candidate declares that set in cpu_features.
+# The prefilter kernels are NEON, AVX-512BW or AVX2 by what -march defines;
+# the candidate declares the set it got in cpu_features. Default `native` is
+# the host that will run the result. Set LB_FSST_MARCH to pin one instead,
+# e.g. `x86-64-v3` for AVX2 on a machine that also has AVX-512.
+set(LB_FSST_MARCH "native" CACHE STRING "-march= value for the prefilter kernels")
+check_cxx_compiler_flag("-march=${LB_FSST_MARCH}" LB_FSST_MARCH_OK)
 
 add_library(fp_objs OBJECT
     fsst_prefilter_candidate.cpp
@@ -44,7 +63,7 @@ target_include_directories(fp_objs PRIVATE
 set_target_properties(fp_objs PROPERTIES
     CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON POSITION_INDEPENDENT_CODE ON)
 target_compile_options(fp_objs PRIVATE
-    -O3 "$<$<BOOL:${LB_FSST_MARCH_NATIVE}>:-march=native>" -fvisibility=hidden)
+    -O3 "$<$<BOOL:${LB_FSST_MARCH_OK}>:-march=${LB_FSST_MARCH}>" -fvisibility=hidden)
 set_source_files_properties(${fsst_fork_SOURCE_DIR}/fsst_avx512.cpp
     PROPERTIES COMPILE_FLAGS "-O1")
 

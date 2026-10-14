@@ -8,3 +8,9 @@ license.workspace = true
 lb-abi = { workspace = true }
 lb-cand-onpair = { path = "../onpair" }
 lb-cand-onpair-spiral = { path = "../onpair_spiral" }
+# Optional while `fsst_rs` does not build against the local onpair. Turning the
+# feature on brings back the `dict_fsst_rs` candidate with it.
+lb-cand-fsst-rs = { path = "../fsst_rs", optional = true }
+
+[features]
+fsst-rs = ["dep:lb-cand-fsst-rs"]

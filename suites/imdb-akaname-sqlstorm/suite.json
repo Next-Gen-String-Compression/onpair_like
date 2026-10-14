@@ -1,0 +1,15 @@
+{
+  "format_version": 1,
+  "id": "imdb-akaname-sqlstorm",
+  "description": "Curated from like_predicates.csv (GitHub-crawled SQLStorm-style LIKE predicates) against the imdb-akaname column. Deduplicated; meta.use_count preserves crawl frequency; ilike folded to case-sensitive per the contract.",
+  "dataset": {
+    "id": "imdb-akaname",
+    "checksum": "xxh3:b55dd01e0f8f053e"
+  },
+  "provenance": {
+    "curated_by": "datasets/SQLStorm/make_like_suites.py",
+    "source_csv": "like_predicates.csv"
+  },
+  "truth_algo": "bitmap-xxh3-v1",
+  "blessed_at": "2026-08-13T10:51:10Z"
+}

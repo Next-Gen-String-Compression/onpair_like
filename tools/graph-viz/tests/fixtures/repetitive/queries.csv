@@ -1,0 +1,13 @@
+uuid,dataset,row_group,needle,algorithm,rows,needle_selectivity,cut_selectivity_estimated,cut_selectivity_measured
+11e560c5-2d8d-185e-d0ed-50d2f8ba2ef1,repetitive,0,bmV3c2xldHRlcg==,onpair16,200,0.5,0.5,0.5
+ea957709-9f11-3cd5-de0e-5b69fe7b79a5,repetitive,0,YXJ0L2NoZWNrb3U=,onpair16,200,0.5,0.5,0.5
+d6fb4726-ce7d-a384-03e9-bb9baf5617f9,repetitive,0,dXQ/cmVmPW5ld3Ns,onpair16,200,0.5,0.5,0.5
+353ceb31-a6f7-1936-1538-141f5b9ea76d,repetitive,0,cmcvY2FydC9jaGVj,onpair16,200,0.5,0.5,0.5
+3daf55f9-d7e3-906b-5385-217a62536f45,repetitive,0,cmVmPW5ldw==,onpair16,200,0.5,0.5,0.5
+69d61cb6-a402-f908-8aa9-a316a9b73e91,repetitive,0,L2NhcnQvY2hlY2tvdXQ/cmVmPW5ld3NsZXR0ZXI=,onpair16,200,0.5,0.5,0.5
+435beb29-cad4-e88c-f4e2-ecea08dd5ea1,repetitive,0,bmV3c2xldHRlcg==,fsst,200,0.5,0.5,0.5
+8677e110-6687-ad0f-60fc-7ab995d14059,repetitive,0,YXJ0L2NoZWNrb3U=,fsst,200,0.5,0.5,0.5
+29c96e87-94c2-306e-c06a-0d6ee8ab1491,repetitive,0,dXQ/cmVmPW5ld3Ns,fsst,200,0.5,0.5,0.5
+bd2448ce-b08e-8554-86c4-968d98286bf5,repetitive,0,cmcvY2FydC9jaGVj,fsst,200,0.5,0.5,0.5
+3bce468d-b977-b879-241e-05a5ef1e4d75,repetitive,0,cmVmPW5ldw==,fsst,200,0.5,0.5,0.5
+02b105a1-d087-856a-a148-3cda0c512c15,repetitive,0,L2NhcnQvY2hlY2tvdXQ/cmVmPW5ld3NsZXR0ZXI=,fsst,200,0.5,0.5,0.5
