@@ -16,7 +16,7 @@ use serde::Deserialize;
 
 #[derive(Parser)]
 struct Args {
-    #[arg(long, default_value = "experiments/matcher_selection/config.toml")]
+    #[arg(long, default_value = "experiments/matcher_selection/config-1mi.toml")]
     config: PathBuf,
     /// Restrict preparation to named datasets, preserving manifest order.
     #[arg(long)]
@@ -309,7 +309,7 @@ mod tests {
 
     #[test]
     fn configured_datasets_have_preparation_recipes() {
-        let mut config: Config = toml::from_str(include_str!("../config.toml")).unwrap();
+        let mut config: Config = toml::from_str(include_str!("../config-1mi.toml")).unwrap();
         validate(&config).unwrap();
         let sources = include_str!("../../../datasets/sources.yaml");
         let recipes: HashSet<_> = sources

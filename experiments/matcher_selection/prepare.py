@@ -16,7 +16,7 @@ except ImportError:
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CONFIG = Path(__file__).with_name("config.toml")
+DEFAULT_CONFIG = Path(__file__).with_name("config-1mi.toml")
 
 
 def main():

@@ -1,9 +1,6 @@
-# Dependencies of the dataset preparation scripts (downloads and archive
-# extraction are stdlib; these are the manifest reader, the parquet writers and
-# the TPC-H generator).
-#   pyyaml, pyarrow  datasets/prepare.py, datasets/loghub/prepare_hdfs.py
-#   duckdb           datasets/prepare.py (TPC-H), and the whole CSV -> parquet
-#                    conversion in datasets/OpenRCA/download_and_transform.py
+# Dependencies of datasets/prepare.py (downloads and archive extraction are
+# stdlib; these are the manifest reader and the parquet writer), plus duckdb for
+# the results database analysis/ builds.
 pyyaml>=6
 pyarrow>=15
 duckdb>=1.0

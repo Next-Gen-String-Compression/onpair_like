@@ -15,246 +15,13 @@
 #     tools/datasets/*.py) so both papers evaluate the same row streams:
 #     original file order, no shuffling, same field/strip/skip rules.
 #
-# `default: true` marks the paper roster (the compression paper's six
-# headline columns + ClickBench URLs). Non-default entries are supported by
-# prepare.py but fetched only when named with --dataset.
+# The paper's 2^20-row roster: one row count for every column, so a needle
+# grid means the same thing across them.
 
 version: 1
 datasets:
-  - id: clickbench-url-1m
-    default: true
-    source:
-      url: https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_0.parquet
-      sha256: fa134fe101e68324e0de851146fda69624f5cbb707d387141d1c2a88a219a16d
-      license: ClickBench (Yandex Metrica sample, published for benchmarking)
-      download_bytes: 122446530
-    kind: parquet            # already columnar: ingest reads it directly
-    params: { column: URL }
-    expected_checksum: "xxh3:d164c1b5dbd6aff2"
-    approx: { rows: 1000000, payload_bytes: 88562192 }
-    notes: URLs, heavy prefix structure, high substring redundancy.
-    # Full ~100M-row column: a manual recipe, not pinned here. Download
-    # https://datasets.clickhouse.com/hits_compatible/hits.parquet (~15 GB) and
-    # ingest its URL column under its own id (clickbench-url). Per the design a
-    # differently-sized slice is a different dataset with its own suites.
-
-  - id: msmarco-query
-    default: true
-    source:
-      url: https://msmarco.z22.web.core.windows.net/msmarcoranking/queries.tar.gz
-      sha256: 05e4c62c9c8520cd695725340d4c990627fd1a92eb8a71b88e3c746031ba6de8
-      license: MS-MARCO (non-commercial research)
-      download_bytes: 18901101
-    kind: tar-tsv-field      # every .tsv member, field 1, strip, skip empty
-    params: { field: 1 }
-    expected_checksum: "xxh3:ef411cc5c265637e"
-    approx: { rows: 1010916, payload_bytes: 35901783 }
-    notes: Short natural-language search queries — the honest short-row case.
-
-  - id: msmarco-url
-    default: true
-    source:
-      url: https://msmarco.z22.web.core.windows.net/msmarcoranking/msmarco-docs.tsv.gz
-      sha256: 78f5cbaae6be4376561a3a16f475c9be6dbcd50e696a67b08fd825c21a263b35
-      license: MS-MARCO (non-commercial research)
-      download_bytes: 8500000000
-    kind: gzip-tsv-field     # field 1 (url), kept only if it startswith http
-    params: { field: 1, require_prefix: "http" }
-    expected_checksum: "xxh3:3f4f2025a92050cf"
-    approx: { rows: 3210000, payload_bytes: 210000000 }
-    notes: >
-      ~8 GB download for a 210 MB column — the price of the original dump.
-      URLs with different host mix than ClickBench.
-
-  - id: amazon-title
-    default: true
-    source:
-      url: https://mcauleylab.ucsd.edu/public_datasets/data/amazon_2023/raw/meta_categories/meta_Books.jsonl.gz
-      sha256: d41f2348d3e0f3099d2a7ee45b304970282199f92a7ccdfe8ba4b1f753009a10
-      license: Amazon Reviews 2023 (McAuley lab, research use)
-      download_bytes: 3200000000
-    kind: jsonl-field        # json per line, .title.strip(), skip empty
-    params: { field: title }
-    expected_checksum: "xxh3:3a0b57c7356a57a6"
-    approx: { rows: 4448181, payload_bytes: 231304376 }
-    notes: Book titles, natural language, U/N=0.87, L_avg 52 B.
-
-  - id: dbpedia-abstract
-    default: true
-    source:
-      url: https://databus.dbpedia.org/dbpedia/text/short-abstracts/2022.12.01/short-abstracts_lang=en.ttl.bz2
-      sha256: e4793027fabd922948763794c4643b07729d207bb537fc766a15961aa711efdd
-      license: CC-BY-SA-4.0
-      download_bytes: 500000000
-    kind: ttl-en-literal     # N-Triples object between '"' and '"@en', raw escaped form
-    params: { limit: 1000000 }
-    expected_checksum: "xxh3:09644aa73fc3e4b1"
-    approx: { rows: 1000000, payload_bytes: 337454075 }
-    notes: Long text (L_avg ~338 B), 99.8% distinct — the long-row showcase.
-
-  - id: tpch-pname-sf10
-    default: true
-    source:
-      url: "duckdb-extension:tpch"   # generated locally, deterministic per SF
-      sha256: n/a
-      license: TPC (academic/benchmark use)
-      download_bytes: 0
-    kind: tpch-duckdb
-    params: { sf: 10, table: part, column: p_name }
-    expected_checksum: "xxh3:ea4860e177003f58"
-    approx: { rows: 2000000, payload_bytes: 65495664 }
-    notes: Synthetic-vocabulary part names, U/N=1.0 — the DB anchor.
-
-  - id: tpch-ccomment-sf10
-    default: true
-    source:
-      url: "duckdb-extension:tpch"
-      sha256: n/a
-      license: TPC (academic/benchmark use)
-      download_bytes: 0
-    kind: tpch-duckdb
-    params: { sf: 10, table: customer, column: c_comment }
-    expected_checksum: "xxh3:af8cd73ba0811038"
-    approx: { rows: 1500000, payload_bytes: 108724798 }
-    notes: Grammar-generated comment text, U/N=0.94.
-
-  # ---- non-default extras (fetch with --dataset <id>) --------------------
-
-  - id: dblp-title
-    default: false
-    source:
-      # Archived monthly release: https://doi.org/10.4230/dblp.xml.2025-12-01
-      url: https://drops.dagstuhl.de/storage/artifacts/dblp/xml/2025/dblp-2025-12-01.xml.gz
-      sha256: 31db48913627f14b32c64b5c3769ae544e99a1221713b67840ff71c44be64ab9
-      license: CC0-1.0
-      download_bytes: 1017708454
-    kind: dblp-xml
-    params: { element: title }
-    expected_checksum: "xxh3:998345fd3f6e958e"
-    approx: { rows: 12166021, payload_bytes: 687588456 }
-    notes: Publication titles; U/N≈0.65 (duplicated republications).
-
-  - id: dblp-author
-    default: false
-    source:
-      url: https://drops.dagstuhl.de/storage/artifacts/dblp/xml/2025/dblp-2025-12-01.xml.gz
-      sha256: 31db48913627f14b32c64b5c3769ae544e99a1221713b67840ff71c44be64ab9
-      license: CC0-1.0
-      download_bytes: 1017708454
-    kind: dblp-xml
-    params: { element: author }
-    expected_checksum: "xxh3:73199b12f5c94c66"
-    approx: { rows: 31805022, payload_bytes: 450471429 }
-    notes: Author names — short, low alphabet diversity, heavy repetition.
-
-  - id: imdb-keyword
-    default: false
-    source:
-      # JOB benchmark IMDB snapshot (Leis et al., VLDB'15), CWI mirror.
-      # One download serves every imdb-* entry (same raw file, per-id copy).
-      url: https://event.cwi.nl/da/job/imdb.tgz
-      sha256: 25f9d893c54f903366e0c263f88db0d429dbc2b159d4987ebc1e203242a7e988
-      license: IMDb data, distributed for the JOB benchmark (research use)
-      download_bytes: 1263193115
-    kind: tgz-csv-column
-    params: { member: keyword.csv, column_index: 1 }
-    expected_checksum: "xxh3:0bce8a4b9edab222"
-    approx: { rows: 134170, payload_bytes: 2700000 }
-    notes: >
-      Movie keywords ("based-on-novel"), short low-entropy tags. Target of the
-      most-used column in like_predicates.csv (71 of 324 predicate uses).
-
-  - id: imdb-akaname
-    default: false
-    source:
-      url: https://event.cwi.nl/da/job/imdb.tgz
-      sha256: 25f9d893c54f903366e0c263f88db0d429dbc2b159d4987ebc1e203242a7e988
-      license: IMDb data, distributed for the JOB benchmark (research use)
-      download_bytes: 1263193115
-    kind: tgz-csv-column
-    params: { member: aka_name.csv, column_index: 2 }
-    expected_checksum: "xxh3:b55dd01e0f8f053e"
-    approx: { rows: 901343, payload_bytes: 16000000 }
-    notes: >
-      Alternative person names ("Marilyn Monroe"), the second-most-used column
-      in like_predicates.csv (50 uses; Smith/Chris/John needles really match).
-
-  - id: tpch-lcomment-sf10
-    default: false
-    source:
-      url: "duckdb-extension:tpch"
-      sha256: n/a
-      license: TPC (academic/benchmark use)
-      download_bytes: 0
-    kind: tpch-duckdb
-    params: { sf: 10, table: lineitem, column: l_comment }
-    expected_checksum: recorded-at-prepare
-    approx: { rows: 60000000, payload_bytes: 1600000000 }
-    notes: 1.6 GB column — main-memory-scale runs only.
-
-  - id: tpch-caddress-sf10
-    default: false
-    source:
-      url: "duckdb-extension:tpch"
-      sha256: n/a
-      license: TPC (academic/benchmark use)
-      download_bytes: 0
-    kind: tpch-duckdb
-    params: { sf: 10, table: customer, column: c_address }
-    expected_checksum: "xxh3:59aba237e90e0a5d"
-    approx: { rows: 1500000, payload_bytes: 37501213 }
-    notes: Random-character addresses — the low-redundancy adversary.
-
-  # The next three columns exist for the FSST-LIKE-Matching (DaMoN'26) paper
-  # workload — datasets/fsst-like-tum/make_suites.py. Together with the
-  # default tpch-pname-sf10 they cover all four TPC-H columns it queries.
-  - id: tpch-ptype-sf10
-    default: false
-    source:
-      url: "duckdb-extension:tpch"
-      sha256: n/a
-      license: TPC (academic/benchmark use)
-      download_bytes: 0
-    kind: tpch-duckdb
-    params: { sf: 10, table: part, column: p_type }
-    expected_checksum: "xxh3:f969f8bc7b093f83"
-    approx: { rows: 2000000, payload_bytes: 41000000 }
-    notes: 150 distinct three-word type strings — the categorical extreme.
-
-  - id: tpch-ocomment-sf10
-    default: false
-    source:
-      url: "duckdb-extension:tpch"
-      sha256: n/a
-      license: TPC (academic/benchmark use)
-      download_bytes: 0
-    kind: tpch-duckdb
-    params: { sf: 10, table: orders, column: o_comment }
-    expected_checksum: "xxh3:a978f31c1c1ba50b"
-    approx: { rows: 15000000, payload_bytes: 730000000 }
-    notes: Grammar-generated comment text at 10x the c_comment row count.
-
-  - id: tpch-scomment-sf10
-    default: false
-    source:
-      url: "duckdb-extension:tpch"
-      sha256: n/a
-      license: TPC (academic/benchmark use)
-      download_bytes: 0
-    kind: tpch-duckdb
-    params: { sf: 10, table: supplier, column: s_comment }
-    expected_checksum: "xxh3:306741a5d5c088fe"
-    approx: { rows: 100000, payload_bytes: 6300000 }
-    notes: Grammar-generated comment text, small enough for quick runs.
-
-  # ---------------------------------------------------------------------
-  # The 2^20-row roster for the SA/LCP needle suites. One row count for
-  # every column, so a needle grid means the same thing across them.
-  # The originals above keep their row counts and checksums; nothing that
-  # already ran against them is invalidated.
-
   - id: clickbench-url-1mi
-    default: false
+    default: true
     source:
       url: https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_0.parquet
       sha256: fa134fe101e68324e0de851146fda69624f5cbb707d387141d1c2a88a219a16d
@@ -271,7 +38,7 @@ datasets:
     notes: hits_0 followed by the first 48,576 rows of hits_1.
 
   - id: amazon-title-1mi
-    default: false
+    default: true
     source:
       url: https://mcauleylab.ucsd.edu/public_datasets/data/amazon_2023/raw/meta_categories/meta_Books.jsonl.gz
       sha256: d41f2348d3e0f3099d2a7ee45b304970282199f92a7ccdfe8ba4b1f753009a10
@@ -284,7 +51,7 @@ datasets:
     notes: The first 2^20 book titles of the full 4.45M-row column.
 
   - id: dbpedia-abstract-1mi
-    default: false
+    default: true
     source:
       url: https://databus.dbpedia.org/dbpedia/text/short-abstracts/2022.12.01/short-abstracts_lang=en.ttl.bz2
       sha256: e4793027fabd922948763794c4643b07729d207bb537fc766a15961aa711efdd
@@ -294,30 +61,10 @@ datasets:
     params: { limit: 1048576 }
     expected_checksum: "xxh3:4b92a22bd44315ca"
     approx: { rows: 1048576, payload_bytes: 354000000 }
-    notes: The 1M-row entry above plus 48,576 more abstracts.
-
-  - id: imdb-mcnote-1mi
-    default: false
-    source:
-      url: https://event.cwi.nl/da/job/imdb.tgz
-      sha256: 25f9d893c54f903366e0c263f88db0d429dbc2b159d4987ebc1e203242a7e988
-      license: IMDb data, distributed for the JOB benchmark (research use)
-      download_bytes: 1263193115
-    kind: tgz-csv-column
-    params: { member: movie_companies.csv, column_index: 4, keep_empty: true,
-              offset: 750000, limit: 1048576 }
-    expected_checksum: "xxh3:c3379090f966eef0"
-    approx: { rows: 1048576, payload_bytes: 12500000 }
-    notes: >
-      movie_companies.note, the only sparse column in the roster: 48.8% of the
-      2.61M rows are NULL and keep_empty preserves them as empty rows, which
-      stay in the selectivity denominator and match nothing. The column is
-      ordered with the notes first (2-8% NULL over the first 1.2M rows, ~89%
-      after), so the window starts at row 750,000, where it is 49.3% empty and
-      so matches the whole column's own 48.75%. A prefix would have been 5.7%.
+    notes: The first 2^20 English short abstracts in file order.
 
   - id: imdb-charname-1mi
-    default: false
+    default: true
     source:
       url: https://event.cwi.nl/da/job/imdb.tgz
       sha256: 25f9d893c54f903366e0c263f88db0d429dbc2b159d4987ebc1e203242a7e988

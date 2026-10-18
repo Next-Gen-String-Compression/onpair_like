@@ -18,7 +18,7 @@ python3 -m venv .venv
 # Show columns and index requirements without downloading.
 .venv/bin/python experiments/matcher_selection/prepare.py --list
 
-# Prepare the same three datasets as optimize_prefilter (the default roster).
+# Prepare the paper's four 2^20-row columns (config-1mi.toml).
 # Download/extract/ingest columns using datasets/sources.yaml.
 # Builds the minimal Rust harness, without unrelated codec dependencies.
 .venv/bin/python experiments/matcher_selection/prepare.py
@@ -28,9 +28,10 @@ python3 -m venv .venv
 
 # Numbered bucket grids in the supplied order, plus PDF and exact counts in CSV.
 .venv/bin/python analysis/needle_coverage.py \
-  experiments/matcher_selection/generated/clickbench-url-1m \
-  experiments/matcher_selection/generated/amazon-title \
-  experiments/matcher_selection/generated/dbpedia-abstract \
+  experiments/matcher_selection/generated/clickbench-url-1mi \
+  experiments/matcher_selection/generated/amazon-title-1mi \
+  experiments/matcher_selection/generated/dbpedia-abstract-1mi \
+  experiments/matcher_selection/generated/imdb-charname-1mi \
   --out results/needle-coverage
 ```
 
@@ -38,26 +39,9 @@ This writes `results/needle-coverage/coverage-1.png`, `coverage.pdf` and
 `coverage.csv`. Add `--panels-per-page 1` to produce a separate PNG for each
 suite. No temporary plotting scripts are needed.
 
-With the pinned inputs and default generator settings, the three suites contain:
-
-| Dataset | Rows | Unique needles | Of which negative | Canonical checksum |
-|---|---:|---:|---:|---|
-| ClickBench URLs | 1,000,000 | 1,276 | 140 | `xxh3:d164c1b5dbd6aff2` |
-| Amazon book titles | 4,448,181 | 1,040 | 140 | `xxh3:3a0b57c7356a57a6` |
-| DBpedia abstracts | 1,000,000 | 1,111 | 140 | `xxh3:09644aa73fc3e4b1` |
-
-Both preparation and generation process exactly these three datasets by default.
-To start with ClickBench only, pass `--dataset clickbench-url-1m` to both
-commands. Existing downloads and prepared columns are reused by the shared
-preparation script.
-
-`config.toml` uses the same dataset IDs, paths and preparation recipes as
-`optimize_prefilter`: ClickBench URLs (**1,000,000 rows**), Amazon book titles
-and DBpedia abstracts. Query generation uses SA/LCP and length buckets spanning
-1–256 bytes, independently of `optimize_prefilter`'s sampled 1–64-byte queries.
-The SA indexes every row of each prepared column; it has no additional sample
-or pilot limit. Other dataset recipes remain available in
-`datasets/sources.yaml`, but are not selected by this experiment's default config.
+`config-1mi.toml` selects ClickBench URLs, Amazon book titles, DBpedia
+abstracts and IMDb `char_name.name`, 1,048,576 rows each. Pass `--dataset
+<id>` to preparation, generation and benchmarking to work on one column.
 
 Every configured recipe pins its canonical checksum; downloaded sources also
 have SHA-256 pins. The dataset manifest and suite record the canonical identity.
@@ -76,17 +60,6 @@ sequentially. The admission estimate is:
 This is a conservative workspace estimate, not a reservation or an OS memory
 cap. The loaded Arrow dataset and extraction tools need additional memory.
 Cached suffix/LCP arrays take about six bytes per encoded symbol on disk.
-
-The largest measured requirement in this three-dataset roster is **5.11 GiB for
-DBpedia abstracts**. The table uses canonical column sizes. The 16 GiB budget
-is an admission limit, not memory allocated for every dataset; the actual
-manifests are checked before generation:
-
-| Dataset | Index admission budget (GiB) |
-|---|---:|
-| ClickBench URLs, 1M rows | 1.40 |
-| Amazon book titles | 3.58 |
-| DBpedia abstracts | 5.11 |
 
 `prepare.py --list` uses the prepared manifest when available, otherwise the
 recipe's approximate sizes. After preparation, obtain requirements from actual
@@ -154,7 +127,7 @@ the tested revision. Run these commands from the `onpair_like` repository root:
 git clone --branch refactor/substring-search https://github.com/spiraldb/onpair.git ../onpair-matcher-selection
 git -C ../onpair-matcher-selection checkout --detach c27d39782e63cb521ec4f62ad42016fc7c77dfb4
 
-# Uses the same three datasets as preparation and generation by default.
+# Uses the same four datasets as preparation and generation by default.
 .venv/bin/python experiments/matcher_selection/benchmark.py \
   --onpair ../onpair-matcher-selection \
   --out results/matcher-selection/first
@@ -163,8 +136,6 @@ git -C ../onpair-matcher-selection checkout --detach c27d39782e63cb521ec4f62ad42
 The commit pin keeps the benchmark reproducible when the branch advances.
 An existing checkout of that revision also works. Use a current stable Rust
 toolchain, as for query generation; the run records the compiler version.
-Add `--dataset clickbench-url-1m` to preparation, generation and benchmarking
-to start with just one dataset.
 
 `--onpair` is explicit: there is no fallback to the old pinned `onpair_spiral`
 candidate. The launcher copies the local Rust source into an ignored build

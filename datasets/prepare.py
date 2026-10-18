@@ -12,10 +12,10 @@ a present canonical artifact with a matching checksum is not re-ingested.
 Usage:
   python3 datasets/prepare.py --list
   python3 datasets/prepare.py --all                  # every default entry
-  python3 datasets/prepare.py --dataset msmarco-query --dataset amazon-title
+  python3 datasets/prepare.py --dataset clickbench-url-1mi
   python3 datasets/prepare.py --all --update-checksums   # first-time pinning
 
-Deps: pyyaml, pyarrow (and duckdb for the tpch-* entries) — see
+Deps: pyyaml, pyarrow — see
 datasets/requirements.txt. `bench` is found at target/release/bench or via
 $BENCH_BIN.
 """
@@ -35,7 +35,6 @@ import sys
 import tarfile
 import time
 import urllib.request
-import xml.sax
 from pathlib import Path
 
 import yaml
@@ -109,38 +108,6 @@ def download(url: str, target: Path, expected_sha256: str | None,
 # identical row streams.
 
 
-def rows_tar_tsv_field(raw: Path, params: dict):
-    field = int(params["field"])
-    with tarfile.open(str(raw), mode="r:gz") as tar:
-        for member in tar.getmembers():
-            if not member.name.endswith(".tsv"):
-                continue
-            f_in = tar.extractfile(member)
-            if f_in is None:
-                continue
-            with io.TextIOWrapper(f_in, encoding="utf-8") as text:
-                for line in text:
-                    parts = line.split("\t", field)
-                    if len(parts) >= field + 1:
-                        row = parts[field].strip()
-                        if row:
-                            yield row
-
-
-def rows_gzip_tsv_field(raw: Path, params: dict):
-    field = int(params["field"])
-    require = params.get("require_prefix")
-    with gzip.open(str(raw), mode="rt", encoding="utf-8") as f:
-        for line in f:
-            parts = line.split("\t", field + 1)
-            if len(parts) >= field + 1:
-                row = parts[field]
-                if require and not row.startswith(require):
-                    continue
-                if row:
-                    yield row
-
-
 def rows_jsonl_field(raw: Path, params: dict):
     field = params["field"]
     with gzip.open(str(raw), mode="rt", encoding="utf-8") as f:
@@ -171,45 +138,6 @@ def rows_ttl_en_literal(raw: Path, params: dict):
                         return
 
 
-class _DBLPHandler(xml.sax.ContentHandler):
-    def __init__(self, element: str, sink):
-        super().__init__()
-        self.element = element
-        self.sink = sink
-        self._buf: list[str] = []
-        self._capturing = False
-
-    def startElement(self, name, attrs):  # noqa: N802
-        if name == self.element:
-            self._capturing = True
-            self._buf = []
-
-    def endElement(self, name):  # noqa: N802
-        if name == self.element and self._capturing:
-            text = "".join(self._buf).strip()
-            if text:
-                self.sink(text)
-            self._capturing = False
-
-    def characters(self, content):
-        if self._capturing:
-            self._buf.append(content)
-
-
-def rows_dblp_xml(raw: Path, params: dict):
-    # Same parse mode as the compression paper's extractor: external DTD not
-    # fetched, so dblp.dtd entities are skipped by expat — identical row
-    # bytes to the paper's columns.
-    rows: list[str] = []
-    handler = _DBLPHandler(params["element"], rows.append)
-    parser = xml.sax.make_parser()
-    parser.setFeature(xml.sax.handler.feature_external_ges, False)
-    parser.setContentHandler(handler)
-    with gzip.open(str(raw), "rb") as f:
-        parser.parse(f)
-    yield from rows
-
-
 def rows_tgz_csv_column(raw: Path, params: dict):
     """One CSV member of a .tgz, one column by index. Parsing matches the
     JOB load scripts (PostgreSQL COPY: FORMAT csv, ESCAPE '\\')."""
@@ -232,11 +160,8 @@ def rows_tgz_csv_column(raw: Path, params: dict):
 
 
 EXTRACTORS = {
-    "tar-tsv-field": rows_tar_tsv_field,
-    "gzip-tsv-field": rows_gzip_tsv_field,
     "jsonl-field": rows_jsonl_field,
     "ttl-en-literal": rows_ttl_en_literal,
-    "dblp-xml": rows_dblp_xml,
     "tgz-csv-column": rows_tgz_csv_column,
 }
 
@@ -287,31 +212,6 @@ def write_parquet(rows, out: Path) -> int:
             writer.write_table(pa.table({PARQUET_COLUMN: pa.array(batch, pa.large_string())}))
             n += len(batch)
     return n
-
-
-def tpch_to_parquet(params: dict, out: Path, db_dir: Path) -> None:
-    """Generate TPC-H at the pinned SF with DuckDB (deterministic per SF) and
-    dump one column to parquet, preserving dbgen row order."""
-    import duckdb
-
-    sf = params["sf"]
-    table, column = params["table"], params["column"]
-    db_path = db_dir / f"tpch-sf{sf}.duckdb"
-    db_dir.mkdir(parents=True, exist_ok=True)
-    con = duckdb.connect(str(db_path))
-    try:
-        con.execute("INSTALL tpch; LOAD tpch;")
-        have = {r[0] for r in con.execute("SHOW TABLES").fetchall()}
-        if table not in have:
-            log(f"  dbgen(sf={sf}) — one-time generation into {db_path.name}")
-            con.execute(f"CALL dbgen(sf={sf})")
-        out.parent.mkdir(parents=True, exist_ok=True)
-        con.execute(
-            f"COPY (SELECT {column} AS {PARQUET_COLUMN} FROM {table}) "
-            f"TO '{out}' (FORMAT PARQUET, COMPRESSION ZSTD)"
-        )
-    finally:
-        con.close()
 
 
 # ----------------------------------------------------------- bench glue
@@ -371,12 +271,7 @@ def prepare_entry(entry: dict, update_checksums: bool) -> dict:
     raw_dir = RAW_DIR / ds_id
     writeback: dict = {}
 
-    if kind == "tpch-duckdb":
-        parquet = raw_dir / f"{entry['params']['table']}.{entry['params']['column']}.parquet"
-        if not parquet.exists():
-            tpch_to_parquet(entry["params"], parquet, RAW_DIR / "tpch")
-        column = PARQUET_COLUMN
-    elif kind == "parquet":
+    if kind == "parquet":
         params = entry.get("params") or {}
         limit = int(params.get("limit", 0)) or None
         extra = entry["source"].get("extra") or []

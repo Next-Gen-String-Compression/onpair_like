@@ -1,9 +1,3 @@
-[submodule "datasets/OpenRCA/vendor/OpenRCA"]
-	path = datasets/OpenRCA/vendor/OpenRCA
-	url = https://github.com/microsoft/OpenRCA.git
-[submodule "datasets/SQLStorm/vendor/SQLStorm"]
-	path = datasets/SQLStorm/vendor/SQLStorm
-	url = https://github.com/SQL-Storm/SQLStorm.git
 [submodule "candidates/common/prefilter/vendor/fsst_prefilter"]
 	path = candidates/common/prefilter/vendor/fsst_prefilter
 	url = https://github.com/Next-Gen-String-Compression/fsst_prefilter.git

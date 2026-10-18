@@ -122,7 +122,7 @@ def cases(args, parser):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--onpair", type=Path, required=True, help="local refactored SpiralDB/OnPair checkout")
-    parser.add_argument("--config", type=Path, default=HERE / "config.toml")
+    parser.add_argument("--config", type=Path, default=HERE / "config-1mi.toml")
     parser.add_argument("--dataset", action="append", default=[])
     parser.add_argument("--case", nargs=2, action="append", metavar=("DATASET_DIR", "SUITE_DIR"),
                         help="explicit prepared inputs, reusable across experiments")
