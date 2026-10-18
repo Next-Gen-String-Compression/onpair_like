@@ -64,9 +64,8 @@ faint in its place.
 
 `data/` holds one sweep per instruction set: NEON on the M4 Pro, AVX2 and
 AVX-512 on the EPYC 9R14 of a `c7a.xlarge`, the matcher sweeps from
-2026-10-14 (all three; the x86 ones named `_2026-10-14b`). The
-resolver sweeps are drawn by no figure any more; they only refit the policy,
-and the pinned ones moved to `data/superseded/`. The u8 sweeps of the FSST
+2026-10-14 (all three; the x86 ones named `_2026-10-14b`). No figure draws
+the resolver sweeps; they only refit the policy. The u8 sweeps of the FSST
 port are named `*_fsst_*`. Every matcher sweep walks 1 MiB of code stream, so
 the two encodings are read against one memory ceiling: 2^19 codes for u16
 (`loader.rs`'s default, `SWEEP_CODES` overrides it) and `loader.hpp`'s
@@ -79,16 +78,10 @@ stays in L2 on every machine fitted. The resolver sources now walk 8 MiB,
 "avx512bw"`, so a default build reports `avx2` in the `machine` column; run
 the sweep twice on an x86 host, once plainly and once under
 `RUSTFLAGS="-C target-cpu=native"`, and name the second CSV
-`matcher_x86_64_avx512_<date>.csv`. Superseded sweeps move to
-`data/superseded/`, outside the glob, rather than being deleted.
+`matcher_x86_64_avx512_<date>.csv`.
 
-Two things the 2026-09-10 scan refactor changed here. The sweeps moved to
-`scan::bench::{matcher_fit,resolver_fit}::sweep` (the gen script follows
-them), and the walk sweep is gone with the standalone walk-cost bench, so
-`walk_*.csv` cannot be regenerated — the walk's cost now comes out of the
-harness run instead, see below. The batched nibble kernel was also renamed
-`nibble_n_8k` -> `nibble_n8k`; `plot_matcher.py` folds the old spelling into
-the new one so pre-refactor CSVs still draw.
+The sweeps live in `scan::bench::{matcher_fit,resolver_fit}::sweep`. The walk
+has no sweep of its own; its cost comes out of the harness run, see below.
 
 `reproduce-kernel.sh` does the whole kernel block from a clone: it fetches
 the two kernel repos at their pins when missing, runs both gen scripts (twice

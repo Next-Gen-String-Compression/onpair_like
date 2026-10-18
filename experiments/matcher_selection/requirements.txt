@@ -1,3 +1,0 @@
--r ../../datasets/requirements.txt
-tomli>=2; python_version < "3.11"
-matplotlib>=3.9,<4

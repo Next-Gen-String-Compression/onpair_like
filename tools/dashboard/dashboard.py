@@ -16,7 +16,7 @@ def _():
 
     alt.data_transformers.disable_max_rows()
 
-    DB = Path(__file__).resolve().parents[1] / "results" / "bench.duckdb"
+    DB = Path(__file__).resolve().parents[2] / "results" / "bench.duckdb"
 
 
     # Shared by the kernel table and the scatter tooltip, so a rate reads the same
@@ -1131,7 +1131,7 @@ def _(chart, chunk_dd, gv_dd, gv_on, mo, points):
 
     import pyarrow as _pa
 
-    _root = _Path(__file__).resolve().parents[1]
+    _root = _Path(__file__).resolve().parents[2]
     _bin = _root / "tools" / "graph-viz" / "target" / "release" / "onpair-graph-viz"
     _cache = _Path(_tempfile.gettempdir()) / "onpair-graph-viz"
 

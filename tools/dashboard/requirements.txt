@@ -1,4 +1,4 @@
-# Dependencies of the marimo dashboard (analysis/dashboard.py). duckdb comes
+# Dependencies of the marimo dashboard (tools/dashboard/dashboard.py). duckdb comes
 # from datasets/requirements.txt, which the .venv already installs.
 #   marimo          the notebook/app runtime
 #   altair          the layered chart (points + median line + IQR band)

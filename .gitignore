@@ -23,7 +23,6 @@ datasets/OpenRCA/data/
 
 # generated analysis outputs (re-derivable)
 analysis/summary.json
-analysis/report.html
 analysis/*.log
 analysis/*.out
 analysis/__marimo__/
