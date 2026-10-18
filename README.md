@@ -65,13 +65,16 @@ will not grant the loader a write lock while the dashboard holds the file open.
 ## Reproducing everything
 
 ```sh
-./reproduce.sh all    # build → datasets → suites → run (stages runnable alone)
+./reproduce-neon.sh   [--small|--medium|--large]   # on an arm64 Mac
+./reproduce-avx512.sh [--small|--medium|--large]   # on an x86 host with AVX-512
 ```
 
-`datasets/sources.yaml` pins every dataset (URL, sha256, license, canonical
-checksum); `bench gen --seed 42` makes every query suite a pure function of
-the dataset checksum; every run records its spec hash + environment. See the
-header of [reproduce.sh](reproduce.sh) for stages and wall-clock estimates.
+Each runs the paper's blocks for its instruction set from a clone, sibling
+repos and data included; with both machines' `results/` and `paper/data` in
+one tree, `paper/make-figures.sh` draws every figure. `datasets/sources.yaml`
+pins every dataset (URL, sha256, license, canonical checksum), the needle
+suites are a pure function of the dataset checksum and seed, and every run
+records its spec hash and environment.
 
 ## Layout
 
