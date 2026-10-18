@@ -5,15 +5,16 @@
 
 use std::time::{Duration, Instant};
 
-use lb_abi::{LbChunkView, LbRunStats, LB_STAT_UNSET};
+use lb_abi::{LbChunkView, LbRunStats, LB_STAT_UNSET, LB_STRATEGY_TAKES_SELECTION};
 
 use crate::bitmap::Bitmap;
-use crate::chunks::{self, Chunks};
+use crate::chunks::{self, Chunk, Chunks};
 use crate::dataset::PreparedDataset;
-use crate::registry::{self, BuiltChunk, Candidate, QueryFfi, Scanner};
+use crate::registry::{self, BuiltChunk, Candidate, PreparedScan, QueryFfi, Scanner};
 use crate::results::{
     CellKey, GateReport, PhaseNs, PrefilterReport, Row, Speed, Status, Writer,
 };
+use crate::selection::{ChunkSelections, Selection};
 use crate::spec::{config_hash, LoadedSpec};
 use crate::suite::{PreparedQuery, Suite};
 use crate::timing::{measure, MeasureCfg};
@@ -31,7 +32,7 @@ pub struct WorkerSummary {
 /// How a cell answers queries: a candidate-implemented strategy, or a
 /// harness-composed pipeline over view()/decode() with a scanner.
 enum Strat<'a> {
-    Candidate { index: u32, name: String, supported_ops: u32 },
+    Candidate { index: u32, name: String, supported_ops: u32, flags: u32 },
     Direct(&'a Scanner),
     Decode(&'a Scanner),
 }
@@ -77,6 +78,7 @@ struct StatsAgg {
     prefilter_ns: Option<u64>,
     verify_ns: Option<u64>,
     setup_ns: Option<u64>,
+    scan_ns: Option<u64>,
     /// Summing these across chunks is the right composition: each chunk has
     /// its own dictionary, so the domains add up exactly the way rows do.
     eval_domain: Option<u64>,
@@ -95,6 +97,7 @@ impl StatsAgg {
         add(&mut self.prefilter_ns, s.prefilter_ns);
         add(&mut self.verify_ns, s.verify_ns);
         add(&mut self.setup_ns, s.setup_ns);
+        add(&mut self.scan_ns, s.scan_ns);
         add(&mut self.eval_domain, s.eval_domain);
         add(&mut self.eval_domain_matches, s.eval_domain_matches);
     }
@@ -112,6 +115,23 @@ struct HarnessPhases {
 struct Scratch {
     bytes: Vec<u8>,
     offsets: Vec<u64>,
+    /// The scanner's bitmap over a chunk's selected rows, packed.
+    packed_bits: Vec<u64>,
+}
+
+/// One selection as a cell sees it: the whole-dataset bitmap the result is
+/// gated and ANDed against, and the per-chunk lists a strategy that takes
+/// the selection is handed.
+struct SelCtx<'a> {
+    bitmap: Option<&'a Bitmap>,
+    chunks: &'a ChunkSelections,
+}
+
+/// What the gate compares against: the suite's truth under `all`, the oracle
+/// ANDed with the selection otherwise.
+struct GateTruth {
+    count: u64,
+    hash: String,
 }
 
 enum Mode<'m> {
@@ -130,7 +150,8 @@ fn exec_once(
     strat: &Strat,
     handles: &[BuiltChunk],
     chunks: &Chunks,
-    qffi: &QueryFfi,
+    qffi: &mut QueryFfi,
+    sel: &SelCtx,
     scratch: &mut Scratch,
     bitmap: &mut Bitmap,
     mut mode: Mode,
@@ -138,11 +159,20 @@ fn exec_once(
     bitmap.zero();
     let words = bitmap.words_mut().as_mut_ptr();
     let mut chunk_stats = LbRunStats::unset();
+    // A strategy that takes the selection is handed each chunk's list. Every
+    // other path runs over all rows and its result is ANDed with the
+    // selection below, inside the timed region: that is the work a system
+    // without pushdown does.
+    let mut pushed_down = false;
 
     let timed = Instant::now();
     match strat {
-        Strat::Candidate { index, .. } => {
-            for (chunk, handle) in chunks.chunks.iter().zip(handles) {
+        Strat::Candidate { index, flags, .. } => {
+            pushed_down = sel.bitmap.is_some() && flags & LB_STRATEGY_TAKES_SELECTION != 0;
+            for (ci, (chunk, handle)) in chunks.chunks.iter().zip(handles).enumerate() {
+                if pushed_down {
+                    qffi.set_selection(&sel.chunks.ffi[ci]);
+                }
                 let ptr = unsafe { words.add(chunk.bitmap_word_range().start) };
                 let stats = match &mut mode {
                     Mode::Timing => None,
@@ -159,6 +189,7 @@ fn exec_once(
                     agg.absorb(&chunk_stats);
                 }
             }
+            qffi.clear_selection();
         }
         Strat::Direct(scanner) => {
             let prepared = scanner.prepare(&qffi.query)?;
@@ -191,62 +222,93 @@ fn exec_once(
         }
         Strat::Decode(scanner) => {
             let prepared = scanner.prepare(&qffi.query)?;
-            for (chunk, handle) in chunks.chunks.iter().zip(handles) {
+            // A candidate that decodes selected rows gets the selection: the
+            // scanner sees only those rows, packed, and each hit goes back to
+            // its row through the chunk's list.
+            pushed_down = sel.bitmap.is_some() && handles.iter().all(BuiltChunk::has_decode_selected);
+            for (ci, (chunk, handle)) in chunks.chunks.iter().zip(handles).enumerate() {
                 let ptr = unsafe { words.add(chunk.bitmap_word_range().start) };
-                let n = chunk.num_rows as usize;
-                // bytes_cap = payload + guaranteed pad (SEMANTICS.md rule 8).
-                let cap = chunk.payload_bytes as usize + lb_abi::LB_DECODE_PAD;
+                let rows = pushed_down.then(|| sel.chunks.lists[ci].as_slice());
                 // Same discipline as Direct: the decode/scan joint clocks
                 // exist only in instrumented mode.
                 match &mut mode {
                     Mode::Timing => {
-                        let rc = handle.decode(
-                            &mut scratch.bytes[..cap],
-                            &mut scratch.offsets[..n + 1],
-                        );
-                        if rc != 0 {
-                            return Err(format!("decode() returned {rc}").into());
-                        }
-                        let view = LbChunkView {
-                            bytes: scratch.bytes.as_ptr(),
-                            offsets: scratch.offsets.as_ptr(),
-                            num_rows: chunk.num_rows,
-                        };
-                        let rc = prepared.scan(&view, ptr, None);
-                        if rc != 0 {
-                            return Err(format!("scan() returned {rc}").into());
-                        }
+                        decode_scan(handle, &prepared, chunk, rows, scratch, ptr, None)?;
                     }
                     Mode::Instrumented(agg, phases) => {
-                        let t0 = Instant::now();
-                        let rc = handle.decode(
-                            &mut scratch.bytes[..cap],
-                            &mut scratch.offsets[..n + 1],
-                        );
-                        if rc != 0 {
-                            return Err(format!("decode() returned {rc}").into());
-                        }
-                        let t1 = Instant::now();
-                        let view = LbChunkView {
-                            bytes: scratch.bytes.as_ptr(),
-                            offsets: scratch.offsets.as_ptr(),
-                            num_rows: chunk.num_rows,
-                        };
                         chunk_stats = LbRunStats::unset();
-                        let rc = prepared.scan(&view, ptr, Some(&mut chunk_stats));
-                        let scan_ns = t1.elapsed().as_nanos() as u64;
-                        if rc != 0 {
-                            return Err(format!("scan() returned {rc}").into());
-                        }
+                        let (decode_ns, scan_ns) =
+                            decode_scan(handle, &prepared, chunk, rows, scratch, ptr, Some(&mut chunk_stats))?;
                         agg.absorb(&chunk_stats);
-                        phases.decode_ns += (t1 - t0).as_nanos() as u64;
+                        phases.decode_ns += decode_ns;
                         phases.scan_ns += scan_ns;
                     }
                 }
             }
         }
     }
+    if let (Some(selected), false) = (sel.bitmap, pushed_down) {
+        bitmap.and_with(selected);
+    }
     Ok(timed.elapsed())
+}
+
+/// One chunk of the `decode` strategy: decode() and the scanner over its
+/// output, or with `rows`, decode_selected() of those rows, the scanner over
+/// them packed, and each set bit moved to its row. Returns the decode and
+/// scan nanoseconds when `stats` asks for the phases, zeros otherwise.
+fn decode_scan(
+    handle: &BuiltChunk,
+    prepared: &PreparedScan,
+    chunk: &Chunk<'_>,
+    rows: Option<&[u32]>,
+    scratch: &mut Scratch,
+    out: *mut u64,
+    stats: Option<&mut LbRunStats>,
+) -> Result<(u64, u64)> {
+    let n = rows.map_or(chunk.num_rows as usize, <[u32]>::len);
+    // bytes_cap = payload + guaranteed pad (SEMANTICS.md rule 8).
+    let cap = chunk.payload_bytes as usize + lb_abi::LB_DECODE_PAD;
+    let t0 = stats.is_some().then(Instant::now);
+    let rc = match rows {
+        Some(rows) => handle.decode_selected(rows, &mut scratch.bytes[..cap], &mut scratch.offsets[..n + 1]),
+        None => handle.decode(&mut scratch.bytes[..cap], &mut scratch.offsets[..n + 1]),
+    };
+    if rc != 0 {
+        return Err(format!("decode() returned {rc}").into());
+    }
+    let t1 = t0.map(|_| Instant::now());
+    let view = LbChunkView {
+        bytes: scratch.bytes.as_ptr(),
+        offsets: scratch.offsets.as_ptr(),
+        num_rows: n as u64,
+    };
+    let packed = &mut scratch.packed_bits[..lb_abi::bitmap_words(n as u64)];
+    let target = match rows {
+        Some(_) => {
+            packed.fill(0);
+            packed.as_mut_ptr()
+        }
+        None => out,
+    };
+    let rc = prepared.scan(&view, target, stats);
+    if rc != 0 {
+        return Err(format!("scan() returned {rc}").into());
+    }
+    if let Some(rows) = rows {
+        for (w, &word) in packed.iter().enumerate() {
+            let mut bits = word;
+            while bits != 0 {
+                let r = rows[w * 64 + bits.trailing_zeros() as usize] as usize;
+                unsafe { *out.add(r >> 6) |= 1u64 << (r & 63) };
+                bits &= bits - 1;
+            }
+        }
+    }
+    Ok(match (t0, t1) {
+        (Some(t0), Some(t1)) => ((t1 - t0).as_nanos() as u64, t1.elapsed().as_nanos() as u64),
+        _ => (0, 0),
+    })
 }
 
 /// Execute the whole matrix slice owned by one worker.
@@ -288,6 +350,12 @@ pub fn run_worker(
 
     let ds_ref = spec.datasets.get(dataset_idx).ok_or("dataset index out of range")?;
     let ds = PreparedDataset::load(&ds_ref.path, !spec.measure.skip_checksum_verify)?;
+    let selections: Vec<Selection> = spec
+        .selections
+        .iter()
+        .map(|s| Selection::build(s, ds.num_rows()))
+        .collect();
+    let any_selected = selections.iter().any(|s| s.bitmap.is_some());
 
     // Suites bound to this dataset (binding verified checksum-strict).
     let mut suites: Vec<Suite> = Vec::new();
@@ -324,8 +392,14 @@ pub fn run_worker(
             dataset: ds.manifest.id.clone(),
             dataset_checksum: ds.manifest.checksum.clone(),
             chunk_rows,
+            selection: None,
+            selection_rows: None,
         };
         let chunks = chunks::slice(&ds, chunk_rows)?;
+        let chunk_sels: Vec<ChunkSelections> = selections
+            .iter()
+            .map(|s| s.per_chunk(chunks.chunks.iter().map(|c| (c.start_row, c.num_rows))))
+            .collect();
 
         // ---- compression axis: build every chunk, harness-timed ----
         let mut handles: Vec<BuiltChunk> = Vec::with_capacity(chunks.chunks.len());
@@ -384,6 +458,7 @@ pub fn run_worker(
                 index: s.index,
                 name: s.name.clone(),
                 supported_ops: s.supported_ops,
+                flags: s.flags,
             })
             .collect();
         if candidate.has_view() {
@@ -407,31 +482,57 @@ pub fn run_worker(
             // over-copying decoders (SEMANTICS.md rule 8).
             bytes: vec![0u8; max_payload as usize + lb_abi::LB_DECODE_PAD],
             offsets: vec![0u64; max_rows as usize + 1],
+            packed_bits: vec![0u64; lb_abi::bitmap_words(max_rows)],
         };
         let mut bitmap = Bitmap::new(ds.num_rows());
 
         for suite in &suites {
             for query in &suite.queries {
-                for strat in &strats {
-                    let row = run_cell(
-                        &key, strat, query, &candidate, &handles, &chunks, &ds,
-                        &mut scratch, &mut bitmap, &measure_cfg,
-                        spec.measure.raw_samples,
-                    )?;
-                    let status = match &row {
-                        Row::Query { status, .. } => *status,
-                        _ => unreachable!(),
-                    };
-                    out.write(&row)?;
-                    match status {
-                        Status::Ok | Status::Unsupported => summary.cells_ok += 1,
-                        Status::GateFailed => {
-                            summary.gate_failures += 1;
-                            if fail_fast {
-                                return Err("gate failure with --fail-fast".into());
-                            }
+                // The oracle once per query, and only when a selection needs
+                // it: truth under a selection is the oracle AND the selection.
+                let oracle = any_selected.then(|| {
+                    let needles: Vec<&[u8]> = query.needles.iter().map(|n| n.as_slice()).collect();
+                    crate::oracle::eval(query.op, &needles, ds.num_rows(), ds.rows())
+                });
+                for (sel, chunk_sel) in selections.iter().zip(&chunk_sels) {
+                    let truth = match (&sel.bitmap, &oracle) {
+                        (Some(selected), Some(oracle)) => {
+                            let mut bm = oracle.clone();
+                            bm.and_with(selected);
+                            GateTruth { count: bm.count(), hash: bm.truth_hash() }
                         }
-                        Status::Error => summary.errors += 1,
+                        _ => {
+                            let t = query.record.truth.as_ref().expect("suite loaded for run");
+                            GateTruth { count: t.count, hash: t.hash.clone() }
+                        }
+                    };
+                    let key = CellKey {
+                        selection: Some(sel.id.clone()),
+                        selection_rows: sel.rows(),
+                        ..key.clone()
+                    };
+                    let ctx = SelCtx { bitmap: sel.bitmap.as_ref(), chunks: chunk_sel };
+                    for strat in &strats {
+                        let row = run_cell(
+                            &key, strat, query, &truth, &ctx, &candidate, &handles, &chunks, &ds,
+                            &mut scratch, &mut bitmap, &measure_cfg,
+                            spec.measure.raw_samples,
+                        )?;
+                        let status = match &row {
+                            Row::Query { status, .. } => *status,
+                            _ => unreachable!(),
+                        };
+                        out.write(&row)?;
+                        match status {
+                            Status::Ok | Status::Unsupported => summary.cells_ok += 1,
+                            Status::GateFailed => {
+                                summary.gate_failures += 1;
+                                if fail_fast {
+                                    return Err("gate failure with --fail-fast".into());
+                                }
+                            }
+                            Status::Error => summary.errors += 1,
+                        }
                     }
                 }
             }
@@ -445,6 +546,8 @@ fn run_cell(
     base_key: &CellKey,
     strat: &Strat,
     query: &PreparedQuery,
+    truth: &GateTruth,
+    sel: &SelCtx,
     candidate: &Candidate,
     handles: &[BuiltChunk],
     chunks: &Chunks,
@@ -473,7 +576,7 @@ fn run_cell(
         error,
     };
 
-    let qffi = QueryFfi::new(query.op, &query.needles);
+    let mut qffi = QueryFfi::new(query.op, &query.needles);
     // Op-mask gate first, then the optional per-query capability probe: a
     // scanner that declares this specific query out of its envelope makes
     // the cell Unsupported, not Error.
@@ -481,10 +584,8 @@ fn run_cell(
         return Ok(mk_row(Status::Unsupported, None, None, None, None, None));
     }
 
-    let truth = query.record.truth.as_ref().expect("suite loaded for run");
-
     // ---- 1. verification pass: gate before any number exists ----
-    if let Err(e) = exec_once(strat, handles, chunks, &qffi, scratch, bitmap, Mode::Timing) {
+    if let Err(e) = exec_once(strat, handles, chunks, &mut qffi, sel, scratch, bitmap, Mode::Timing) {
         eprintln!("error: {}/{}: {e}", candidate.name, query.record.id);
         return Ok(mk_row(Status::Error, None, None, None, None, Some(e.to_string())));
     }
@@ -494,7 +595,10 @@ fn run_cell(
         // Loud, debuggable failure: recompute the oracle live and name the
         // first divergent row (never depends on stored indices).
         let needles: Vec<&[u8]> = query.needles.iter().map(|n| n.as_slice()).collect();
-        let oracle_bm = crate::oracle::eval(query.op, &needles, ds.num_rows(), ds.rows());
+        let mut oracle_bm = crate::oracle::eval(query.op, &needles, ds.num_rows(), ds.rows());
+        if let Some(selected) = sel.bitmap {
+            oracle_bm.and_with(selected);
+        }
         let div = bitmap.first_divergence(&oracle_bm);
         let (div_bytes, expected) = match div {
             // A divergent bit at or past num_rows is a padding scribble — an
@@ -544,7 +648,7 @@ fn run_cell(
     let mut agg = StatsAgg::default();
     let mut phases = HarnessPhases::default();
     if let Err(e) = exec_once(
-        strat, handles, chunks, &qffi, scratch, bitmap,
+        strat, handles, chunks, &mut qffi, sel, scratch, bitmap,
         Mode::Instrumented(&mut agg, &mut phases),
     ) {
         return Ok(mk_row(Status::Error, Some(gate), None, None, None, Some(e.to_string())));
@@ -556,7 +660,7 @@ fn run_cell(
         if exec_error.is_some() {
             return Duration::ZERO;
         }
-        match exec_once(strat, handles, chunks, &qffi, scratch, bitmap, Mode::Timing) {
+        match exec_once(strat, handles, chunks, &mut qffi, sel, scratch, bitmap, Mode::Timing) {
             Ok(d) => d,
             Err(e) => {
                 exec_error = Some(e.to_string());
@@ -587,9 +691,6 @@ fn run_cell(
         let fp_rate = prefilter_candidates
             .filter(|&c| c > 0)
             .map(|c| (c as f64 - domain_matches as f64) / c as f64);
-        let verify_per_survivor = prefilter_candidates
-            .filter(|&c| c > 0)
-            .map(|c| median as f64 / c as f64);
         // Decode strategies: the harness owns the joint, so its measurement
         // is authoritative even when a tiny chunk quantizes to 0 ticks.
         let decode_ns = if matches!(strat, Strat::Decode(_)) {
@@ -597,9 +698,23 @@ fn run_cell(
         } else {
             agg.decode_ns.map(|ns| PhaseNs { ns, origin: "self_reported" })
         };
-        let scan_ns = composed.then_some(PhaseNs { ns: phases.scan_ns, origin: "harness" });
+        // The harness owns the joint for a composed pipeline, so its clock wins
+        // there; a self-contained strategy that scans rows itself reports its own.
+        let scan_ns = if composed {
+            Some(PhaseNs { ns: phases.scan_ns, origin: "harness" })
+        } else {
+            agg.scan_ns.map(|ns| PhaseNs { ns, origin: "self_reported" })
+        };
         let prefilter_ns = agg.prefilter_ns.map(|ns| PhaseNs { ns, origin: "self_reported" });
         let verify_ns = agg.verify_ns.map(|ns| PhaseNs { ns, origin: "self_reported" });
+        // The verify phase alone, over the rows it verified. Left unset when the
+        // module reports no verify phase: the query median stood in for it here
+        // once, and since most of a prefiltered query is the scan, that
+        // overstated the per-row cost by 2x to 32x.
+        let verify_per_survivor = match (&verify_ns, prefilter_candidates) {
+            (Some(v), Some(c)) if c > 0 => Some(v.ns as f64 / c as f64),
+            _ => None,
+        };
         let setup_ns = agg.setup_ns.map(|ns| PhaseNs { ns, origin: "self_reported" });
         if prefilter_candidates.is_none()
             && decode_ns.is_none()

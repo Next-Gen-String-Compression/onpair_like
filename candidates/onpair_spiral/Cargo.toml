@@ -1,8 +1,7 @@
 # SpiralDB's OnPair (github.com/spiraldb/onpair) as a query-axis candidate,
 # exercising its `feat/search-prefilter` branch: a SIMD substring prefilter
 # with two pluggable verify paths. Pinned to a rev (the branch is pre-release
-# and moves); bump the rev to track it. Distinct from the `onpair` candidate,
-# which links the C++ onpair_cpp compressed-domain automata.
+# and moves); bump the rev to track it.
 [package]
 name = "lb-cand-onpair-spiral"
 version.workspace = true
@@ -13,5 +12,4 @@ license.workspace = true
 lb-abi = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-# branch = "feat/search-prefilter", head 5927cce at time of integration.
-onpair = { git = "https://github.com/spiraldb/onpair.git", rev = "5927cce985a6e86bc6f49f4ae24106e1fc085e80" }
+onpair = { path = "../../third_party/onpair" }

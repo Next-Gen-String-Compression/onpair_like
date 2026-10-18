@@ -1,0 +1,35 @@
+# verify-medium.toml cut to what phase-shares draws: the walk alone at 12
+# bits, a sixth of its time. Its runs keep that spec's name, so config.py can
+# pin either.
+#
+#   paper/gen-phases.sh medium-walk [neon|avx512]
+
+strategies = ["pf_walk"]
+
+[[datasets]]
+path = "../../../datasets/clickbench-url-1mi"
+[[datasets]]
+path = "../../../datasets/amazon-title-1mi"
+[[datasets]]
+path = "../../../datasets/dbpedia-abstract-1mi"
+[[datasets]]
+path = "../../../datasets/imdb-charname-1mi"
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/clickbench-url-1mi/sa-lcp-v1-s42-n10-76a1cfeaf7ff8fbe"
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/amazon-title-1mi/sa-lcp-v1-s42-n10-9355081547f10caf"
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa-lcp-v1-s42-n10-2862fe216f2b674b"
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/sa-lcp-v1-s42-n10-9adc88e9eb33e0eb"
+
+[[candidates]]
+name = "onpair_spiral"
+configs = ['{"bits":12,"prune":1.0}']
+
+[measure]
+chunk_rows = [524288]
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

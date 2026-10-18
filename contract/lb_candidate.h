@@ -17,7 +17,7 @@
 extern "C" {
 #endif
 
-#define LB_ABI_VERSION 5u
+#define LB_ABI_VERSION 8u
 
 /* Guaranteed writable headroom past the decoded payload in every decode()
  * output buffer (see lb_candidate.decode). Lets fixed-stride over-copying
@@ -60,10 +60,23 @@ enum {
 #define LB_OP_BIT(o) (1u << (o))
 #define LB_ALL_OPS   ((1u << LB_OP_COUNT) - 1u)
 
+/* The rows of one chunk a predicate upstream has already selected (ABI v7):
+ * chunk-local row indices, ascending, without repeats. The harness builds
+ * one per chunk outside timing. */
+typedef struct lb_selection {
+  const uint32_t* rows;
+  uint64_t        count;
+} lb_selection;
+
 typedef struct lb_query {
   uint32_t        op;           /* one of the LB_* op codes            */
   const lb_bytes* needles;
   uint32_t        needle_count; /* per-op arity rules in SEMANTICS.md  */
+  /* NULL = every row. Non-NULL only in run() calls to a strategy that
+   * declares LB_STRATEGY_TAKES_SELECTION, set per chunk by the harness
+   * before the call; such a strategy must set no bit outside it (rule 11
+   * in SEMANTICS.md). Always NULL in scanner prepare().                 */
+  const lb_selection* selection;
 } lb_query;
 
 /* ------------------------------------------------------------- reporting */
@@ -90,6 +103,12 @@ typedef struct lb_run_stats {
   uint64_t setup_ns;             /* per-query setup: pattern/automaton
                                     compilation before any row or token
                                     is examined (ABI v3)               */
+  uint64_t scan_ns;              /* the pass over the rows themselves,
+                                    for a strategy that owns its scan
+                                    (ABI v6). The harness times this
+                                    joint itself for the strategies it
+                                    composes and ignores the field
+                                    there                              */
   /* The column values this strategy actually evaluated (ABI v5). One per
    * row is the norm, and UNSET means exactly that — leave both fields
    * alone unless the domain is *reduced*, as under a dictionary front-end
@@ -108,9 +127,16 @@ typedef struct lb_run_stats {
 /* A candidate-implemented way of answering queries (e.g. "compressed",
  * or a custom fused/hybrid path). The names "direct" and "decode" are
  * reserved for harness-composed strategies and must never be declared. */
+/* lb_strategy.flags */
+#define LB_STRATEGY_TAKES_SELECTION 1u /* run() honours lb_query.selection;
+                                          otherwise the harness runs the
+                                          strategy over every row and ANDs
+                                          the result with the selection   */
+
 typedef struct lb_strategy {
   const char* name;
   uint32_t    supported_ops;   /* bitmask of LB_OP_BIT(op)              */
+  uint32_t    flags;           /* LB_STRATEGY_* bits, 0 for none        */
 } lb_strategy;
 
 /* ------------------------------------------------------------- candidate */
@@ -170,6 +196,15 @@ typedef struct lb_candidate {
                 uint64_t* offsets_out);
 
   void (*destroy)(void* self);
+
+  /* Optional (NULL if absent, ABI v8): decode() of only the `count`
+   * ascending row indices in `rows`, packed: output row k is rows[k], and
+   * offsets_out has count + 1 slots. bytes_cap is at least those rows'
+   * bytes + LB_DECODE_PAD. Lets the "decode" strategy push a selection
+   * down into decompression.                                            */
+  int (*decode_selected)(void* self, const uint32_t* rows, uint64_t count,
+                         uint8_t* bytes_out, uint64_t bytes_cap,
+                         uint64_t* offsets_out);
 } lb_candidate;
 /* A candidate must offer at least one of: run (with strategies), view,
  * decode. */

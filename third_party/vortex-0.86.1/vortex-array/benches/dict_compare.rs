@@ -1,0 +1,166 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: Copyright the Vortex contributors
+
+#![expect(clippy::unwrap_used)]
+
+use std::sync::LazyLock;
+
+use vortex_array::Canonical;
+use vortex_array::IntoArray;
+use vortex_array::RecursiveCanonical;
+use vortex_array::VortexSessionExecute;
+use vortex_array::array_session;
+use vortex_array::arrays::ConstantArray;
+use vortex_array::arrays::VarBinArray;
+use vortex_array::arrays::VarBinViewArray;
+use vortex_array::arrays::dict_test::gen_primitive_for_dict;
+use vortex_array::arrays::dict_test::gen_varbin_words;
+use vortex_array::arrays::varbin::VarBinArrayExt;
+use vortex_array::builders::dict::dict_encode;
+use vortex_array::builtins::ArrayBuiltins;
+use vortex_array::expr::eq;
+use vortex_array::expr::lit;
+use vortex_array::expr::root;
+use vortex_array::scalar_fn::fns::operators::Operator;
+use vortex_session::VortexSession;
+
+fn main() {
+    LazyLock::force(&SESSION);
+    divan::main();
+}
+
+static SESSION: LazyLock<VortexSession> = LazyLock::new(array_session);
+
+const LENGTH_AND_UNIQUE_VALUES: &[(usize, usize)] = &[
+    // length, unique_values
+    (10_000, 2),
+    (10_000, 4),
+    (10_000, 8),
+    (10_000, 32),
+    (10_000, 128),
+    (10_000, 512),
+    (10_000, 2048),
+    (50_000, 2),
+    (50_000, 4),
+    (50_000, 8),
+    (50_000, 32),
+    (50_000, 128),
+    (50_000, 512),
+    (50_000, 2048),
+];
+
+#[divan::bench(args = LENGTH_AND_UNIQUE_VALUES)]
+fn bench_compare_primitive(bencher: divan::Bencher, (len, uniqueness): (usize, usize)) {
+    let mut ctx = SESSION.create_execution_ctx();
+    let primitive_arr = gen_primitive_for_dict::<i32>(len, uniqueness);
+    let dict = dict_encode(&primitive_arr.clone().into_array(), &mut ctx).unwrap();
+    let value = primitive_arr.as_slice::<i32>()[0];
+
+    bencher
+        .with_inputs(|| (&dict, SESSION.create_execution_ctx()))
+        .bench_refs(|(dict, ctx)| {
+            dict.clone()
+                .into_array()
+                .binary(ConstantArray::new(value, len).into_array(), Operator::Eq)
+                .unwrap()
+                .execute::<Canonical>(ctx)
+                .unwrap()
+        })
+}
+
+#[divan::bench(args = LENGTH_AND_UNIQUE_VALUES)]
+fn bench_compare_varbin(bencher: divan::Bencher, (len, uniqueness): (usize, usize)) {
+    let mut ctx = SESSION.create_execution_ctx();
+    let varbin_arr = VarBinArray::from(gen_varbin_words(len, uniqueness));
+    let dict = dict_encode(&varbin_arr.clone().into_array(), &mut ctx).unwrap();
+    let const_bytes = varbin_arr.bytes_at(0);
+    let value = unsafe { str::from_utf8_unchecked(const_bytes.as_slice()) };
+
+    bencher
+        .with_inputs(|| (&dict, SESSION.create_execution_ctx()))
+        .bench_refs(|(dict, ctx)| {
+            dict.clone()
+                .into_array()
+                .binary(ConstantArray::new(value, len).into_array(), Operator::Eq)
+                .unwrap()
+                .execute::<RecursiveCanonical>(ctx)
+                .unwrap()
+        })
+}
+
+#[divan::bench(args = LENGTH_AND_UNIQUE_VALUES)]
+fn bench_compare_varbinview(bencher: divan::Bencher, (len, uniqueness): (usize, usize)) {
+    let mut ctx = SESSION.create_execution_ctx();
+    let varbinview_arr = VarBinViewArray::from_iter_str(gen_varbin_words(len, uniqueness));
+    let dict = dict_encode(&varbinview_arr.clone().into_array(), &mut ctx).unwrap();
+    let const_bytes = varbinview_arr.bytes_at(0);
+    let value = unsafe { str::from_utf8_unchecked(const_bytes.as_slice()) };
+
+    bencher
+        .with_inputs(|| (&dict, SESSION.create_execution_ctx()))
+        .bench_refs(|(dict, ctx)| {
+            dict.clone()
+                .into_array()
+                .binary(ConstantArray::new(value, len).into_array(), Operator::Eq)
+                .unwrap()
+                .execute::<RecursiveCanonical>(ctx)
+                .unwrap()
+        })
+}
+
+const CODES_AND_VALUES_LENGTHS: &[(usize, usize)] = &[
+    (1_000, 10_000),
+    (2_000, 10_000),
+    (2_500, 10_000),
+    (3_333, 10_000),
+    (5_000, 10_000),
+    (7_500, 10_000),
+    (9_999, 10_000),
+    (10_000, 10_000),
+    (20_000, 10_000),
+];
+
+#[divan::bench(args = CODES_AND_VALUES_LENGTHS)]
+fn bench_compare_sliced_dict_primitive(
+    bencher: divan::Bencher,
+    (codes_len, values_len): (usize, usize),
+) {
+    let mut ctx = SESSION.create_execution_ctx();
+    let primitive_arr = gen_primitive_for_dict::<i32>(codes_len.max(values_len), values_len);
+    let dict = dict_encode(&primitive_arr.clone().into_array(), &mut ctx).unwrap();
+    let dict = dict.into_array().slice(0..codes_len).unwrap();
+    let value = primitive_arr.as_slice::<i32>()[0];
+
+    bencher
+        .with_inputs(|| (&dict, SESSION.create_execution_ctx()))
+        .bench_refs(|(dict, ctx)| {
+            dict.clone()
+                .apply(&eq(root(), lit(value)))
+                .unwrap()
+                .execute::<RecursiveCanonical>(ctx)
+                .unwrap()
+        })
+}
+
+#[divan::bench(args = CODES_AND_VALUES_LENGTHS)]
+fn bench_compare_sliced_dict_varbinview(
+    bencher: divan::Bencher,
+    (codes_len, values_len): (usize, usize),
+) {
+    let mut ctx = SESSION.create_execution_ctx();
+    let varbin_arr = VarBinArray::from(gen_varbin_words(codes_len.max(values_len), values_len));
+    let dict = dict_encode(&varbin_arr.clone().into_array(), &mut ctx).unwrap();
+    let dict = dict.into_array().slice(0..codes_len).unwrap();
+    let const_bytes = varbin_arr.bytes_at(0);
+    let value = unsafe { str::from_utf8_unchecked(const_bytes.as_slice()) };
+
+    bencher
+        .with_inputs(|| (&dict, SESSION.create_execution_ctx()))
+        .bench_refs(|(dict, ctx)| {
+            dict.clone()
+                .apply(&eq(root(), lit(value)))
+                .unwrap()
+                .execute::<RecursiveCanonical>(ctx)
+                .unwrap()
+        })
+}

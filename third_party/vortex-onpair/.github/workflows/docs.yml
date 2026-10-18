@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Copyright the Vortex contributors
+
+name: Vortex Docs
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch: { }
+
+permissions:
+  # Weirdly, we need write permissions to see draft releases.
+  # See https://github.com/cli/cli/issues/3037
+  contents: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/docs-build.yml
+
+  deploy:
+    permissions:
+      deployments: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.deployment-url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build
+    steps:
+      # Note, since we provide the job with a CloudFlare scoped API token, we run it in a separate job that doesn't
+      # execute any repository code.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact-id }}
+          path: docs
+          merge-multiple: true
+      - name: Upload artifacts to CloudFlare Pages
+        id: deployment
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0  # v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy docs/ --project-name=vortex-docs --branch=${{ github.head_ref || github.ref_name }}

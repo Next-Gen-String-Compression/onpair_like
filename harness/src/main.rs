@@ -55,13 +55,31 @@ enum Cmd {
         /// Output suite directory (suite.json + queries.jsonl + gen-report.json).
         #[arg(long, short)]
         out: PathBuf,
-        /// Determinism root: same dataset + seed + profile + ops => byte-identical suite.
+        /// Same dataset, generator configuration and seed produce identical needles.
         #[arg(long)]
         seed: u64,
+        /// sampled supports all operations; suffix-array generates balanced CONTAINS needles.
+        #[arg(long, default_value = "sampled", value_parser = ["sampled", "suffix-array"])]
+        method: String,
+        /// Unique needles per length/selectivity cell (suffix-array only).
+        #[arg(long, default_value_t = 20)]
+        per_cell: usize,
+        /// Maximum needle length in bytes (suffix-array only).
+        #[arg(long, default_value_t = 256)]
+        max_needle_len: usize,
+        /// Mutation attempts per zero-match cell (suffix-array only).
+        #[arg(long, default_value_t = 4000)]
+        negative_attempts: usize,
+        /// Reuse dataset-bound SA/LCP arrays across seeds and quotas.
+        #[arg(long)]
+        index_cache: Option<PathBuf>,
+        /// SA workspace admission budget, excluding the loaded dataset.
+        #[arg(long, default_value_t = 4096)]
+        index_memory_mib: u64,
         /// full | quick (quick: reduced grid for iteration).
         #[arg(long, default_value = "full")]
         profile: String,
-        /// Comma-separated op filter, e.g. "contains,prefix" (default: all five).
+        /// Comma-separated op filter (sampled: all five; suffix-array: contains).
         #[arg(long)]
         ops: Option<String>,
         /// Suite id (default: the out directory's basename).
@@ -100,6 +118,9 @@ enum Cmd {
         /// Abort at the first gate failure (debugging aid).
         #[arg(long)]
         fail_fast: bool,
+        /// Override the spec's measure.min_iters; the manifest records the value used.
+        #[arg(long)]
+        min_iters: Option<u32>,
         // Hidden worker-mode flags: the parent re-executes itself with
         // these to run one (candidate, config, dataset) in a child.
         #[arg(long, hide = true)]
@@ -146,7 +167,8 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
             );
             Ok(ExitCode::SUCCESS)
         }
-        Cmd::Gen { dataset: ds_dir, out, seed, profile, ops, id, force } => {
+        Cmd::Gen { dataset: ds_dir, out, seed, method, per_cell, max_needle_len,
+            negative_attempts, index_cache, index_memory_mib, profile, ops, id, force } => {
             let ds = PreparedDataset::load(&ds_dir, true)?;
             let ops = ops
                 .map(|s| {
@@ -166,6 +188,35 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
                     .to_string_lossy()
                     .into_owned(),
             };
+            if method == "suffix-array" {
+                use lb_harness::gen::{BalancedRequest, IndexLimits, LengthBucket, SubstringIndex};
+                if ops.as_ref().is_some_and(|ops| ops.as_slice() != [lb_abi::LB_CONTAINS]) {
+                    return Err("suffix-array generation supports only --ops contains".into());
+                }
+                if profile != "full" { return Err("--profile applies to sampled generation; use --per-cell for suffix-array".into()); }
+                if out.join(suite::QUERIES_FILE).exists() && !force { return Err("suite exists; pass --force to replace it".into()); }
+                let limits = IndexLimits { max_needle_len,
+                    memory_budget_bytes: index_memory_mib.checked_mul(1 << 20).ok_or("memory budget overflow")? };
+                eprintln!("indexing {} rows, {} bytes (SA + LCP)", ds.num_rows(), ds.raw_bytes());
+                let index = match index_cache {
+                    Some(path) => SubstringIndex::cached(ds.payload(), ds.offsets_u64(), limits, &path)?,
+                    None => SubstringIndex::new(ds.payload(), ds.offsets_u64(), limits)?,
+                };
+                let mut request = BalancedRequest::new(ds.num_rows(), seed);
+                request.per_cell = per_cell;
+                request.negative_attempts = negative_attempts;
+                request.lengths.retain(|b| b.min <= max_needle_len);
+                for bucket in &mut request.lengths { bucket.max = bucket.max.min(max_needle_len); }
+                if max_needle_len > 256 { request.lengths.push(LengthBucket { min: 257, max: max_needle_len }); }
+                eprintln!("selecting up to {per_cell} unique needles per cell");
+                let generated = index.generate(&request)?;
+                lb_harness::gen::write_balanced_suite(std::slice::from_ref(&generated), &ds, &out, &suite_id, force)?;
+                let filled = generated.cells.iter().filter(|c| c.status == "filled").count();
+                println!("generated {} unique queries; {filled}/{} cells filled; coverage: {}",
+                    generated.needles.len(), generated.cells.len(), out.join("gen-report.json").display());
+                println!("next: bench bless --suite {} --dataset {}", out.display(), ds_dir.display());
+                return Ok(ExitCode::SUCCESS);
+            }
             let params = lb_harness::gen::GenParams {
                 seed,
                 profile: lb_harness::gen::Profile::parse(&profile)?,
@@ -194,6 +245,11 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
         Cmd::Bless { suite: suite_dir, dataset: ds_dir, force } => {
             let ds = PreparedDataset::load(&ds_dir, true)?;
             let outcome = suite::bless(&suite_dir, &ds, force)?;
+            let blessed = Suite::load_for_run(&suite_dir, &ds)?;
+            if blessed.manifest.provenance.as_ref().is_some_and(|p| p["generator"] == lb_harness::gen::SUBSTRING_GENERATOR_VERSION) {
+                lb_harness::gen::verify_balanced_suite(&suite_dir, &ds)?;
+                println!("verified SA row counts, bucket assignments, uniqueness and mutation witnesses");
+            }
             println!(
                 "blessed {} ({} newly blessed, {} verified against existing truth)",
                 suite_dir.display(),
@@ -229,8 +285,11 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        Cmd::Run { spec, out, fail_fast, worker_candidate, worker_config, worker_dataset } => {
-            let loaded = LoadedSpec::load(&spec)?;
+        Cmd::Run { spec, out, fail_fast, min_iters, worker_candidate, worker_config, worker_dataset } => {
+            let mut loaded = LoadedSpec::load(&spec)?;
+            if let Some(n) = min_iters {
+                loaded.spec.measure.min_iters = n;
+            }
             match worker_candidate {
                 Some(candidate) => run_worker_process(
                     &loaded,
@@ -315,8 +374,11 @@ fn ingest_into_db(out_dir: &std::path::Path) -> Result<(), Error> {
     // The DB indexes this repo's results/ tree. A run written elsewhere (a
     // scratch directory, an integration test's tempdir) is out of its scope —
     // say so rather than inserting rows nobody can locate again.
-    let results_root = std::fs::canonicalize(root.join("results"))?;
-    if !std::fs::canonicalize(out_dir)?.starts_with(&results_root) {
+    // A fresh clone has no results/ until its first run writes one there.
+    let results_root = root.join("results");
+    let inside = std::fs::canonicalize(&results_root)
+        .is_ok_and(|r| std::fs::canonicalize(out_dir).is_ok_and(|o| o.starts_with(r)));
+    if !inside {
         println!(
             "not ingested: {} is outside {} (the DB indexes that tree only)",
             out_dir.display(),
@@ -325,14 +387,18 @@ fn ingest_into_db(out_dir: &std::path::Path) -> Result<(), Error> {
         return Ok(());
     }
     let python = root.join(".venv/bin/python");
-    let loader = root.join("analysis/db/load.py");
+    let loader = root.join("tools/results-db/load.py");
     if !python.exists() {
-        return Err(format!(
-            "ingest: {} not found — create it with `python3 -m venv .venv && \
-             .venv/bin/pip install -r datasets/requirements.txt`",
-            python.display()
-        )
-        .into());
+        // The run measured and wrote everything; the DB is derived from it, so a
+        // missing interpreter is a note, not a failed run.
+        eprintln!(
+            "note: skipping ingest, {} not found — create it with `python3 -m venv \
+             .venv && .venv/bin/pip install -r datasets/requirements.txt`, then \
+             re-ingest with `.venv/bin/python tools/results-db/load.py {}`",
+            python.display(),
+            out_dir.display()
+        );
+        return Ok(());
     }
     let status = std::process::Command::new(&python)
         .arg(&loader)
@@ -473,6 +539,7 @@ fn run_parent(loaded: &LoadedSpec, out_dir: &std::path::Path, fail_fast: bool) -
                 if fail_fast {
                     cmd.arg("--fail-fast");
                 }
+                cmd.arg("--min-iters").arg(spec.measure.min_iters.to_string());
                 let status = cmd.status()?;
                 partials.push(
                     out_dir
@@ -533,11 +600,22 @@ fn run_parent(loaded: &LoadedSpec, out_dir: &std::path::Path, fail_fast: bool) -
         serde_json::to_string_pretty(&manifest)?,
     )?;
     println!("results: {}", results_path.display());
+    let payload_bytes = manifest
+        .datasets
+        .iter()
+        .filter_map(|ds| {
+            let id = ds.get("id")?.as_str()?.to_string();
+            Some((id, ds.get("payload_bytes")?.as_u64()?))
+        })
+        .collect();
+    if let Err(e) = print_run_summary(&results_path, &payload_bytes) {
+        eprintln!("warn: could not summarize {}: {e}", results_path.display());
+    }
 
     if let Err(e) = ingest_into_db(out_dir) {
         eprintln!("error: {e}");
         eprintln!("       results.jsonl and manifest.json are intact; re-ingest with");
-        eprintln!("       .venv/bin/python analysis/db/load.py {}", out_dir.display());
+        eprintln!("       .venv/bin/python tools/results-db/load.py {}", out_dir.display());
         any_error = true;
     }
 
@@ -549,4 +627,156 @@ fn run_parent(loaded: &LoadedSpec, out_dir: &std::path::Path, fail_fast: bool) -
         return Ok(ExitCode::from(EXIT_ERROR));
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// One measured cell, as the run summary prints it.
+struct CellRow {
+    candidate: String,
+    config: String,
+    strategy: String,
+    gbps_raw: f64,
+    median_ns: u64,
+    /// Self-reported phase splits, absent for candidates that do not report them.
+    prefilter_ns: Option<u64>,
+    verify_ns: Option<u64>,
+    setup_ns: Option<u64>,
+    /// Code-stream bytes of the build this cell ran over, and payload bytes per
+    /// one of them: `gbps_raw` is over the payload, so this is the factor
+    /// between what the engine touched and what it is credited with.
+    code_bytes: Option<u64>,
+    payload_per_code_byte: Option<f64>,
+}
+
+/// Print what the run measured, fastest first, straight from the
+/// `results.jsonl` just written.
+///
+/// One table per (dataset, chunk_rows, selection, query), because those are
+/// the things a row is not comparable across: a table then holds one row per
+/// system, which is the comparison worth reading.
+///
+/// The point of the last two columns is that `logical GB/s` is over the
+/// *payload*, so two systems are only comparable through how much payload each
+/// of their codes carries — a narrower dictionary can win on time per code and
+/// still lose the cell because it needs more codes to say the same bytes.
+fn print_run_summary(
+    results_path: &std::path::Path,
+    payload_bytes: &std::collections::BTreeMap<String, u64>,
+) -> std::io::Result<()> {
+    use std::collections::BTreeMap;
+    use std::io::BufRead;
+
+    let phase = |row: &serde_json::Value, name: &str| {
+        row.pointer(&format!("/prefilter/{name}/ns"))
+            .and_then(serde_json::Value::as_u64)
+    };
+    let text = |row: &serde_json::Value, name: &str| {
+        row[name].as_str().unwrap_or("?").to_string()
+    };
+    let group_of = |row: &serde_json::Value| {
+        (
+            text(row, "dataset"),
+            row["chunk_rows"].as_u64().unwrap_or(0),
+            row["selection"].as_str().unwrap_or("all").to_string(),
+            text(row, "query_id"),
+        )
+    };
+
+    let mut builds: BTreeMap<String, Option<u64>> = BTreeMap::new();
+    let mut groups: BTreeMap<(String, u64, String, String), Vec<CellRow>> = BTreeMap::new();
+
+    let file = std::io::BufReader::new(std::fs::File::open(results_path)?);
+    let rows: Vec<serde_json::Value> = file
+        .lines()
+        .map_while(Result::ok)
+        .filter(|line| !line.trim().is_empty())
+        .filter_map(|line| serde_json::from_str(&line).ok())
+        .collect();
+
+    // Builds first: a query row names its build only by the same key fields.
+    let build_key = |row: &serde_json::Value| {
+        format!(
+            "{}\u{1}{}\u{1}{}\u{1}{}",
+            text(row, "candidate"),
+            text(row, "config"),
+            text(row, "dataset"),
+            row["chunk_rows"].as_u64().unwrap_or(0)
+        )
+    };
+    for row in rows.iter().filter(|row| row["kind"] == "build") {
+        builds.insert(
+            build_key(row),
+            row["footprint_components"]["codes"].as_u64(),
+        );
+    }
+
+    for row in rows
+        .iter()
+        .filter(|row| row["kind"] == "query" && row["status"] == "ok")
+    {
+        let code_bytes = builds.get(&build_key(row)).copied().flatten();
+        let payload = payload_bytes.get(&text(row, "dataset")).copied();
+        groups.entry(group_of(row)).or_default().push(CellRow {
+            candidate: text(row, "candidate"),
+            config: text(row, "config"),
+            strategy: text(row, "strategy"),
+            gbps_raw: row["gbps_raw"].as_f64().unwrap_or(0.0),
+            median_ns: row
+                .pointer("/latency/median_ns")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0),
+            prefilter_ns: phase(row, "prefilter_ns"),
+            verify_ns: phase(row, "verify_ns"),
+            setup_ns: phase(row, "setup_ns"),
+            code_bytes,
+            payload_per_code_byte: match (payload, code_bytes) {
+                (Some(payload), Some(codes)) if codes != 0 => {
+                    Some(payload as f64 / codes as f64)
+                }
+                _ => None,
+            },
+        });
+    }
+
+    for ((dataset, chunk_rows, selection, query), mut cells) in groups {
+        cells.sort_by(|a, b| b.gbps_raw.total_cmp(&a.gbps_raw));
+        let chunk = if chunk_rows == 0 {
+            "whole column".to_string()
+        } else {
+            format!("{chunk_rows} rows/chunk")
+        };
+        println!("\n{query} · {dataset} · {chunk} · {selection} · {} systems", cells.len());
+        println!(
+            "{:<22} {:<24} {:<11} {:>12} {:>11} {:>10} {:>10} {:>9} {:>11} {:>8}",
+            "candidate",
+            "config",
+            "strategy",
+            "logical GB/s",
+            "median ns",
+            "prefilter",
+            "verify",
+            "setup",
+            "code bytes",
+            "payload/code"
+        );
+        let ns = |value: Option<u64>| {
+            value.map_or_else(|| "-".to_string(), |ns| ns.to_string())
+        };
+        for cell in cells {
+            println!(
+                "{:<22} {:<24} {:<11} {:>12.2} {:>11} {:>10} {:>10} {:>9} {:>11} {:>8}",
+                cell.candidate,
+                cell.config,
+                cell.strategy,
+                cell.gbps_raw,
+                cell.median_ns,
+                ns(cell.prefilter_ns),
+                ns(cell.verify_ns),
+                ns(cell.setup_ns),
+                ns(cell.code_bytes),
+                cell.payload_per_code_byte
+                    .map_or_else(|| "-".to_string(), |factor| format!("{factor:.3}")),
+            );
+        }
+    }
+    Ok(())
 }

@@ -1,0 +1,52 @@
+[package]
+name = "compress-bench"
+description = "Compression benchmarks for Vortex and other formats"
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+homepage.workspace = true
+include.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+anyhow = { workspace = true }
+arrow-array = { workspace = true }
+arrow-ipc = { workspace = true }
+arrow-schema = { workspace = true }
+async-trait = { workspace = true }
+bytes = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+futures = { workspace = true }
+indicatif = { workspace = true }
+itertools = { workspace = true }
+lance-bench = { path = "../lance-bench", optional = true }
+parquet = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tempfile = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+vortex = { workspace = true }
+vortex-arrow = { workspace = true }
+vortex-bench = { workspace = true }
+vortex-cuda = { workspace = true, optional = true }
+
+[features]
+cuda = ["dep:tempfile", "dep:vortex-cuda"]
+lance = ["dep:lance-bench"]
+
+[[bin]]
+name = "compress-bench"
+test = false
+
+[lib]
+
+[lints]
+workspace = true

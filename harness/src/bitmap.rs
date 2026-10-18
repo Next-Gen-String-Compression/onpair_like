@@ -52,6 +52,14 @@ impl Bitmap {
         (self.words[(i >> 6) as usize] >> (i & 63)) & 1 == 1
     }
 
+    /// Keep only the bits `other` also has; both cover the same rows.
+    pub fn and_with(&mut self, other: &Bitmap) {
+        debug_assert_eq!(self.num_rows, other.num_rows);
+        for (a, b) in self.words.iter_mut().zip(&other.words) {
+            *a &= *b;
+        }
+    }
+
     pub fn count(&self) -> u64 {
         self.words.iter().map(|w| w.count_ones() as u64).sum()
     }

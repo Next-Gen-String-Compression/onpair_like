@@ -6,6 +6,8 @@ cmake_minimum_required(VERSION 3.21)
 project(lb_fsst CXX)
 
 include(FetchContent)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../common/pins.cmake)
+lb_pin(CWIDA_FSST_SHA)
 # Populate-only: point SOURCE_SUBDIR at a nonexistent dir so MakeAvailable does
 # NOT add_subdirectory() cwida's CMakeLists (which would also build its `fsst`
 # CLI binaries + the fsst12 variant). We compile only the library sources we
@@ -13,7 +15,7 @@ include(FetchContent)
 FetchContent_Declare(
     fsst_upstream
     GIT_REPOSITORY https://github.com/cwida/fsst.git
-    GIT_TAG        e638d4cf8c26129d73c242a4127b42b975de5b63
+    GIT_TAG        ${CWIDA_FSST_SHA}
     SOURCE_SUBDIR  __lb_no_configure__
 )
 FetchContent_MakeAvailable(fsst_upstream)

@@ -6,5 +6,4 @@ license.workspace = true
 
 [dependencies]
 lb-abi = { workspace = true }
-lb-cand-onpair = { path = "../onpair" }
 lb-cand-onpair-spiral = { path = "../onpair_spiral" }

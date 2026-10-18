@@ -1,0 +1,278 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: Copyright the Vortex contributors
+
+use std::fmt::Debug;
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use cudarc::driver::DeviceRepr;
+use cudarc::driver::PushKernelArg;
+use tracing::instrument;
+use vortex::array::ArrayRef;
+use vortex::array::Canonical;
+use vortex::array::IntoArray;
+use vortex::array::arrays::PrimitiveArray;
+use vortex::array::arrays::Slice;
+use vortex::array::arrays::primitive::PrimitiveDataParts;
+use vortex::array::arrays::slice::SliceArraySlotsExt;
+use vortex::array::buffer::BufferHandle;
+use vortex::array::match_each_integer_ptype;
+use vortex::array::match_each_native_simd_ptype;
+use vortex::dtype::NativePType;
+use vortex::encodings::fastlanes::BitPacked;
+use vortex::encodings::fastlanes::FoR;
+use vortex::encodings::fastlanes::FoRArray;
+use vortex::encodings::fastlanes::FoRArrayExt;
+use vortex::encodings::fastlanes::FoRArraySlotsExt;
+use vortex::error::VortexExpect;
+use vortex::error::VortexResult;
+use vortex::error::vortex_ensure;
+use vortex::error::vortex_err;
+
+use crate::CudaBufferExt;
+use crate::CudaDeviceBuffer;
+use crate::device_buffer::with_cuda_view_mut;
+use crate::executor::CudaArrayExt;
+use crate::executor::CudaExecute;
+use crate::executor::CudaExecutionCtx;
+use crate::kernel::encodings::bitpacked::decode_bitpacked;
+
+/// CUDA decoder for frame-of-reference.
+#[derive(Debug)]
+pub(crate) struct FoRExecutor;
+
+impl FoRExecutor {
+    fn try_specialize(array: ArrayRef) -> Option<FoRArray> {
+        array.try_downcast::<FoR>().ok()
+    }
+}
+
+#[async_trait]
+impl CudaExecute for FoRExecutor {
+    #[instrument(level = "trace", skip_all, fields(executor = ?self))]
+    async fn execute(
+        &self,
+        array: ArrayRef,
+        ctx: &mut CudaExecutionCtx,
+    ) -> VortexResult<Canonical> {
+        let array = Self::try_specialize(array).ok_or_else(|| vortex_err!("Expected FoRArray"))?;
+
+        // Fuse FOR + BP => FFOR
+        if let Some(bitpacked) = array.encoded().as_opt::<BitPacked>() {
+            match_each_integer_ptype!(bitpacked.ptype(bitpacked.dtype()), |P| {
+                let reference: P = array.reference_scalar().try_into()?;
+                return decode_bitpacked(bitpacked.into_owned(), reference, None, ctx).await;
+            })
+        }
+
+        // Fuse FOR + SLICE + BP => SLICE + FFOR
+        if let Some(slice_array) = array.encoded().as_opt::<Slice>()
+            && let Some(bitpacked) = slice_array.child().as_opt::<BitPacked>()
+        {
+            let slice_range = slice_array.slice_range().clone();
+            let unpacked = match_each_integer_ptype!(bitpacked.ptype(bitpacked.dtype()), |P| {
+                let reference: P = array.reference_scalar().try_into()?;
+                decode_bitpacked(bitpacked.into_owned(), reference, None, ctx).await?
+            });
+
+            return unpacked
+                .into_primitive()
+                .into_array()
+                .slice(slice_range)?
+                .execute::<Canonical>(ctx.execution_ctx());
+        }
+
+        match_each_native_simd_ptype!(array.ptype(), |P| { decode_for::<P>(array, ctx).await })
+    }
+}
+
+#[instrument(skip_all)]
+async fn decode_for<P>(array: FoRArray, ctx: &mut CudaExecutionCtx) -> VortexResult<Canonical>
+where
+    P: NativePType + DeviceRepr + Send + Sync + 'static,
+{
+    let array_len = array.encoded().len();
+    vortex_ensure!(array_len > 0, "FoR encoded array must not be empty");
+
+    let reference: P = array
+        .reference_scalar()
+        .as_primitive()
+        .as_::<P>()
+        .vortex_expect("Cannot have a null reference");
+
+    // Execute child and copy to device
+    let canonical = array.encoded().clone().execute_cuda(ctx).await?;
+    let primitive = canonical.into_primitive();
+    let PrimitiveDataParts {
+        buffer, validity, ..
+    } = primitive.into_data_parts();
+
+    let mut device_buffer = ctx.ensure_on_device(buffer).await?;
+    let array_len_u64 = array_len as u64;
+
+    let cuda_function = ctx.load_function("for", &[P::PTYPE])?;
+    let (next, launch) = with_cuda_view_mut::<P, _>(device_buffer, |view| {
+        ctx.launch_kernel(&cuda_function, array_len, |args| {
+            args.arg(view).arg(&reference).arg(&array_len_u64);
+        })
+    })?;
+    device_buffer = next;
+    if let Some(launch) = launch {
+        launch?;
+        return Ok(Canonical::Primitive(PrimitiveArray::from_buffer_handle(
+            device_buffer,
+            P::PTYPE,
+            validity,
+        )));
+    }
+
+    // Preserve aliased inputs by using the out-of-place kernel only when unique mutable access is
+    // unavailable.
+    let input_view = device_buffer.cuda_view::<P>()?;
+    let mut output = ctx.device_alloc::<P>(array_len)?;
+    let ptype_suffix = P::PTYPE.to_string();
+    let cuda_function =
+        ctx.load_function_with_suffixes("for", &["in", "out", ptype_suffix.as_str()])?;
+    ctx.launch_kernel(&cuda_function, array_len, |args| {
+        args.arg(&input_view)
+            .arg(&mut output)
+            .arg(&reference)
+            .arg(&array_len_u64);
+    })?;
+
+    let output = BufferHandle::new_device(Arc::new(CudaDeviceBuffer::new(output)));
+    Ok(Canonical::Primitive(PrimitiveArray::from_buffer_handle(
+        output,
+        P::PTYPE,
+        validity,
+    )))
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+    use vortex::array::IntoArray;
+    use vortex::array::arrays::PrimitiveArray;
+    use vortex::array::assert_arrays_eq;
+    use vortex::array::validity::Validity::NonNullable;
+    use vortex::buffer::Buffer;
+    use vortex::dtype::NativePType;
+    use vortex::encodings::fastlanes::BitPacked;
+    use vortex::encodings::fastlanes::BitPackedArrayExt;
+    use vortex::encodings::fastlanes::FoR;
+    use vortex::encodings::fastlanes::FoRArray;
+    use vortex::error::VortexExpect;
+    use vortex::scalar::Scalar;
+    use vortex_array::VortexSessionExecute;
+    use vortex_array::array_session;
+
+    use super::*;
+    use crate::CanonicalCudaExt;
+    use crate::session::CudaSession;
+
+    fn make_for_array<T: NativePType + Into<Scalar>>(input_data: Vec<T>, reference: T) -> FoRArray {
+        FoR::try_new(
+            PrimitiveArray::new(Buffer::from(input_data), NonNullable).into_array(),
+            reference.into(),
+        )
+        .unwrap()
+    }
+
+    #[rstest]
+    #[case::u8(make_for_array((0..2050).map(|i| (i % 246) as u8).collect(), 10u8))]
+    #[case::u16(make_for_array((0..2050).map(|i| (i % 2050) as u16).collect(), 1000u16))]
+    #[case::u32(make_for_array((0..2050).map(|i| (i % 2050) as u32).collect(), 100000u32))]
+    #[case::u64(make_for_array((0..2050).map(|i| (i % 2050) as u64).collect(), 1000000u64))]
+    #[crate::test]
+    async fn test_cuda_for_decompression(#[case] for_array: FoRArray) -> VortexResult<()> {
+        let mut ctx = array_session().create_execution_ctx();
+        let mut cuda_ctx = CudaSession::create_execution_ctx(&crate::cuda_session())
+            .vortex_expect("failed to create execution context");
+
+        let gpu_result = FoRExecutor
+            .execute(for_array.clone().into_array(), &mut cuda_ctx)
+            .await
+            .vortex_expect("GPU decompression failed")
+            .into_host()
+            .await?
+            .into_array();
+
+        assert_arrays_eq!(for_array, gpu_result, &mut ctx);
+
+        Ok(())
+    }
+
+    #[crate::test]
+    async fn test_signed_ffor() {
+        let mut ctx = array_session().create_execution_ctx();
+        let mut cuda_ctx = CudaSession::create_execution_ctx(&crate::cuda_session())
+            .vortex_expect("failed to create execution context");
+
+        let values = (0i8..8i8)
+            .cycle()
+            .take(1024)
+            .collect::<Buffer<_>>()
+            .into_array();
+        let packed = BitPacked::encode(&values, 3, &mut array_session().create_execution_ctx())
+            .unwrap()
+            .into_array();
+        let for_array = FoR::try_new(packed, (-8i8).into()).unwrap();
+
+        let gpu_result = FoRExecutor
+            .execute(for_array.clone().into_array(), &mut cuda_ctx)
+            .await
+            .vortex_expect("GPU decompression failed")
+            .into_host()
+            .await
+            .vortex_expect("copying to host failed")
+            .into_array();
+
+        assert_arrays_eq!(for_array, gpu_result, &mut ctx);
+    }
+
+    /// Patched positions must pick up the frame of reference, exactly like unpacked ones.
+    ///
+    /// The bit-packed exceptions are stored reference-relative, so a decoder that writes them
+    /// straight into the output leaves every patched value short by the reference. A plain
+    /// bit-packed array cannot catch that: its reference is zero.
+    #[rstest]
+    #[case::u32(100_000u32)]
+    #[case::u64(1_000_000u64)]
+    #[crate::test]
+    async fn test_ffor_patched_values_include_reference<T>(#[case] reference: T) -> VortexResult<()>
+    where
+        T: NativePType + Into<Scalar> + From<u32>,
+    {
+        let mut ctx = array_session().create_execution_ctx();
+        let mut cuda_ctx = CudaSession::create_execution_ctx(&crate::cuda_session())
+            .vortex_expect("failed to create execution context");
+
+        // Values that fit in 8 bits, with a handful that do not and so become patches.
+        let mut values = (0..2048u32)
+            .map(|i| <T as From<u32>>::from(i % 200))
+            .collect::<Vec<_>>();
+        for index in [7, 1023, 1024, 2047] {
+            values[index] = <T as From<u32>>::from(1u32 << 17);
+        }
+
+        let values = PrimitiveArray::new(Buffer::from(values), NonNullable).into_array();
+        let packed = BitPacked::encode(&values, 8, &mut array_session().create_execution_ctx())?;
+        assert!(
+            packed.patches().is_some(),
+            "test setup expects the exceptions to be stored as patches"
+        );
+        let for_array = FoR::try_new(packed.into_array(), reference.into())?;
+
+        let gpu_result = FoRExecutor
+            .execute(for_array.clone().into_array(), &mut cuda_ctx)
+            .await
+            .vortex_expect("GPU decompression failed")
+            .into_host()
+            .await?
+            .into_array();
+
+        assert_arrays_eq!(for_array, gpu_result, &mut ctx);
+
+        Ok(())
+    }
+}

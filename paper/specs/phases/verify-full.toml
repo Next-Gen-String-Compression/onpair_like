@@ -1,0 +1,36 @@
+# The phase-shares run: onpair_spiral's three verifiers on the needles of
+# micro/full.toml at its 512k row group. A spec of its own because
+# `strategies` filters every candidate and pf_memmem_superset and
+# pf_kmp_superset exist only on onpair_spiral.
+#
+#   paper/gen-phases.sh full [neon|avx512]
+
+strategies = ["pf_walk", "pf_memmem_superset", "pf_kmp_superset"]
+
+[[datasets]]
+path = "../../../datasets/clickbench-url-1mi"
+[[datasets]]
+path = "../../../datasets/amazon-title-1mi"
+[[datasets]]
+path = "../../../datasets/dbpedia-abstract-1mi"
+[[datasets]]
+path = "../../../datasets/imdb-charname-1mi"
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/clickbench-url-1mi/sa-lcp-v1-s42-n20-6144c06e52f29a26"
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/amazon-title-1mi/sa-lcp-v1-s42-n20-bd773a2051ca818a"
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa-lcp-v1-s42-n20-b771bf1937fef6ec"
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/sa-lcp-v1-s42-n20-2935831fb5714505"
+
+[[candidates]]
+name = "onpair_spiral"
+configs = ['{"bits":12,"prune":1.0}', '{"bits":16,"prune":1.0}']
+
+[measure]
+chunk_rows = [524288]
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

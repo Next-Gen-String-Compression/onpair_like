@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Copyright the Vortex contributors
+
+include ../setup.slt.no
+
+# Keep each of the three inserted files in its own ordered scan partition.
+statement ok
+SET datafusion.execution.target_partitions = 3;
+
+statement ok
+CREATE EXTERNAL TABLE ordered_pushdown (
+    c1 VARCHAR NOT NULL,
+    c2 INT NOT NULL
+)
+STORED AS vortex
+WITH ORDER (c1 ASC)
+LOCATION '${WORK_DIR}/ordered_pushdown/';
+
+statement ok
+INSERT INTO ordered_pushdown VALUES
+    ('air', 5),
+    ('balloon', 42);
+
+statement ok
+INSERT INTO ordered_pushdown VALUES
+    ('zebra', 5);
+
+statement ok
+INSERT INTO ordered_pushdown VALUES
+    ('texas', 2000),
+    ('alabama', 2000);
+
+query TI
+SELECT c1, c2 FROM ordered_pushdown ORDER BY c1 ASC LIMIT 3;
+----
+air 5
+alabama 2000
+balloon 42
+
+query TT
+EXPLAIN SELECT c1, c2 FROM ordered_pushdown ORDER BY c1 ASC LIMIT 3;
+----
+logical_plan
+01)Sort: ordered_pushdown.c1 ASC NULLS LAST, fetch=3
+02)--TableScan: ordered_pushdown projection=[c1, c2]
+physical_plan
+01)SortPreservingMergeExec: [c1@0 ASC NULLS LAST], fetch=3
+02)--DataSourceExec: file_groups={3 groups: [[${WORK_DIR}/ordered_pushdown/<slt:ignore>_0.vortex], [${WORK_DIR}/ordered_pushdown/<slt:ignore>_0.vortex], [${WORK_DIR}/ordered_pushdown/<slt:ignore>_0.vortex]]}, projection=[c1, c2], limit=3, output_ordering=[c1@0 ASC NULLS LAST], file_type=vortex

@@ -44,8 +44,10 @@ struct FsstBuilt {
 
 // Train + batch-compress `view` into `out`. Returns true on success (with
 // out.enc alive); on failure writes a message into err_buf and returns false.
+// `after_train`, when given, runs on the trained encoder before compression
+// (fsst_prefilter renumbers the codes there with its fork's fsst_sort_codes).
 static bool Build(const lb_chunk_view* view, FsstBuilt& out, char* err_buf,
-                  uint64_t err_cap) {
+                  uint64_t err_cap, void (*after_train)(fsst_encoder_t*) = nullptr) {
   auto fail = [&](const char* msg) -> bool {
     if (err_cap > 0) std::snprintf(err_buf, err_cap, "%s", msg);
     return false;
@@ -64,6 +66,7 @@ static bool Build(const lb_chunk_view* view, FsstBuilt& out, char* err_buf,
   fsst_encoder_t* enc =
       fsst_create(size_t(n), len_in.data(), str_in.data(), /*zeroTerminated=*/0);
   if (enc == nullptr) return fail("fsst_create failed");
+  if (after_train != nullptr) after_train(enc);
 
   // Conservative output bound: FSST needs ~(7 + 2*len) per string worst case.
   std::vector<uint8_t> buf;

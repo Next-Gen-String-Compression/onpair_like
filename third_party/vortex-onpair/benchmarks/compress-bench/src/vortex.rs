@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: Copyright the Vortex contributors
+
+use std::io::Cursor;
+use std::path::Path;
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
+
+use anyhow::Result;
+use anyhow::bail;
+use async_trait::async_trait;
+use bytes::Bytes;
+use futures::StreamExt;
+use futures::pin_mut;
+use vortex::array::IntoArray;
+use vortex::dtype::FieldNames;
+use vortex::expr::root;
+use vortex::expr::select;
+use vortex::file::OpenOptionsSessionExt;
+use vortex::file::WriteOptionsSessionExt;
+use vortex_arrow::ArrowSessionExt;
+use vortex_bench::Format;
+use vortex_bench::SESSION;
+use vortex_bench::compress::Compressed;
+use vortex_bench::compress::CompressedData;
+use vortex_bench::compress::Compressor;
+use vortex_bench::compress::Uncompressed;
+use vortex_bench::compress::read_projection;
+use vortex_bench::conversions::parquet_to_vortex_chunks;
+
+/// Compressor implementation for Vortex format.
+pub struct VortexCompressor;
+
+#[async_trait]
+impl Compressor for VortexCompressor {
+    fn format(&self) -> Format {
+        Format::OnDiskVortex
+    }
+
+    async fn load(&self, parquet_path: &Path) -> Result<Uncompressed> {
+        let chunks = parquet_to_vortex_chunks(parquet_path.to_path_buf()).await?;
+        Ok(Uncompressed::Vortex(chunks.into_array()))
+    }
+
+    async fn compress(&self, input: &Uncompressed) -> Result<Compressed> {
+        let array = input.vortex()?;
+
+        let mut buf = Vec::new();
+        let start = Instant::now();
+        let mut cursor = Cursor::new(&mut buf);
+        SESSION
+            .write_options()
+            .write(&mut cursor, array.to_array_stream())
+            .await?;
+        let elapsed = start.elapsed();
+
+        Ok(Compressed {
+            size: buf.len() as u64,
+            data: CompressedData::Bytes(Bytes::from(buf)),
+            elapsed,
+        })
+    }
+
+    async fn decompress(&self, compressed: &Compressed) -> Result<Duration> {
+        let CompressedData::Bytes(data) = &compressed.data else {
+            bail!("Vortex decompression expects in-memory bytes");
+        };
+
+        let start = Instant::now();
+        let mut scan = SESSION.open_options().open_buffer(data.clone())?.scan()?;
+        let source_dtype = scan.dtype()?;
+        let root_columns = source_dtype
+            .as_struct_fields_opt()
+            .map_or(0, |fields| fields.nfields());
+        if let Some(cols) = read_projection(root_columns) {
+            // Columns are named "0".."num_columns-1"; project the given subset.
+            let names: FieldNames = cols.iter().map(|i| i.to_string()).collect();
+            let projection = select(names, root())
+                .optimize_recursive(&source_dtype)?
+                .bind(&source_dtype)?;
+            scan = scan.with_projection(projection);
+        }
+        let schema = Arc::new(SESSION.arrow().to_arrow_schema(&scan.dtype()?)?);
+
+        let stream = scan.into_record_batch_stream(schema)?;
+        pin_mut!(stream);
+
+        while let Some(batch) = stream.next().await {
+            let _batch = batch?;
+        }
+        Ok(start.elapsed())
+    }
+}

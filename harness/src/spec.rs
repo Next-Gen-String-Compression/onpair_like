@@ -68,6 +68,85 @@ pub struct ScannerSel {
     pub name: String,
 }
 
+/// One selection vector to run every cell under (ABI v7): `all`, or
+/// `uniform` with a `fraction`, or `runs` with `fraction` and a run length
+/// drawn uniformly over `run_rows_min..=run_rows_max`. Both random shapes
+/// are a function of `seed` and the global row index. Absent from a spec,
+/// the one selection is `all`; present, only the listed ones run.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct SelectionSpec {
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fraction: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_rows_min: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_rows_max: Option<u64>,
+    #[serde(default)]
+    pub seed: u64,
+}
+
+impl SelectionSpec {
+    pub fn all() -> Self {
+        Self {
+            kind: "all".into(),
+            fraction: None,
+            run_rows_min: None,
+            run_rows_max: None,
+            seed: 0,
+        }
+    }
+
+    fn validate(&self) -> Result<()> {
+        let fraction = || -> Result<f64> {
+            let f = self.fraction.ok_or(format!("selection {}: fraction is required", self.kind))?;
+            if !(f > 0.0 && f <= 1.0) {
+                return Err(format!("selection {}: fraction {f} is not in (0, 1]", self.kind).into());
+            }
+            Ok(f)
+        };
+        match self.kind.as_str() {
+            "all" => {
+                if self.fraction.is_some() || self.run_rows_min.is_some() || self.run_rows_max.is_some() {
+                    return Err("selection all takes no fraction or run_rows".into());
+                }
+            }
+            "uniform" => {
+                fraction()?;
+                if self.run_rows_min.is_some() || self.run_rows_max.is_some() {
+                    return Err("selection uniform takes no run_rows".into());
+                }
+            }
+            "runs" => {
+                let f = fraction()?;
+                let (min, max) = match (self.run_rows_min, self.run_rows_max) {
+                    (Some(a), Some(b)) => (a, b),
+                    _ => return Err("selection runs needs run_rows_min and run_rows_max".into()),
+                };
+                if min < 1 || max < min {
+                    return Err(format!("selection runs: run_rows {min}..={max} is not a range from 1").into());
+                }
+                // One run per period of avg / fraction rows; the longest run must fit.
+                let avg = (min + max) as f64 / 2.0;
+                if f > avg / max as f64 {
+                    return Err(format!(
+                        "selection runs: fraction {f} exceeds {:.4}, the most run_rows {min}..={max} can fill without merging",
+                        avg / max as f64
+                    )
+                    .into());
+                }
+            }
+            other => return Err(format!("selection kind {other:?} is not all, uniform or runs").into()),
+        }
+        Ok(())
+    }
+}
+
+fn default_selections() -> Vec<SelectionSpec> {
+    vec![SelectionSpec::all()]
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Measure {
@@ -134,6 +213,8 @@ pub struct Spec {
     /// runner does not re-run `decode` for every codec × scanner.
     #[serde(default)]
     pub strategies: Vec<String>,
+    #[serde(default = "default_selections")]
+    pub selections: Vec<SelectionSpec>,
     #[serde(default)]
     pub measure: Measure,
 }
@@ -177,6 +258,12 @@ impl LoadedSpec {
             if cr != 0 && cr % 64 != 0 {
                 return Err(format!("measure.chunk_rows: {cr} is not a multiple of 64").into());
             }
+        }
+        if spec.selections.is_empty() {
+            return Err("selections is empty; omit it to run under every row".into());
+        }
+        for s in &spec.selections {
+            s.validate()?;
         }
         Ok(LoadedSpec {
             spec,
@@ -236,6 +323,35 @@ name = "c"
         ))
         .expect_err("misplaced root key must not be silently dropped");
         assert!(err.to_string().contains("strategies"));
+    }
+
+    #[test]
+    fn selections_default_to_all_and_validate() {
+        let spec: Spec = toml::from_str(HEAD).unwrap();
+        assert_eq!(spec.selections, vec![SelectionSpec::all()]);
+        let spec: Spec = toml::from_str(&format!(
+            "{HEAD}\n[[selections]]\nkind = \"all\"\n[[selections]]\nkind = \"uniform\"\nfraction = 0.1\nseed = 7\n\
+             [[selections]]\nkind = \"runs\"\nrun_rows_min = 32\nrun_rows_max = 512\nfraction = 0.5\n"
+        ))
+        .unwrap();
+        assert_eq!(spec.selections.len(), 3);
+        for s in &spec.selections {
+            s.validate().unwrap();
+        }
+        let bad = |kind: &str, fraction, min, max| SelectionSpec {
+            kind: kind.into(),
+            fraction,
+            run_rows_min: min,
+            run_rows_max: max,
+            seed: 0,
+        };
+        assert!(bad("uniform", None, None, None).validate().is_err());
+        assert!(bad("uniform", Some(1.5), None, None).validate().is_err());
+        assert!(bad("runs", Some(0.1), Some(0), Some(4)).validate().is_err());
+        // 0.6 of the rows in runs of at most 512 with mean 272 would merge runs.
+        assert!(bad("runs", Some(0.6), Some(32), Some(512)).validate().is_err());
+        assert!(bad("runs", Some(0.5), Some(32), Some(512)).validate().is_ok());
+        assert!(bad("stripes", Some(0.1), None, None).validate().is_err());
     }
 
     #[test]

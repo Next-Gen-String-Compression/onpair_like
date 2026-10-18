@@ -1,509 +1,358 @@
-//! End-to-end checks over a fixed in-test corpus.
-//!
-//! The corpus lives here rather than in a data file so the crate stays free of
-//! datasets, and the dictionary it trains is reproducible: OnPair's default
-//! config seeds deterministically, and the revision is pinned in `Cargo.toml`.
-//! Both of those are what make the golden figure stable.
+//! End-to-end checks over the plan logs in `tests/fixtures`, which
+//! `tests/fixtures/make.sh` regenerates from two small corpora with both
+//! loggers.
 
-use onpair::{Column, DEFAULT_CONFIG, DictionaryView};
-use onpair_graph_viz::{
-    Error, Options, ProbeWeight, build_path_graph, candidate_rows, index_for, live_cover,
-    minimum_vertex_cut, visualize,
-};
+use std::path::Path;
 
-const ROWS: &[&str] = &[
-    "https://www.example.com/index.html",
-    "https://www.example.com/search?q=onpair",
-    "https://www.example.com/search?q=compression",
-    "https://shop.example.org/cart/checkout?ref=newsletter",
-    "https://shop.example.org/products/list?page=2&sort=desc",
-    "https://news.site.co.uk/articles/2026/08?utm_source=newsletter",
-    "https://news.site.co.uk/articles/2026/08?utm_source=google",
-    "https://cdn.assets.example.net/static/app.js",
-    "https://forum.example.com/user/profile?id=42",
-    "https://forum.example.com/search?q=substring-search&page=3",
-];
+use onpair_graph_viz::{Figure, Log, Options, read_log, visualize};
 
-/// Patterns spanning the interesting cases: several boundary alignments, a
-/// pattern short enough to sit inside one token, one that matches nothing, and
-/// one long enough to force a chain of interior probes.
-const PATTERNS: &[&str] = &[
-    "utm_source=newsletter",
-    "example",
-    "?q=",
-    "co",
-    "zzz-absent",
-    "/articles/2026/08?utm_source=",
-];
-
-struct Corpus {
-    bytes: Vec<u8>,
-    offsets: Vec<u32>,
+fn log(name: &str) -> Log {
+    read_log(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name))
+        .expect("fixture reads")
 }
 
-impl Corpus {
-    fn new() -> Self {
-        let mut bytes = Vec::new();
-        let mut offsets = vec![0u32];
-        for row in ROWS {
-            bytes.extend_from_slice(row.as_bytes());
-            offsets.push(bytes.len() as u32);
-        }
-        Self { bytes, offsets }
-    }
-
-    fn column(&self) -> Column<u32> {
-        Column::compress(&self.bytes, &self.offsets, DEFAULT_CONFIG).expect("corpus compresses")
-    }
-
-    /// A deliberately repetitive corpus, for the whole-needle case.
-    ///
-    /// Ten rows do not give OnPair enough evidence to merge a phrase into one long
-    /// token, so no needle over that corpus is ever *contained* — and the case that
-    /// most confuses a reader of these figures is exactly the contained one.
-    fn repetitive() -> Self {
-        let mut bytes = Vec::new();
-        let mut offsets = vec![0u32];
-        for row in 0..200 {
-            let text = if row % 2 == 0 {
-                format!("https://shop.example.org/cart/checkout?ref=newsletter&id={row}")
-            } else {
-                format!("https://shop.example.org/cart/basket?ref=google&id={row}")
-            };
-            bytes.extend_from_slice(text.as_bytes());
-            offsets.push(bytes.len() as u32);
-        }
-        Self { bytes, offsets }
-    }
+fn figure(log: &Log, algorithm: &str, needle: &[u8], options: &Options) -> Figure {
+    let query = log
+        .queries
+        .iter()
+        .find(|q| q.algorithm == algorithm && q.needle == needle)
+        .unwrap_or_else(|| panic!("no {algorithm} query for {needle:?}"));
+    visualize(log, query, options).expect("figure renders")
 }
 
-/// The point of the whole exercise: a rendered cover must admit every true match.
-/// This graph is a second implementation of OnPair's planning logic, so it is
-/// worth proving rather than assuming.
+/// Every logged query draws, and no control character reaches an SVG.
 #[test]
-fn every_cover_is_sound() {
-    let corpus = Corpus::new();
-    let column = corpus.column();
-    let view = column.view();
-    let frequencies = index_for(view).expect("index builds");
+fn every_logged_query_draws() {
+    for name in ["plain", "repetitive"] {
+        let log = log(name);
+        for query in &log.queries {
+            let figure = visualize(&log, query, &Options::default()).expect("figure renders");
+            for svg in [figure.svg.expect("small graph renders"), figure.table_svg] {
+                let stray = svg.chars().find(|c| c.is_control() && *c != '\n');
+                assert_eq!(stray, None, "{name}/{}: control character in the SVG", query.uuid);
+            }
+        }
+    }
+}
 
-    for metric in ProbeWeight::ALL {
-        for pattern in PATTERNS {
-            let options = Options {
-                metric,
-                ..Options::default()
-            };
-            let figure = visualize(view, &frequencies, pattern.as_bytes(), &options)
-                .unwrap_or_else(|error| panic!("{pattern:?} under {}: {error}", metric.name()));
-            let measurement = figure.measurement.expect("measured by default");
+/// The edges marked as cut compile to the cover the planner priced: their
+/// frequency over the rows is OnPair's logged estimate. FSST is left out, since
+/// its estimate also counts pairs the frequency sum does not.
+#[test]
+fn the_cut_compiles_to_the_planners_estimate() {
+    for name in ["plain", "repetitive"] {
+        let log = log(name);
+        for query in log.queries.iter().filter(|q| q.algorithm.starts_with("onpair")) {
+            let figure = visualize(&log, query, &Options::default()).expect("figure renders");
+            let drawn = (figure.summary.cover_frequency as f64 / query.rows as f64).min(1.0);
             assert!(
-                measurement.sound,
-                "{pattern:?} under {}: cover missed a true match",
-                metric.name()
-            );
-            assert!(
-                measurement.candidates >= measurement.exact_rows,
-                "{pattern:?} under {}: fewer candidates than matches",
-                metric.name()
+                (drawn - query.cut_selectivity_estimated).abs() < 1e-12,
+                "{name}/{}: drawn {drawn} vs logged {}",
+                query.uuid,
+                query.cut_selectivity_estimated
             );
         }
     }
 }
 
-/// Same cover, computed from the graph by hand rather than through `visualize`,
-/// to pin the relationship between the cut and the token membership it implies.
-#[test]
-fn cut_membership_admits_the_matching_rows() {
-    let corpus = Corpus::new();
-    let column = corpus.column();
-    let view = column.view();
-    let frequencies = index_for(view).expect("index builds");
-    let weights = onpair_graph_viz::Weights::from_index(&frequencies);
-
-    let pattern = b"utm_source=newsletter";
-    let graph = build_path_graph(view.dict, pattern, &weights).expect("graph builds");
-    let cut = minimum_vertex_cut(&graph, ProbeWeight::TermFrequency);
-    let candidates = candidate_rows(view, &graph.membership_for_cut(&cut.selected_nodes));
-
-    let truth = view.rows_containing(pattern);
-    assert!(!truth.is_empty(), "the corpus should contain the pattern");
-    for row in truth {
-        assert!(candidates.contains(&row), "row {row} was filtered out");
-    }
-}
-
-/// OnPair's own prefilter and this crate's cut should agree on selectivity.
-///
-/// Equal-weight cuts can tie, so a difference is not automatically a bug — but
-/// on this corpus they do agree, and a change in that is worth being told about.
-#[test]
-fn selectivity_matches_onpair() {
-    let corpus = Corpus::new();
-    let column = corpus.column();
-    let view = column.view();
-    let frequencies = index_for(view).expect("index builds");
-
-    for pattern in PATTERNS {
-        let figure = visualize(view, &frequencies, pattern.as_bytes(), &Options::default())
-            .expect("figure builds");
-        let measurement = figure.measurement.expect("measured by default");
-        if let Some(theirs) = measurement.onpair_candidates {
-            assert_eq!(
-                measurement.candidates, theirs,
-                "{pattern:?}: this crate admits {} rows, OnPair admits {theirs}",
-                measurement.candidates
-            );
-        }
-    }
-}
-
-/// A cut is free to select tokens the code stream never uses — they weigh nothing,
-/// so its objective is indifferent between naming them and not — and OnPair takes
-/// them back out before scanning. A figure that kept them would draw comparisons
-/// that never happen, so it prunes too, and says which probes went.
-///
-/// These patterns cannot match anything, and neither can the tokens their cut
-/// picks, so the whole cover is pruned away. That OnPair then admits no rows is
-/// the part worth asserting: it is the only outside evidence that this crate's
-/// copy of the pruning rule agrees with the library's.
-#[test]
-fn probes_for_absent_tokens_are_pruned() {
-    let corpus = Corpus::new();
-    let column = corpus.column();
-    let view = column.view();
-    let frequencies = index_for(view).expect("index builds");
-
-    for pattern in ["zz", "q=z", "zzz-absent"] {
-        let figure = visualize(view, &frequencies, pattern.as_bytes(), &Options::default())
-            .expect("figure builds");
-        let measurement = figure.measurement.as_ref().expect("measured by default");
-
-        assert!(
-            !figure.cut.selected_nodes.is_empty(),
-            "{pattern:?}: the cut should still name the probes it chose"
-        );
-        assert_eq!(
-            figure.dead_probes, figure.cut.selected_nodes,
-            "{pattern:?}: every probe the cut chose occurs nowhere"
-        );
-        assert_eq!(
-            (figure.cover.cmp_cost, figure.cover.member_ids),
-            (0, 0),
-            "{pattern:?}: a fully pruned cover costs nothing to check"
-        );
-        assert!(
-            figure.cover.dead_ids > 0,
-            "{pattern:?}: nothing was dropped"
-        );
-        assert_eq!(
-            (measurement.candidates, measurement.onpair_candidates),
-            (0, Some(0)),
-            "{pattern:?}: an empty cover admits no rows, and OnPair should agree"
-        );
-        assert!(
-            figure.svg.expect("small graph renders").contains("PRUNED"),
-            "{pattern:?}: the figure should mark what it dropped"
-        );
-    }
-}
-
-/// A token holding the whole needle is a mandatory member of every cover and has no
-/// node in the DAG, so nothing the graph draws accounts for it. That gap is what
-/// made a figure look wrong: a cut of three probes producing a cover of ten, or a
-/// cut of weight zero producing a cover at all. The figure has to name them.
-#[test]
-fn whole_needle_tokens_are_counted_and_drawn() {
-    let corpus = Corpus::repetitive();
-    let column = corpus.column();
-    let view = column.view();
-    let frequencies = index_for(view).expect("index builds");
-
-    // Frequent enough in this corpus to have been merged into single tokens, and
-    // short enough to fit in one.
-    let figure =
-        visualize(view, &frequencies, b"google", &Options::default()).expect("figure builds");
-    assert!(
-        !figure.graph.contained.is_empty(),
-        "some dictionary token should hold the whole needle"
-    );
-    assert_eq!(
-        figure.summary.contained_tokens,
-        figure.graph.contained.len()
-    );
-    assert!(
-        figure.summary.contained_frequency > 0,
-        "those tokens occur in this column"
-    );
-    assert!(
-        figure.summary.cover_frequency >= figure.summary.contained_frequency,
-        "the cover holds them, so it cannot weigh less"
-    );
-    assert_eq!(
-        figure.summary.cover_probes,
-        figure.summary.cover_points + figure.summary.cover_ranges,
-        "every probe is a point or a range"
-    );
-
-    let svg = figure.svg.expect("small graph renders");
-    assert!(svg.contains("MANDATORY"), "the card should be badged");
-    assert!(
-        svg.contains("contains the whole needle"),
-        "and should say what it is"
-    );
-    assert!(
-        svg.contains("WHOLE-NEEDLE TOKENS"),
-        "and the chip should count them"
-    );
-
-    // A needle past MAX_TOKEN_SIZE cannot be contained by construction, and then
-    // the figure has no reason to mention the case at all.
-    let options = Options {
-        max_states: None,
-        ..Options::default()
-    };
-    let figure = visualize(view, &frequencies, b"/cart/checkout?ref=newsletter", &options)
-        .expect("figure builds");
-    assert_eq!(figure.summary.contained_tokens, 0);
-    assert!(!figure.svg.expect("renders").contains("MANDATORY"));
-}
-
-/// A cut of weight zero says no occurrence crosses a token boundary — not that
-/// nothing matches. When every occurrence sits inside one token the cover is the
-/// mandatory ids alone, and it is exact.
-#[test]
-fn a_weightless_cut_still_covers_the_matches() {
-    let corpus = Corpus::repetitive();
-    let column = corpus.column();
-    let view = column.view();
-    let frequencies = index_for(view).expect("index builds");
-
-    // Every row holds "/cart/", so the dictionary holds it too and no occurrence of
-    // "cart" ever straddles two tokens.
-    let figure =
-        visualize(view, &frequencies, b"cart", &Options::default()).expect("figure builds");
-    let measurement = figure.measurement.as_ref().expect("measured by default");
-    assert_eq!(
-        figure.cut.value, 0,
-        "no boundary-crossing occurrence to pay for"
-    );
-    assert!(
-        figure.cover.cmp_cost > 0,
-        "yet the cover still has probes to issue"
-    );
-    assert_eq!(
-        (measurement.candidates, measurement.exact_rows),
-        (view.num_rows(), view.num_rows()),
-        "and every row matches, all of them admitted exactly"
-    );
-    assert!(measurement.sound);
-
-    let svg = figure.svg.expect("small graph renders");
-    assert!(
-        svg.contains("The cut weighs nothing"),
-        "the figure has to say why a zero weight is not an empty answer"
-    );
-}
-
-/// Row frequency is not in OnPair's index, so under a `tf` metric there is nothing
-/// to print — and printing the term frequency again under a `DF` label, as this
-/// once did, is a measurement the figure never took.
-#[test]
-fn row_frequency_is_shown_only_when_it_was_counted() {
-    let corpus = Corpus::new();
-    let column = corpus.column();
-    let view = column.view();
-    let frequencies = index_for(view).expect("index builds");
-
-    let figure = visualize(view, &frequencies, b"utm_source=", &Options::default())
-        .expect("figure builds");
-    let svg = figure.svg.expect("small graph renders");
-    assert!(svg.contains("TF "), "term frequency always comes from the index");
-    assert!(
-        !svg.contains("DF "),
-        "no rows were counted, so no row frequency should be claimed"
-    );
-
-    let options = Options {
-        metric: ProbeWeight::RowFrequency,
-        ..Options::default()
-    };
-    let figure =
-        visualize(view, &frequencies, b"utm_source=", &options).expect("figure builds");
-    let svg = figure.svg.expect("small graph renders");
-    assert!(
-        svg.contains("DF "),
-        "the df metric counts rows, so the figure may report them"
-    );
-}
-
-/// Needles taken from a real column carry raw bytes, and XML 1.0 has no escape for
-/// a C0 control character — a figure with one in a label is rejected outright by
-/// every viewer, not merely ugly. So they are written as `\xNN` instead. A
-/// ClickBench URL needle with a `0x0e` in it is what found this.
+/// A ClickBench URL needle with a `0x0e` in it is what found this.
 #[test]
 fn control_bytes_in_a_needle_do_not_break_the_svg() {
-    let corpus = Corpus::new();
-    let column = corpus.column();
-    let view = column.view();
-    let frequencies = index_for(view).expect("index builds");
-
-    let figure =
-        visualize(view, &frequencies, b"sho\x0ep?q=", &Options::default()).expect("figure builds");
-    let svg = figure.svg.expect("small graph renders");
-
-    assert!(
-        svg.contains("\\x0e"),
-        "the byte should be shown, not dropped"
-    );
-    let stray = svg
-        .chars()
-        .find(|character| character.is_control() && *character != '\n');
-    assert_eq!(stray, None, "a control character reached the SVG");
+    let svg = figure(&log("plain"), "onpair16", b"sho\x0ep?q=", &Options::default())
+        .svg
+        .expect("small graph renders");
+    assert!(svg.contains("\\x0e"), "the byte should be shown, not dropped");
 }
 
-/// Where the trimming rule copied from OnPair is pinned: runs merge, unused ids
-/// leave the *ends* of a run, and an unused id between two used ones stays — a
-/// range costs one comparison however wide it is, but splitting it costs two.
+/// A step the FSST cut takes only as the second code of a pair is badged.
 #[test]
-fn live_cover_trims_run_ends_only() {
-    // Ids 2, 3 and 5 are used; every other id in an eight-token dictionary is not.
-    let frequencies =
-        onpair::search::build_token_frequency_index(&[2u16, 3, 5, 5], 8).expect("index builds");
-
-    // Runs 1..=5 and 7..=7. The first keeps 2..=5 — id 1 is trimmed, id 4 rides
-    // along — and the second goes entirely.
-    let live = live_cover(
-        &[false, true, true, true, true, true, false, true],
-        &frequencies,
-    );
-    assert_eq!(
-        live.members,
-        [false, false, true, true, true, true, false, false]
-    );
-    assert_eq!(
-        (live.shape.points, live.shape.ranges, live.shape.cmp_cost),
-        (0, 1, 1)
-    );
-    assert_eq!((live.shape.member_ids, live.shape.dead_ids), (4, 2));
-    assert!(!live.is_empty());
-
-    // Trimmed down to one id, a range is probed as a point instead: run 1..=2 loses
-    // its unused first id and leaves id 2 alone.
-    let live = live_cover(
-        &[false, true, true, false, false, false, false, false],
-        &frequencies,
-    );
-    assert_eq!(
-        (
-            live.shape.points,
-            live.shape.ranges,
-            live.shape.member_ids,
-            live.shape.dead_ids
-        ),
-        (1, 0, 1, 1)
-    );
-
-    let live = live_cover(
-        &[true, true, false, false, false, false, true, true],
-        &frequencies,
-    );
-    assert!(live.is_empty(), "no used id survives");
-    assert_eq!(live.shape.dead_ids, 4);
+fn paired_steps_are_badged() {
+    let log = log("plain");
+    let mut seen = 0;
+    for query in log.queries.iter().filter(|q| q.algorithm == "fsst") {
+        let figure = visualize(&log, query, &Options::default()).expect("figure renders");
+        let svg = figure.svg.expect("small graph renders");
+        assert_eq!(
+            svg.matches(">PAIR<").count(),
+            figure.logged.paired.len(),
+            "{}",
+            query.uuid
+        );
+        seen += figure.logged.paired.len();
+    }
+    assert!(seen > 0, "the fixture should hold a paired step");
 }
 
 /// Past the guard the graph is still returned; only the drawing is skipped.
 #[test]
 fn wide_graphs_skip_the_svg() {
-    let corpus = Corpus::new();
-    let column = corpus.column();
-    let view = column.view();
-    let frequencies = index_for(view).expect("index builds");
-
+    let log = log("plain");
+    let needle = b"/articles/2026/08?utm_source=";
     let options = Options {
         max_states: Some(1),
         ..Options::default()
     };
-    let figure =
-        visualize(view, &frequencies, b"/articles/2026/08", &options).expect("figure builds");
+    let figure = figure(&log, "onpair16", needle, &options);
     assert!(figure.states() > 1, "this needle needs several states");
-    assert!(
-        figure.svg.is_none(),
-        "the guard should have skipped the SVG"
-    );
-
+    assert!(figure.svg.is_none(), "the guard should have skipped the SVG");
     let options = Options {
         max_states: None,
         ..options
     };
-    let figure =
-        visualize(view, &frequencies, b"/articles/2026/08", &options).expect("figure builds");
-    assert!(figure.svg.is_some(), "no guard means always render");
+    assert!(figure_svg(&log, needle, &options).is_some(), "no guard means always render");
 }
 
-#[test]
-fn empty_pattern_is_rejected() {
-    let corpus = Corpus::new();
-    let column = corpus.column();
-    let view = column.view();
-    let frequencies = index_for(view).expect("index builds");
+fn figure_svg(log: &Log, needle: &[u8], options: &Options) -> Option<String> {
+    figure(log, "onpair16", needle, options).svg
+}
 
+/// Edges route around the states they do not touch.
+#[test]
+fn no_edge_runs_through_a_state_it_does_not_touch() {
+    /// `x`, `y`, `w`, `h` of every state box, with the offset it stands for.
+    fn state_boxes(svg: &str) -> Vec<(String, f64, f64, f64, f64)> {
+        let mut out = Vec::new();
+        for group in svg.split("<g class=\"state").skip(1) {
+            let Some(offset) = group
+                .split("needle byte offset ")
+                .nth(1)
+                .and_then(|rest| rest.split(';').next())
+            else {
+                continue;
+            };
+            let Some(rect) = group.split("<rect ").nth(1) else {
+                continue;
+            };
+            let number = |name: &str| -> Option<f64> {
+                rect.split(&format!("{name}=\""))
+                    .nth(1)?
+                    .split('"')
+                    .next()?
+                    .parse()
+                    .ok()
+            };
+            if let (Some(x), Some(y), Some(w), Some(h)) =
+                (number("x"), number("y"), number("width"), number("height"))
+            {
+                out.push((offset.to_string(), x, y, w, h));
+            }
+        }
+        out
+    }
+
+    /// Points along one path. Handles the `M`/`H`/`V`/`C` the renderer emits.
+    fn sample(path: &str) -> Vec<(f64, f64)> {
+        let tokens: Vec<&str> = path.split([' ', ',']).filter(|t| !t.is_empty()).collect();
+        let mut points: Vec<(f64, f64)> = Vec::new();
+        let mut cursor = (0.0, 0.0);
+        let mut index = 0;
+        let number = |token: &str| token.parse::<f64>().unwrap_or(f64::NAN);
+        while index < tokens.len() {
+            match tokens[index] {
+                "M" => {
+                    cursor = (number(tokens[index + 1]), number(tokens[index + 2]));
+                    points.push(cursor);
+                    index += 3;
+                }
+                "H" | "V" => {
+                    let target = number(tokens[index + 1]);
+                    let end = if tokens[index] == "H" {
+                        (target, cursor.1)
+                    } else {
+                        (cursor.0, target)
+                    };
+                    for step in 1..=32 {
+                        let t = f64::from(step) / 32.0;
+                        points.push((
+                            cursor.0 + (end.0 - cursor.0) * t,
+                            cursor.1 + (end.1 - cursor.1) * t,
+                        ));
+                    }
+                    cursor = end;
+                    index += 2;
+                }
+                "C" => {
+                    let c1 = (number(tokens[index + 1]), number(tokens[index + 2]));
+                    let c2 = (number(tokens[index + 3]), number(tokens[index + 4]));
+                    let end = (number(tokens[index + 5]), number(tokens[index + 6]));
+                    for step in 1..=96 {
+                        let t = f64::from(step) / 96.0;
+                        let u = 1.0 - t;
+                        let (a, b, c, d) =
+                            (u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t);
+                        points.push((
+                            a * cursor.0 + b * c1.0 + c * c2.0 + d * end.0,
+                            a * cursor.1 + b * c1.1 + c * c2.1 + d * end.1,
+                        ));
+                    }
+                    cursor = end;
+                    index += 7;
+                }
+                _ => index += 1,
+            }
+        }
+        points
+    }
+
+    for (name, needle) in [
+        ("plain", b"example.com".as_slice()),
+        ("repetitive", b"newsletter".as_slice()),
+        // Jumps over materialized states, which is what needs routing.
+        ("repetitive", b"art/checkou".as_slice()),
+        ("repetitive", b"ut?ref=newsl".as_slice()),
+        ("repetitive", b"rg/cart/chec".as_slice()),
+    ] {
+        let svg = figure_svg(&log(name), needle, &Options::default())
+            .expect("figure is small enough to draw");
+        let label = String::from_utf8_lossy(needle);
+        let boxes = state_boxes(&svg);
+        assert!(!boxes.is_empty(), "{label}: no state boxes parsed");
+
+        for chunk in svg.split("<path d=\"").skip(1) {
+            let Some((path, rest)) = chunk.split_once('"') else {
+                continue;
+            };
+            if !rest.starts_with(" class=\"edge") {
+                continue;
+            }
+            let points = sample(path);
+            let (first, last) = (points[0], points[points.len() - 1]);
+            for (offset, x, y, w, h) in &boxes {
+                // An edge that starts or ends on this box is attached to it.
+                let attached = [first, last].iter().any(|&(px, py)| {
+                    px >= x - 4.0 && px <= x + w + 4.0 && py >= y - 4.0 && py <= y + h + 4.0
+                });
+                if attached {
+                    continue;
+                }
+                let inside = points.iter().any(|&(px, py)| {
+                    px > x + 3.0 && px < x + w - 3.0 && py > y + 3.0 && py < y + h - 3.0
+                });
+                assert!(
+                    !inside,
+                    "{label}: edge {path} runs through the p={offset} state box"
+                );
+            }
+        }
+    }
+}
+
+/// Nothing the figure draws may sit on top of anything else.
+#[test]
+fn nothing_drawn_overlaps_anything_else() {
+    /// Every `<g class="…">`'s first rect: one box per drawn element.
+    fn boxes(svg: &str) -> Vec<(String, f64, f64, f64, f64)> {
+        let mut out = Vec::new();
+        for group in svg.split("<g class=\"").skip(1) {
+            let Some((class, rest)) = group.split_once('"') else {
+                continue;
+            };
+            let Some(rect) = rest.split("<rect ").nth(1) else {
+                continue;
+            };
+            let number = |name: &str| -> Option<f64> {
+                rect.split(&format!("{name}=\""))
+                    .nth(1)?
+                    .split('"')
+                    .next()?
+                    .parse()
+                    .ok()
+            };
+            if let (Some(x), Some(y), Some(w), Some(h)) = (
+                number("x"),
+                number("y"),
+                number("width"),
+                number("height"),
+            ) {
+                out.push((class.to_string(), x, y, w, h));
+            }
+        }
+        out
+    }
+
+    for (label, needle) in [
+        ("plain", b"example.com".as_slice()),
+        ("repetitive", b"newsletter".as_slice()),
+        // Both shapes of the collision the anchor placement used to cause: a
+        // jump whose midpoint is a state's centre, and one whose midpoint is
+        // under another probe's card.
+        ("repetitive", b"art/checkou".as_slice()),
+        ("repetitive", b"ref=new".as_slice()),
+    ] {
+        let svg = figure_svg(&log(label), needle, &Options::default())
+            .expect("figure is small enough to draw");
+        let drawn = boxes(&svg);
+        assert!(drawn.len() > 5, "{label}: only {} boxes parsed", drawn.len());
+
+        for (i, a) in drawn.iter().enumerate() {
+            for b in &drawn[i + 1..] {
+                let x = (a.1 + a.3).min(b.1 + b.3) - a.1.max(b.1);
+                let y = (a.2 + a.4).min(b.2 + b.4) - a.2.max(b.2);
+                assert!(
+                    x <= 0.0 || y <= 0.0,
+                    "{label} / {}: {} at ({}, {}) overlaps {} at ({}, {}) by {x}×{y}",
+                    String::from_utf8_lossy(needle),
+                    a.0,
+                    a.1,
+                    a.2,
+                    b.0,
+                    b.1,
+                    b.2
+                );
+            }
+        }
+    }
+}
+
+/// The companion table is the figure that has to be exhaustive: the DAG can
+/// omit a token, the symbol table cannot.
+#[test]
+fn the_symbol_table_names_every_token_and_marks_the_cover() {
+    let log = log("repetitive");
+    let figure = figure(&log, "onpair16", b"newsletter", &Options::default());
+    let query = &log.queries[0];
+    let symbols = log.symbols_of(query).expect("symbol table");
+    for id in 0..symbols.content.len() {
+        assert!(
+            figure.table_svg.contains(&format!(">{id}</text>")),
+            "token {id} is missing from the table"
+        );
+    }
+    let probes = figure
+        .summary
+        .cover_terms
+        .iter()
+        .flat_map(|term| term.begin..=term.last)
+        .filter(|id| !figure.logged.graph.contained.contains(id))
+        .count();
+    assert_eq!(figure.table_svg.matches(">PROBE<").count(), probes);
     assert_eq!(
-        visualize(view, &frequencies, b"", &Options::default()).unwrap_err(),
-        Error::EmptyPattern
-    );
-}
-
-#[test]
-fn mismatched_index_is_rejected() {
-    let corpus = Corpus::new();
-    let column = corpus.column();
-    let view = column.view();
-    // An index over a truncated code stream still has the right token count, so
-    // build one for a different dictionary size instead.
-    let frequencies =
-        onpair::search::build_token_frequency_index(view.codes, view.dict.num_tokens())
-            .expect("index builds");
-    let smaller = Column::compress(b"abc", &[0u32, 3], DEFAULT_CONFIG).expect("compresses");
-    let smaller_view = smaller.view();
-
-    let error = visualize(smaller_view, &frequencies, b"ab", &Options::default()).unwrap_err();
-    assert!(
-        matches!(error, Error::IndexMismatch { .. }),
-        "expected a mismatch, got {error}"
+        figure.table_svg.matches(">WHOLE<").count(),
+        figure.logged.graph.contained.len()
     );
 }
 
 /// Byte-compare one figure against a committed SVG.
 ///
 /// Regenerate with `UPDATE_GOLDEN=1 cargo test`, and look at the diff before
-/// accepting it — a layout change that makes figures worse looks exactly like a
-/// layout change that makes them better until someone opens the file.
+/// accepting it.
 #[test]
 fn golden_figure() {
-    let corpus = Corpus::new();
-    let column = corpus.column();
-    let view = column.view();
-    let frequencies = index_for(view).expect("index builds");
-
     let options = Options {
-        title: "golden".to_string(),
+        title: Some("golden".to_string()),
         subtitle: Some("contains \"utm_source=newsletter\"".to_string()),
         ..Options::default()
     };
-    let figure =
-        visualize(view, &frequencies, b"utm_source=newsletter", &options).expect("figure builds");
-    let svg = figure.svg.expect("small graph renders");
+    let svg = figure(&log("plain"), "onpair16", b"utm_source=newsletter", &options)
+        .svg
+        .expect("small graph renders");
 
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/newsletter.svg");
     if std::env::var_os("UPDATE_GOLDEN").is_some() {
-        std::fs::create_dir_all(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden"))
-            .expect("golden directory");
         std::fs::write(path, &svg).expect("write golden");
         return;
     }
-
     let expected = std::fs::read_to_string(path)
-        .expect("golden figure missing — regenerate with UPDATE_GOLDEN=1");
+        .expect("golden figure missing, regenerate with UPDATE_GOLDEN=1");
     assert_eq!(svg, expected, "the rendered figure changed");
 }
-

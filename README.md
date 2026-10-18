@@ -13,6 +13,8 @@ Design: [DESIGN.md](DESIGN.md) (the reference spec). Contract:
 
 ```sh
 cargo build --release
+# the Python every run loads its results into results/bench.duckdb with
+python3 -m venv .venv && .venv/bin/pip install -r datasets/requirements.txt
 
 # 1. ingest: raw source -> canonical artifact (cached, deterministic)
 ./target/release/bench ingest --source datasets/fixtures/mini.csv \
@@ -31,13 +33,19 @@ cargo build --release
 Outputs: `results/<run>/results.jsonl` (one self-contained row per build /
 per gated query cell) + `manifest.json` (environment, versions, checksums,
 spec hash). Every run also loads itself into `results/bench.duckdb`, the
-queryable index over all runs — see [analysis/db/README.md](analysis/db/README.md).
+queryable index over all runs — see [tools/results-db/README.md](tools/results-db/README.md).
+
+## Generating query workloads
+
+The paper's needle suites come from
+[experiments/matcher_selection](experiments/matcher_selection/README.md), the
+[shared SA + LCP generator](harness/src/gen/README.md) over complete columns.
 
 ## Dashboard
 
 ```sh
-.venv/bin/pip install -r analysis/requirements.txt
-.venv/bin/marimo run analysis/dashboard.py        # http://localhost:2718
+.venv/bin/pip install -r tools/dashboard/requirements.txt
+.venv/bin/marimo run tools/dashboard/dashboard.py        # http://localhost:2718
 ```
 
 Reads `results/bench.duckdb` read-only. Pick one run (newest first), then read
@@ -56,27 +64,32 @@ will not grant the loader a write lock while the dashboard holds the file open.
 ## Reproducing everything
 
 ```sh
-./reproduce.sh all    # build → datasets → suites → run (stages runnable alone)
+./reproduce-neon.sh   [--small|--medium|--large]   # on an arm64 Mac
+./reproduce-avx512.sh [--small|--medium|--large]   # on an x86 host with AVX-512
 ```
 
-`datasets/sources.yaml` pins every dataset (URL, sha256, license, canonical
-checksum); `bench gen --seed 42` makes every query suite a pure function of
-the dataset checksum; every run records its spec hash + environment. See the
-header of [reproduce.sh](reproduce.sh) for stages and wall-clock estimates.
+Each runs the paper's blocks for its instruction set from a clone, sibling
+repos and data included; with both machines' `results/` and `paper/data` in
+one tree, `paper/make-figures.sh` draws every figure. `datasets/sources.yaml`
+pins every dataset (URL, sha256, license, canonical checksum), the needle
+suites are a pure function of the dataset checksum and seed, and every run
+records its spec hash and environment.
 
 ## Layout
 
 | path | what |
 |---|---|
-| `contract/` | the C-ABI contract — the cross-language source of truth |
+| `contract/` | the C-ABI contract, the cross-language source of truth |
 | `abi/` | Rust mirror of the contract (`lb-abi`) |
 | `harness/` | Rust harness: CLI (`bench`), formats, loader, oracle, gate, timing, results |
-| `candidates/` | storage schemes: `uncompressed` (Rust baseline), `cpp_identity` (identity/memcpy C++ smoke), `gate_canary` (proves the correctness gate fires), `lz4` / `zstd` (general block codecs, decode-then-eval), `fsst` (string-native FSST, decode baseline), `fsst_like_tum` (FSST compressed-domain LIKE matching, DaMoN'26), `onpair` (the paper's codec: decode + compressed-domain automata), `onpair_spiral` (SpiralDB's Rust OnPair: contains via `pf_kmp` / `pf_memmem` prefilter+verify, and `kmp` un-prefiltered baseline), `llm_token_tum` (SGTT LLM-token-table compression, TUM token-vldb2026: static cl100k-derived token dictionary, decode-then-eval), `llm_token_prefilter` (compressed-domain mandatory-chain prefilter over the SGTT token stream + per-survivor decode verify, and its encoded-domain `dict_` peer) |
-| `scanners/` | pluggable uncompressed eval kernels: `memmem` (Rust `memchr`), `libc` (`memmem(3)`), `cpp_std_find` (C++ `std::search`), `stringzilla` (SIMD), `classics` (BNDM/KMP/Boyer–Moore–Horspool), `multi` (Aho–Corasick + Teddy, for `contains_any`), `composed` (prefilter-ablation scanners). `ac_cpp` (the author's C++ Aho–Corasick) is parked — kept for reference, excluded from the build |
-| `suites/` | query suites (`suite.json` + `queries.jsonl`, truth blessed in) — curated, or swept via `bench gen` (seed-deterministic grid + `gen-report.json` coverage matrix) |
-| `specs/` | run specs: candidates × configs × scanners × datasets × chunk sizes |
-| `datasets/` | `sources.yaml` (pinned URLs + sha256 + licenses + canonical checksums) + `prepare.py` (download → extract → ingest → verify); artifacts and raw downloads are gitignored |
-| `analysis/` | reporting over finished runs. `db/` is the queryable store: `schema.sql` + `load.py` build `results/bench.duckdb` (5 dimensions + measurements + the `v` view) from `results/**`, automatically at the end of each run; `dashboard.py` is the marimo dashboard over it; `analyze.py`/`report.py` are the older stdlib summary + HTML report |
+| `candidates/` | storage schemes: `uncompressed` and `uncompressed_memmem` (plain baselines), `lz4` and `fsst` (decode-then-search), `fsst_like_tum` (TUM's FSST-LIKE matching), `onpair_spiral` (OnPair: `pf_walk` in the compressed domain, and decode), `dict_onpair` (`onpair_spiral` over a chunk's unique values), `fsst_prefilter` (the min-cut prefilter in the FSST fork), the `_debug` variants for the ablation, and `gate_canary` and `cpp_identity` for the harness tests |
+| `scanners/` | uncompressed search kernels: `memmem` and `memmem-hay` (Rust `memchr`), `cpp_std_find`, `stringzilla`, `classics` (BNDM, KMP, Horspool), `prefilter` |
+| `experiments/matcher_selection/` | the paper's needle suite generator |
+| `paper/` | specs, gen scripts, pinned sweeps and plot scripts for every figure |
+| `e2e/` | DuckDB and Vortex end to end: ClickBench, JOB and the micro needles |
+| `suites/`, `specs/` | the smoke suite and specs the harness tests run |
+| `datasets/` | `sources.yaml` (pinned URLs, sha256, licenses, canonical checksums) and `prepare.py`; artifacts and downloads are gitignored |
+| `tools/` | `results-db/` (builds `results/bench.duckdb` from `results/**` at the end of each run), `dashboard/` (marimo), `bench-viz/` (static HTML explorer), `graph-viz/` (alignment graph and cut drawings) |
 
 ## Adding a candidate or scanner
 

@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2020 Free Software Foundation Europe e.V.
+# SPDX-License-Identifier: CC0-1.0
+name: REUSE Compliance Check
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  # Cancel outdated runs on PRs, but let all develop commits complete.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' }}
+
+on:
+  push:
+    branches: [develop]
+  pull_request: { }
+
+jobs:
+  reuse-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+      - name: REUSE Compliance Check
+        uses: fsfe/reuse-action@676e2d560c9a403aa252096d99fcab3e1132b0f5  # v6

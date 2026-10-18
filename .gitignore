@@ -17,11 +17,15 @@ datasets/**/manifest.json
 # raw downloads are cached products of the fetch recipes in datasets/sources.yaml
 datasets/**/*.parquet
 !datasets/fixtures/**
+# OpenRCA downloads its own raw tree in place (datasets/OpenRCA/README.md):
+# a 2.6 GiB zip that expands to 25 GB of CSVs, all re-fetchable
+datasets/OpenRCA/data/
 
-# generated analysis outputs (re-derivable)
-analysis/summary.json
-analysis/report.html
-analysis/*.log
-analysis/*.out
-analysis/__marimo__/
+tools/dashboard/__marimo__/
 .idea
+paper/out/
+
+/third_party/fsst/search/prefilter/scan/bench/data/
+/third_party/fsst/search/prefilter/scan/bench/output/
+/third_party/onpair/target*/
+/third_party/onpair/bench/

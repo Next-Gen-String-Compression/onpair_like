@@ -1,16 +1,10 @@
 # Design: a two-axis benchmark for LIKE-family string predicates
 
-Status: **reference spec — the design below is implemented (harness, candidates,
-scanners; see [README.md](README.md)). Review rounds 1–3 (2026-07-07) incorporated;
-all open questions resolved.**
-
-This document is the architecture reference for the benchmark foundation. It
-covers the language/integration decision, the dataset and
-query formats, the load-and-prepare path, the candidate contract, correctness
-gating, measurement methodology, prefilter inspection, the phase-1 vertical
-slice, and open questions. Illustrative sketches (a C header, example JSON)
-appear where a contract needs to be concrete to be evaluable; they are design
-artifacts, not implementation.
+Status: reference spec for the harness, the candidate contract and the
+measurement rules the paper's numbers rest on. Code comments cite it by
+section, so the numbers stay fixed: §12, §13 and §15 (review notes and the old
+dataset roster) were removed, and §3, §11, §16 and §17 keep only what still
+describes the code.
 
 ---
 
@@ -81,65 +75,6 @@ process-per-candidate run model, not from IPC.**
 
 ## 3. Language and integration: the decision
 
-This is the load-bearing decision, so I'll lay out the space honestly. The
-criteria, in the order I weighted them:
-
-1. **Measurement fidelity** — can we time a sub-millisecond query without the
-   integration mechanism appearing in the number?
-2. **One timing code path** — is every candidate measured by literally the
-   same loop and clock, or do we trust N reimplementations?
-3. **Prefilter instrumentation** — how cheaply can structured per-query stats
-   cross the candidate boundary?
-4. **Ease of adding a candidate** — in each language, what does a new
-   candidate author have to touch?
-5. **Build complexity** — what does a fresh clone need to produce a runnable
-   benchmark?
-6. **Isolation** — can a segfaulting or allocator-corrupting candidate
-   invalidate other candidates' numbers?
-
-### Options considered
-
-**(A) C++ harness, Rust candidates behind a C ABI.**
-Symmetric in principle with (B). In practice the harness's actual workload is
-not systems code: it is file formats, JSON, CLI, checksums, statistics,
-process orchestration, and error propagation. The C++ ecosystem for that
-(CMake + vcpkg/FetchContent, Arrow C++, nlohmann, CLI11) is markedly heavier
-to build and to keep reproducible than the Rust equivalent (cargo + serde +
-arrow-rs + clap, one lockfile). There is also an asymmetry in the candidate
-libraries themselves: the C/C++ candidates you named (FSST, LZ4, dictionary
-schemes) already expose C APIs and are trivially callable from anywhere,
-whereas Vortex is a large Rust library whose scan path would need a bespoke
-C-ABI wrapper to be called *from* C++ — the C++-harness direction wraps the
-hard thing, the Rust-harness direction wraps things that are already wrapped.
-
-**(B) Rust harness, all candidates behind a C ABI.** ← recommended
-Same symmetric contract as (A) — the crucial point is that in both (A) and
-(B), *neither candidate language is subordinate*, because candidates don't
-target the harness language at all: they target a frozen C header. A C++
-candidate implements `lb_candidate.h` with its own compiler and flags; a Rust
-candidate implements the same header via `extern "C"` glue. The harness
-language is an implementation detail behind the contract.
-
-**(C) Subprocess candidates with an IPC protocol.**
-Each candidate is a standalone binary; the harness feeds it queries over a
-pipe/socket, data via a mmap'd file. Genuine advantages: total build
-isolation (no cross-language linking ever), crash isolation, any-language
-candidates for free. But it fails the two criteria I weighted highest.
-Per-query IPC round-trips are the same order of magnitude as fast queries, so
-timing must move *inside* the candidate process — which means every language
-needs its own timing loop, warmup policy, and stats collection, and
-"identical measurement" becomes "N implementations we hope are identical."
-Self-reported timings from candidate authors are also exactly the trust
-model a benchmark should avoid. Prefilter instrumentation becomes a protocol
-instead of a struct. I rejected it, but deliberately captured its two real
-benefits (build and crash isolation) in the process model below.
-
-**(D) Two parallel harnesses (one per language) sharing a spec.**
-Mentioned only to reject explicitly: two timing loops that are "specified" to
-be identical never are, and every cross-language comparison inherits the
-delta. This is the worst option for a benchmark whose entire point is
-cross-candidate comparability.
-
 ### Recommendation
 
 **Rust harness. Candidate contract defined as a versioned C header. Candidates
@@ -174,8 +109,8 @@ Why each piece:
   bleed between candidates. Spawning a fresh child (the harness re-executing
   itself with `--worker candidate=X dataset=Y`) per candidate gives each one
   a clean address space and lets a segfault fail *one* cell of the run
-  matrix loudly instead of the whole run. This captures the isolation benefit
-  of option (C) without putting IPC anywhere near the timing path — the child
+  matrix loudly instead of the whole run. This gives the isolation of separate
+  processes without putting IPC anywhere near the timing path — the child
   mmaps the dataset itself and writes results to a file; the parent only
   aggregates.
 
@@ -417,6 +352,25 @@ dataset artifact:
   chunking doubles as the scale mechanism. *(Decided in review round 3.)*
 
 ---
+
+### Selection vectors (ABI v7)
+
+A LIKE predicate rarely runs first; a cheaper predicate upstream has usually
+already admitted a fraction of the rows. The spec's `[[selections]]` list
+puts that on the axis: `all`, `uniform` (each row admitted independently
+with `fraction`), or `runs` (one run per period of `avg_run / fraction`
+rows, its length drawn uniformly over `run_rows_min..=run_rows_max`), each
+seeded and decided from the global row index so the admitted rows are the
+same at every `chunk_rows`. The harness hands a strategy that declares
+`LB_STRATEGY_TAKES_SELECTION` each chunk's ascending row list through
+`lb_query.selection`; every other strategy runs over all rows and the
+harness ANDs its result with the selection inside the timed sample. Truth
+under a selection is the oracle ANDed with it, computed at run time, so no
+suite is re-blessed. Result rows carry `selection` and `selection_rows`.
+
+The harness-composed `decode` strategy takes the selection when every chunk
+offers `decode_selected` (ABI v8): it decodes the selected rows only, packed,
+the scanner runs over them, and each hit is moved back to its row.
 
 ## 7. The candidate contract
 
@@ -743,7 +697,7 @@ prepare + the query over all chunks, §6):
 ### The result store: a derived index, not a second source of truth
 
 `results.jsonl` is the record; `results/bench.duckdb` is a rebuildable index
-over it, loaded at the end of every `bench run` (`analysis/db/`). Five
+over it, loaded at the end of every `bench run` (`tools/results-db/`). Five
 dimensions — platform, run, dataset, system, query — plus one measurement table
 whose rows carry latency *and* the footprint of the build they were answered
 from, so the two axes of §9 sit side by side without a join. The store adds no
@@ -880,201 +834,30 @@ candidate being measured.
 
 ---
 
-## 11. Repository layout and phase-1 plan
+## 11. Repository layout
 
-```
-contract/        lb_candidate.h + SEMANTICS.md (op definitions, edge cases,
-                 candidate rules) — the cross-language source of truth
-harness/         Rust crate: CLI (ingest, bless, run, check), formats,
-                 loader, oracle, timing, gate, results
-candidates/
-  uncompressed/  Rust: trivial storage candidate — retains the chunk view,
-                 exposes view(); all scan smarts live in scanners
-  cpp_identity/  C++: smoke candidate — copies chunks, decode() = memcpy;
-                 proves the C++ build/decode path end-to-end
-  onpair/        C++: OnPair (pinned via FetchContent) — the first real
-                 compressed candidate; decode() plus a "compressed"
-                 strategy (token automata over the packed stream)
-  onpair_spiral/ Rust: SpiralDB's OnPair (git dep, github.com/spiraldb/onpair,
-                 branch feat/search-prefilter) — three contains-only run()
-                 strategies: "pf_kmp" (SIMD prefilter + compressed-domain
-                 token-KMP verify), "pf_memmem" (prefilter + decode-survivors +
-                 memmem verify), and "kmp" (token-KMP over every row, no
-                 prefilter — the cross-library counterpart of `onpair`'s
-                 `compressed`); a distinct library/scheme from `onpair`
-scanners/
-  memmem/        Rust: memchr/memmem SIMD kernels (phase-1 workhorse)
-  cpp_std_find/  C++: std::string_view::find — proves the C++ scanner path
-datasets/        manifests + fetch/ingest recipes (artifacts gitignored)
-suites/          curated suites, checked in (queries.jsonl + suite.json)
-```
+The layout table in [README.md](README.md) lists every directory. Design
+choices that differ from a plain reading of the brief:
 
-### The vertical slice, in order
-
-1. **Contract first:** `lb_candidate.h` + `SEMANTICS.md` with the op
-   definitions and edge-case table from §5, the reserved strategy names and
-   no-memoization rule from §7, and the candidate hygiene rules from §3.
-2. **Oracle + its tests** — hand-built fixtures covering every edge case,
-   differential tests. The trust root exists before anything it will judge.
-3. **Dataset path:** `ingest` (Parquet/CSV → canonical artifact + manifest),
-   mmap loader, checksums. First dataset: a ClickBench column (proposed:
-   `URL` from hits — realistic skew; plus a small checked-in fixture dataset
-   for tests).
-4. **Suite path:** parse, validate, `bless`.
-5. **Runner:** process-per-candidate orchestration, chunk loop, strategy ×
-   scanner loops, timing loop, two-mode execution, gate, `results.jsonl` +
-   manifest.
-   Chunked runs are exercised in tests (small fixture dataset at several
-   chunk sizes must produce identical gated results), even though the
-   phase-1 default is a single chunk.
-6. **Uncompressed candidate + first scanners:** the storage candidate is
-   deliberately trivial — build retains the chunk view, `view()` exposes it,
-   footprint = raw (ratio 1.0 by construction), no `run()`. The scan smarts
-   live in scanners: `memmem` (Rust — `memchr::memmem` for `contains`, a
-   genuinely strong SIMD substring kernel; bounds-checked `memcmp` for
-   prefix/suffix; sequential memmem with position advance for
-   `multi_contains`; first-match-wins loop for `contains_any`;
-   Aho-Corasick/Teddy remain *future scanners*) and `cpp_std_find` (C++).
-   The combination (uncompressed × memmem × `direct`) is the brief's
-   reference baseline. Neither phase-1 scanner reports prefilter stats —
-   they have no prefilter.
-7. **C++ identity smoke candidate:** `build` copies the chunk into private
-   buffers (a "compression" scheme at ratio ≈1), exposes `decode()` (memcpy
-   back out), no `run()`. Deliberately tiny, yet it exercises exactly the
-   shape every real compressed candidate will use — C++ built under cargo,
-   named footprint components, and the composed `decode` strategy across
-   every scanner — so the risky machinery is proven before FSST or OnPair
-   arrive. *(Confirmed in review: kept, now in identity-codec form.)*
-8. **End-to-end + gate test:** a curated ~25-query suite over the first
-   dataset covering all five ops and the edge cases; the deliberately-wrong
-   candidate proving the gate fires; a full run producing gated results.
-
-**Definition of done:** one command each for ingest → bless → run, from raw
-ClickBench file to `results.jsonl`, all cells gated; injected wrongness fails
-loudly; adding a mock candidate — or scanner — in either language touches
-only its own directory plus one registry line.
-
-### Deliberate divergences from the brief's hints, consolidated
-
-- Truth is count + set-hash (with debug samples), not a stored row set — the
-  brief allowed either; stored full sets don't scale with high selectivity.
+- Truth is count + set-hash (with debug samples), not a stored row set;
+  stored full sets don't scale with high selectivity.
 - The correctness reference lives in the harness as the oracle, not as a
-  candidate — it must be independent of candidate machinery to be a root of
-  trust.
-- Neither pure in-process FFI nor subprocess IPC, but in-process timing with
-  process-per-candidate isolation — captures the fidelity of the former and
-  the isolation of the latter.
-- Instrumentation is a separate execution mode, so "inspect prefiltering" and
-  "trust the latency numbers" never trade off against each other.
-- A second (trivial C++) candidate added to phase 1 to de-risk the bilingual
-  contract immediately.
-- *(Implementation, 2026-07-07)* The deliberately-wrong candidate became a
-  visible registered candidate, `gate_canary`, with two strategies: `ok`
-  (correct naive matcher — also phase 1's only exerciser of the
-  candidate-implemented `run()` path) and `wrong` (bit-flip on row 0). A
-  dedicated spec (`specs/gate-canary.toml`) must exit 3; the integration
-  suite asserts both strategies.
-- *(Implementation, 2026-07-07)* The loader currently reads the IPC file
-  into aligned buffers (one copy at startup) rather than zero-copy mmap —
-  the fallback §4 explicitly allows; load cost is setup, not measurement,
-  and the swap remains a one-function change.
-- *(Implementation, 2026-07-07, ABI v2)* `decode()` output buffers carry a
-  guaranteed `LB_DECODE_PAD` (64 B) of writable headroom past the payload
-  (SEMANTICS.md rule 8). Fixed-stride over-copying decoders (OnPair emits a
-  constant `MAX_TOKEN_SIZE` memcpy per token; FSST-style codecs do the same
-  per symbol) would otherwise need a private buffer plus a full defensive
-  memcpy inside the timed decode path — precisely the allocation/copy
-  pollution the measurement discipline exists to keep out.
-- *(Implementation, 2026-07-07)* First real compressed candidate: `onpair`
-  (github.com/gargiulofrancesco/onpair_cpp, FetchContent pinned to a
-  commit; `ONPAIR_SOURCE_DIR` overrides with a local checkout). It is also
-  the first exerciser of decision 9's two prefilter modes over one build:
-  harness-composed `decode`, plus a candidate `run()` strategy
-  `"compressed"` supporting prefix/contains/contains_any via token automata
-  compiled per call against each chunk's dictionary (suffix and
-  multi_contains are not expressible compressed-domain and are declared
-  unsupported). Chunk payloads are capped at 4 GiB by OnPair's uint32
-  offsets; build() rejects larger chunks with a chunk_rows hint.
-- *(Implementation, 2026-07-14)* `onpair_spiral`: SpiralDB's OnPair (the
-  Rust library, github.com/spiraldb/onpair) as a query-axis candidate,
-  pinned to a rev of its `feat/search-prefilter` branch. A pure-Rust glue
-  crate (like lz4/zstd), distinct from the C++ `onpair` — different library,
-  different resident form (codes are one u16 per token, not bit-packed). One
-  build exposes three contains-only `run()` strategies. Two ride the library's
-  SIMD substring prefilter, differing only in the verify step: `pf_kmp`
-  (compressed-domain token-KMP over each survivor's codes;
-  `ColumnView::rows_containing_prefiltered`, capped at 255-byte needles — a
-  longer needle errors the cell) and `pf_memmem` (decode each survivor and run
-  memmem; `rows_containing_prefiltered_memmem`, no cap). The third, `kmp`
-  (`ColumnView::rows_containing`, same 255-byte cap), runs the token-KMP
-  automaton over every row with no prefilter — the un-prefiltered baseline and
-  the cross-library counterpart of the C++ `onpair` candidate's `compressed`
-  path, so `kmp` vs `compressed` races the two libraries and `pf_kmp` vs `kmp`
-  isolates the prefilter's payoff. All three call the
-  library's own convenience recipes verbatim, so the benchmark measures what
-  OnPair ships; no `lb_run_stats` are filled (filling
-  `prefilter_candidates` would mean re-implementing the prefilter/verify
-  split, diverging from the shipped method). The prefilter's resident cost
-  (its stored `cum_token_freq` per-token frequency prefix sums) is attributed
-  on the compression axis as the `prefilter` footprint component — the first
-  candidate to exercise §7's named prefilter-storage accounting. Same 4-GiB
-  u32-offset chunk cap as `onpair`. Query-axis specs:
-  `specs/compression/onpair_spiral_query.toml` (pf_kmp vs pf_memmem vs kmp,
-  with onpair `compressed` as the cross-library reference) and the unified
-  `specs/shootout/candidates.toml` head-to-head.
-
----
-
-## 12. Decisions locked in review (rounds 1–3, 2026-07-07)
-
-1. **Nulls:** dropped at ingest; removed count recorded in the manifest.
-2. **Dataset scale:** no ingest-time caps (revised in round 2 — chunking
-   makes them redundant). Chunk size is a prepare-time, sweepable benchmark
-   dimension (§6), not a dataset property; a column genuinely too large for
-   a machine is sliced at the source, which is honestly a different dataset.
-3. **Threading:** single-threaded, core-pinned latency is the phase-1
-   definition.
-4. **C++ smoke candidate:** kept in phase 1.
-5. **Output contract:** bitmap, confirmed.
-6. **Headline statistic:** median; the full distribution (p25–p99, optional
-   raw samples) is stored for tail comparisons across candidates.
-7. **Platforms:** x86-64 (AVX2/AVX-512) is the measurement target; arm64
-   macOS is a first-class local/dev platform (§9 platform policy).
-8. **Matching:** byte-exact only; no case folding anywhere in phase 1.
-9. **Prefiltering kinds:** two supported modes — compressed-domain
-   prefiltering, and decompress → uncompressed prefilter → uncompressed
-   eval — modeled as execution strategies over a single build (§7), so a
-   compressed candidate can expose both paths at one compression-axis point.
-10. **The decode path is always harness-composed.** Candidates supply
-    `decode()` (or `view()` when stored uncompressed) and never hand-roll a
-    decode-then-eval pipeline; custom fused strategies remain possible via
-    `run()`, but no current algorithm needs one.
-11. **Scanners are first-class.** The uncompressed eval functions form a
-    pluggable registry (§7), benchmarked both standalone (`direct`) and as
-    the scan half of `decode` — subjects of the benchmark, not a fixed
-    harness detail.
-12. **Footprint stays self-reported** for phase 1 — trust + code review;
-    the warn-level RSS-delta cross-check remains available as a later
-    addition. *(Round 3.)*
-13. **No fixed block size.** `chunk_rows` is user-defined per run spec and
-    sweepable; when unspecified, the default is one chunk over the whole
-    column. Truth chunk-invariance (§6) is what makes arbitrary user-chosen
-    sizes safe — no re-blessing, comparable results keyed by chunk size.
-    *(Round 3.)*
-14. **Phase-1 scanner set:** `memmem` (Rust) and `cpp_std_find` (C++); the
-    registry grows from phase 2 onward. *(Round 3.)*
-15. **Hard capability gating, no scalar fallbacks.** Candidates and scanners
-    declare required CPU features in the vtable (`cpu_features`); the
-    harness detects host features at startup and refuses to run any module
-    whose requirements are unmet, recording its cells as *unavailable on
-    this platform*. Scalar variants, when wanted, are separate explicit
-    registrations — never a silent downgrade. *(Round 3.)*
-
-## 13. Open questions
-
-None — the round-2 questions (footprint verification, default chunk size,
-phase-1 scanner set, portability floor) were all resolved in round 3 and are
-recorded as decisions 12–15 in §12. The design is awaiting approval.
+  candidate, so it is independent of candidate machinery.
+- Timing runs in-process, with one child process per candidate for
+  isolation, which keeps the fidelity of FFI and the isolation of separate
+  processes.
+- Instrumentation is a separate execution mode, so inspecting the prefilter
+  and trusting the latency numbers never trade off.
+- The deliberately wrong candidate is the registered `gate_canary`, with an
+  `ok` strategy (a correct naive matcher) and a `wrong` one (bit flip on row
+  0); `specs/gate-canary.toml` must exit 3.
+- The loader reads the IPC file into aligned buffers (one copy at startup)
+  rather than mmapping it, which §4 allows; load cost is setup, not
+  measurement.
+- `decode()` output buffers carry `LB_DECODE_PAD` (64 B) of writable
+  headroom past the payload (SEMANTICS.md rule 8), so fixed-stride
+  over-copying decoders (OnPair's 16-byte token copy, FSST's per-symbol copy)
+  need no private buffer or defensive copy inside the timed decode.
 
 ---
 
@@ -1237,7 +1020,7 @@ self-reported diagnostics, never mixed into headline latency (§10).
 2. Latency vs needle length at fixed selectivity band — automaton build cost
    vs verify cost.
 3. **The heatmap**: selectivity × length grid colored by
-   `onpair-compressed / uncompressed-direct` latency ratio — "where OnPair
+   `onpair_spiral/pf_walk / uncompressed/direct` latency ratio — "where OnPair
    is lacking" as one figure.
 4. `contains_any` scaling in k, balanced vs skewed.
 5. Ratio-vs-latency Pareto per op at selectivity slices, across candidate
@@ -1255,221 +1038,49 @@ mutation loop; (c) coverage report accounts for every grid point exactly
 once; (d) generated suites pass `bench bless` + `bench check`; (e) a
 mini end-to-end: gen (quick) → bless → run on fixtures, gate green.
 
-### Scope decisions (review round 4, 2026-07-08)
-
-(See §15 for the dataset-reproducibility layer that implements decision 2's
-dataset axis.)
-
-1. **Micro-sweep first.** The real-workload (macro) track — query sets from
-   published benchmarks (ClickBench LIKE queries, TPC-H Q13/Q16, TPC-DS)
-   run as workload mixes with source citations in `meta` — is deferred; the
-   suite format already accommodates it with no changes.
-2. **Dataset axis is the step after the generator.** Columns spanning the
-   statistics that drive both axes: URLs (done), natural language
-   (e.g. ClickBench `Title`), query/machine logs, and a low-redundancy
-   identifier column as the learned-dictionary adversary; each dataset ships
-   a statistics table (length distribution, byte entropy, substring
-   redundancy) so results are interpretable. Data-size scaling (1M → 10M →
-   100M) rides on this step.
-3. **Baselines (FSST, LZ4/ZSTD, dictionary) are a later phase.**
-   **Filter-only scope locked:** the measured unit is predicate → bitmap;
-   materialization of matching rows is out of scope for the paper (argued
-   there, revisitable later as an additional strategy phase).
-   Case-insensitive matching: future work, acknowledged as hard.
-4. **Phase instrumentation approved** — `setup_ns`, ABI v3 (subsection
-   above); no OnPair library modification required.
-5. **Grid defaults adopted as specced** (absent objections in review):
-   per-op grids with R = 5/3, `contains_any` k ≤ 64, dense selectivity
-   points {0.3, 0.5, 0.8}, `measure.min_millis` stays 200 (the per-spec
-   override already exists for sweep runs that want to halve wall time).
-
 ---
 
-## 15. Dataset reproducibility (2026-07-08)
+## 16. Uncompressed baselines and the strategy cross-product
 
-Implemented alongside §14's scope decision 2, modeled on (and tightened
-from) the OnPair compression paper's benchmark repo
-(github.com/gargiulofrancesco/compression_benchmark):
+The uncompressed side has to be the strongest defensible opponent.
 
-- **`datasets/sources.yaml`** — the pinned manifest: per entry a source URL,
-  raw sha256 (pinned where upstream is immutable, recorded-at-prepare
-  otherwise), license id, extraction rule, and the **canonical checksum**
-  (`bench ingest`'s logical xxh3) that names the benchmark input itself.
-  The default roster is the compression paper's six headline columns
-  (TPC-H p_name + c_comment at SF=10, Amazon Books titles, DBpedia
-  short abstracts, MS MARCO URLs + queries) plus ClickBench URLs — the two
-  papers evaluate the same row streams, extracted by the same rules
-  (original file order, same field/strip/skip logic).
-- **`datasets/prepare.py`** — one idempotent driver: download (retry +
-  sha256) → stdlib extraction → intermediate parquet → `bench ingest` (the
-  only artifact producer) → canonical-checksum verify; `--update-checksums`
-  pins first-fetch values back into the manifest. A checksum mismatch is a
-  hard stop, never a warning.
-- **`reproduce.sh`** — staged (`build` / `datasets` / `suites` / `run`),
-  with wall-clock estimates in the header. The `suites` stage runs
-  `bench gen --seed 42` + `bless` per materialised dataset, so the full
-  chain — bytes → dataset checksum → suite → truth → results manifest — is
-  a pure function of the manifest plus one seed.
-
-Improvements over the paper repo's scheme: dblp is pinned to a **dated
-release** instead of the rolling snapshot; queries are *generated*
-deterministically rather than shipped as a static needle file; and the
-canonical checksum layer means reviewers verify benchmark-input identity,
-not just transport integrity. Divergence: no held-out split — OnPair trains
-on the chunk it compresses (build() *is* the training), so a train/eval
-split has no meaning on the query axis.
-
-## 16. Uncompressed SOTA: prefilters, evaluators, and the strategy cross-product
-
-*Status: approved (2026-07-08; dictionary encoding cut from this phase); implementing.*
-
-The uncompressed side must be the strongest defensible opponent, and its
-internal structure is itself a paper question: **when does SIMD
-prefiltering help, and when does it collapse** — especially short vs long
-rows, rare vs common needle bytes. Today's scanners are monolithic
-(`memmem` silently fuses a rare-pair SIMD prefilter with Two-Way verify),
-so that ablation is currently impossible.
-
-### 16.1 What already composes, and what doesn't
+### 16.1 What composes
 
 For every (candidate, scanner) pair the runner emits up to three strategy
-rows — `compressed` (candidate `run()`), `direct`, `decode`. So
-decompress-then-eval × evaluator is already automatic: LZ4/zstd need only
-decode-only candidates and every scanner composes with them for free
-("OnPair decode + teddy+strstr" is just a spec line). What's missing:
+rows: `compressed` (candidate `run()`), `direct` (the scanner over the raw
+view) and `decode` (the scanner over `decode()` output). Decompress-then-search
+therefore needs only a decode-only candidate, and every scanner composes with
+it. The spec's root `strategies` list picks which of these run.
 
-1. **Prefilter × evaluator decomposition** — scanners are single
-   `prepare`/`scan` units; no way to express "teddy prefilter + strstr
-   verify" or measure a prefilter in isolation.
-2. **Haystack-level scanning** — all scanners loop row-by-row; on short
-   rows (msmarco-query, ~36 B) the SIMD kernel never gets a runway.
-   Scanning the concatenated payload once and mapping hit positions back
-   to rows is a distinct strategy and the shape compressed-domain scanning
-   already has; omitting it handicaps the uncompressed side.
-3. **Spec `strategies` allowlist** — the runner runs every applicable
-   strategy per pair; a 30-scanner shootout must not re-run `decode` for
-   every codec × scanner.
+All row scanners loop row by row, and on short rows a SIMD kernel never gets a
+runway. `memmem-hay` scans a chunk's concatenated payload once and maps each
+hit back to its row, the shape compressed-domain scanning already has; the
+paper's baselines use it.
 
 ### 16.2 Baseline roster
 
-**Platform policy:** implement every module and *gate* it (cfg(target_arch)
-at registration + the existing `cpu_features` hard-gate) rather than omit
-it — runs happen on both macOS/arm64 and x86-64, and a module that can't
-run on a platform is absent from that platform's results, never silently
-scalar.
-
-Single-pattern evaluators (contains/prefix/suffix):
+**Platform policy:** implement every module and gate it (`cfg(target_arch)` at
+registration plus the `cpu_features` hard gate) rather than omit it. A module
+that cannot run on a platform is absent from that platform's results, never
+silently scalar.
 
 | scanner | notes |
 |---|---|
-| `memmem` | in already; memchr crate, fused SIMD prefilter + Two-Way, NEON/AVX2 |
-| `cpp-std-find` | in already; libc++/libstdc++ `string_view::find` |
-| `strstr` | platform libc — glibc's SSE2/AVX2 path on Linux/x86, Apple's on macOS |
-| `stringzilla` | modern SIMD library, NEON/AVX-512; competitive with memmem |
-| `vectorscan` | Hyperscan fork (identical x86 codepaths, NEON on ARM); single-literal "noodle" engine; feature-gated heavy dep |
-| `bndm` | bit-parallel, needles ≤ 64 B — matches the needle-length axis |
-| `kmp`, `bmh` | classic reference points (KMP automaton already exists) |
+| `memmem`, `memmem-hay` | the memchr crate: fused SIMD prefilter + Two-Way, NEON/AVX2; per row and per chunk |
+| `cpp_std_find` | libc++/libstdc++ `string_view::find` |
+| `stringzilla` | SIMD library, NEON/AVX-512 |
+| `bndm`, `kmp`, `bmh` | classic references (`classics`); `bndm` takes needles up to 64 B |
+| `prefilter` | the C++ matcher of `candidates/common/prefilter` over raw rows |
 
-Multi-pattern (contains_any / multi_contains): k× memmem loop (current),
-`aho-corasick` (crate; NFA/DFA — BurntSushi's canonical Rust
-implementation), `teddy` (`aho_corasick::packed`, explicit — the canonical
-port of Hyperscan's), `vectorscan` multi-literal (FDR/Teddy original).
+Decompress-then-search candidates: `lz4` (block) and `fsst` (§17).
+`uncompressed_memmem` adds memmem per row and over the whole payload with
+selection vectors.
 
-**`ac-cpp` evaluated and dropped (2026-07-09).** The author's hand-written
-full-DFA byte-level Aho-Corasick (dense 256-wide goto table) was wrapped as
-a scanner and benchmarked head-to-head against `teddy` and the
-`aho-corasick` crate on ClickBench URLs and MS MARCO queries. Findings: with
-no prefilter it touches every byte, so on single-needle `contains` it ran
-~8× slower than the memchr-prefiltered scanners (83 vs ~10 ms on URLs) and
-it lost at small k; its one edge is **cost flat in k** (one table lookup per
-byte regardless of pattern count), which let it beat `teddy` only at very
-high pattern counts (k=64 short rows: 28.8 vs 229 ms). Since it only roughly
-matches — and does not clearly beat — the public, maintained `aho-corasick`
-crate in that large-k corner, it was **removed as a contender** rather than
-maintained as a bespoke C++ dependency. Source is parked (unbuilt) under
-`scanners/ac_cpp/` for reference; the workspace `exclude`s it.
-
-Prefilters (composable): `none`, `first-byte`, `rare-byte` (memchr's
-static frequency heuristic), `first+last` (bytes at offsets 0, len−1,
-movemask AND), `rare-pair` (same mechanism, rarity-chosen offsets —
-isolates the heuristic's value vs the fixed choice), `teddy-1`
-(single-pattern fingerprint). On ARM the movemask idiom is NEON `shrn`;
-memchr/aho-corasick provide both ISAs from the same code.
-
-Two composition granularities, both expressible:
-- **position-level**: prefilter emits candidate positions; verify =
-  needle memcmp at the position (the high-performance shape, what memmem
-  does internally);
-- **row-level**: prefilter screens whole rows; survivors go to any named
-  evaluator (the clean cartesian, e.g. `teddy-1+strstr`).
-
-A `composed` scanner crate registers each combination as an ordinary named
-scanner — no ABI change; composed scanners self-report prefilter
-counters through the existing `lb_run_stats` fields, finally exercising
-§10's instrumentation on the uncompressed side. Haystack-level variants
-are registered as scanner names with a `-hay` suffix (cross-row false
-positives resolved by position→row-bounds verification).
-
-Decompress-then-eval candidates: `lz4` (block), `zstd` (at a few levels).
-`fsst` is the closest string-native rival — see §17, which also adds the
-compressed-domain FSST-LIKE matcher.
-
-### 16.3 Experiment plan: two tiers, combinations stay first-class
-
-A pure tournament ("keep the winning prefilter and evaluator") is unsound:
-there is no single winner — we already measured the memmem/Aho-Corasick
-crossover at k, and prefilter value swings with needle rarity, row length,
-and selectivity. A full cartesian headline (~30 scanner configs × 1,320
-targets × 7 datasets × strategies) is unaffordable. So:
-
-- **Tier 1 — screening shootout** (one experiment, one figure): all
-  prefilter×evaluator combos + fused engines, `direct` strategy only, on
-  three representative columns (proposed: msmarco-query = short rows,
-  clickbench-url-1m = URLs, dbpedia-abstract = long text). Output: a
-  **winner map** over (op, needle length, selectivity band) — the defense
-  of every baseline choice, and a survey figure in its own right.
-- **Tier 2 — headline sweeps**: the shootout's per-regime winners +
-  `memmem`-as-shipped (the recognizable baseline) + `vectorscan`
-  (industrial SOTA), × codecs (decode), × compressed evals, full grid,
-  all seven datasets.
-
-Every combination remains spec-addressable forever; tiering is spec
-authoring, not architecture.
-
-### 16.4 Work items (post-approval order)
-
-1. Spec `strategies` allowlist (small; unblocks affordable shootouts).
-   *Done (2026-07-08).*
-2. `composed` scanner crate: prefilter × verifier registry, prefilter stats
-   self-reporting. *Done:* `pf-none|first-byte|rare-byte|first-last|rare-pair`,
-   row-granularity, position-level exact verify, reporting
-   `prefilter_candidates` (survivors) via a timing-mode-free monomorphised
-   loop. Row-level "any named evaluator" cartesian (e.g. `teddy-1+strstr`)
-   and per-phase `prefilter_ns`/`verify_ns` splits deferred (need per-row
-   clocks / cross-crate verifier composition).
-3. Haystack-scan variant for contains. *Done:* `memmem-hay`.
-4. New scanner crates: `libc-memmem`, `bndm`, `kmp`, `bmh`,
-   `aho-corasick`/`teddy` multi, `stringzilla` (crate FFI) — *done.*
-   `vectorscan` (FFI, feature-gated) remains: it is untestable on the arm64
-   dev host (needs a system libhs/libvectorscan), so it lands during an x86
-   run rather than blind here.
-5. New candidates: `lz4`, `zstd`. *Done* (decode-only; offsets stored
-   uncompressed and counted in footprint).
-6. Tier-1 shootout spec (`specs/shootout/tier1.toml`, done) + run;
-   winner-map analysis; then Tier-2 specs.
-
-ABI change: this phase bumped the contract to **v4** (optional
-`lb_scanner.supports_query` — a pure per-query capability probe so a scanner
-declares an out-of-envelope query `Unsupported`, not `Error`; used by `bndm`
-for >64 B needles and `teddy` for empty needles).
-
-Open questions for review: vectorscan linkage (system/brew library vs
-vendored build); zstd level set; shootout column triple confirmation;
-which x86 machine joins the paper's hardware matrix.
+ABI v4 added the optional `lb_scanner.supports_query`, a per-query capability
+probe, so a scanner declares an out-of-envelope query `Unsupported` rather
+than `Error` (`bndm` above 64 B).
 
 ## 17. FSST: standard decode baseline and compressed-domain LIKE (FSST-LIKE)
-
-*Status: approved (2026-07-09); implementing.*
 
 FSST (Fast Static Symbol Table, Boncz/Neumann/Leis, VLDB'20) is the
 string-native rival OnPair is measured against, and DaMoN'26 published
@@ -1482,7 +1093,7 @@ against *match-in-place* within the FSST family, next to the OnPair results.
 ### 17.1 Two candidates, two forks — by design
 
 - **`fsst`** — standard FSST, **decode-only** (no `run`/`view`), exactly the
-  lz4/zstd shape. Wraps **cwida/fsst upstream** (the canonical reference
+  lz4 shape. Wraps **cwida/fsst upstream** (the canonical reference
   implementation). It is the reference-standard decompress-then-eval line: the
   harness composes every scanner over its `decode()` output.
 - **`fsst_like_tum`** — the DaMoN compressed-domain matcher, **match-in-place only**
@@ -1504,12 +1115,11 @@ dropped because plain `fsst` already covers decode, and the cross-fork ratio
 delta below is the only thing that needs stating: read it as a trainer
 difference, not a bug.)
 
-Both C++ dependencies are `FetchContent`-pinned to explicit commits (like
-onpair), for reproducibility.
+Both C++ dependencies are `FetchContent`-pinned to the commits in `pins.env`.
 
 ### 17.2 Footprint components
 
-Both candidates report the same three components, mirroring lz4/zstd/onpair so
+Both candidates report the same three components, mirroring lz4 so
 the compression-axis report's `payload×` formula (raw payload ÷ (footprint −
 index)) works unchanged:
 
@@ -1582,36 +1192,9 @@ gate is its acceptance test and must pass on every suite query before any number
 is recorded (else exit 3). `fsst_create` symbol-table training is deterministic
 for fixed input, so ratios are stable across runs.
 
-### 17.6 Work items (status)
+### 17.6 Dependencies
 
-1. `fsst` (cwida) decode-only candidate + registration + `codecs.toml` entry.
-   **Done (2026-07-09):** payload× ≈ 2.0 on msmarco, decode ~2.8 GB/s, gate passes.
-2. `fsst_like_tum` interpreted `run()` + `decode()`; **correctness gate passes on all
-   four columns.** **Done (2026-07-09).** Finding (`fsst_like_query.toml`):
-   compressed-domain `interp` beats decode-then-eval on short/medium rows
-   (msmarco 13.4 vs 19.6 ms; url 22.6 vs 26.5; tpch 26.8 vs 31.7) but **loses on
-   long rows** (dbpedia 126 vs 85 ms) — the interpreted automaton's per-symbol
-   overhead scales with row length, which is exactly the regime the codegen
-   backends are built to win. So the interpreted number under-represents
-   FSST-LIKE on long text.
-3. `cpp` / `llvm` / `-simd` codegen backends — **Done (2026-08-04), validated on
-   an x86-64 Linux host (WSL2, clang++ 14, LLVM 14):** all four strategies
-   register, and the correctness gate passes on **every** suite query on all four
-   columns (`fsst_like_query.toml`, exit 0). Findings (suite-total of per-query
-   medians; match-only = headline − `setup_ns`):
-   - **Long rows (dbpedia): codegen reclaims the regime interp lost.**
-     Match-only `llvm-simd` 2.65 s vs `interp` 3.51 s vs decode-then-eval
-     (fsst+memmem) 4.50 s — and llvm-simd wins even at headline (3.08 s),
-     JIT cost included.
-   - `llvm`/`llvm-simd` per-query JIT is ~10–25 ms; the `cpp` backend's
-     per-query `clang++ -shared` is ~350–500 ms on this host and dominates its
-     headline, so `cpp`'s value is its match-only number (fastest of all on
-     msmarco: 0.15 s suite-total).
-   - Short/medium rows: `interp` remains the best headline choice; codegen
-     match-only is comparable (tpch, url) — consistent with the paper's
-     amortization story.
-
-Dependencies added (FetchContent-pinned): cwida/fsst, calin2110/FSST-LIKE-Matching
+FetchContent-pinned: cwida/fsst, calin2110/FSST-LIKE-Matching
 (+ its calin2110/fsst, fmt). LLVM **14–16** is an *optional* build dependency
 (`llvm-14-dev`/`llvm-16-dev` apt, `llvm@16` brew); absent (or ≥17, which removed
 APIs the upstream codegen uses) ⇒ `llvm*` strategies absent, not a build failure.

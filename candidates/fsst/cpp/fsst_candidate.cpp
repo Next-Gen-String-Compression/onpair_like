@@ -71,6 +71,29 @@ int cand_decode(void* self, uint8_t* bytes_out, uint64_t bytes_cap,
   return 0;
 }
 
+// decode() of the selected rows only. A run of consecutive rows is one
+// stretch of the code stream, decoded in one call like the bulk decode.
+int cand_decode_selected(void* self, const uint32_t* rows, uint64_t count,
+                         uint8_t* bytes_out, uint64_t bytes_cap,
+                         uint64_t* offsets_out) {
+  auto* h = static_cast<FsstBuilt*>(self);
+  fsst_decoder_t decoder;
+  if (fsst_import(&decoder, h->symtab.data()) == 0) return 2;
+  offsets_out[0] = 0;
+  for (uint64_t k = 0; k < count;) {
+    uint64_t e = k + 1;
+    while (e < count && rows[e] == rows[e - 1] + 1) e++;
+    const uint64_t c0 = h->coffsets[rows[k]], c1 = h->coffsets[rows[e - 1] + 1];
+    const uint64_t at = offsets_out[k];
+    const size_t got = fsst_decompress(&decoder, c1 - c0, h->compressed.data() + c0,
+                                       bytes_cap - at, bytes_out + at);
+    for (; k < e; k++)
+      offsets_out[k + 1] = offsets_out[k] + (h->offsets[rows[k] + 1] - h->offsets[rows[k]]);
+    if (at + got != offsets_out[e]) return 3;
+  }
+  return 0;
+}
+
 void cand_destroy(void* self) { delete static_cast<FsstBuilt*>(self); }
 
 const lb_candidate kVtable = {
@@ -86,6 +109,7 @@ const lb_candidate kVtable = {
     /*view=*/nullptr,
     /*decode=*/cand_decode,
     /*destroy=*/cand_destroy,
+    /*decode_selected=*/cand_decode_selected,
 };
 
 }  // namespace

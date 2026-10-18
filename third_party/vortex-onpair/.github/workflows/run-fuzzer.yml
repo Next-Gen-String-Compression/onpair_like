@@ -1,0 +1,202 @@
+name: Run Fuzzer
+
+on:
+  workflow_call:
+    inputs:
+      fuzz_target:
+        description: "The cargo fuzz binary target name (e.g., file_io, array_ops)"
+        required: true
+        type: string
+      fuzz_name:
+        description: "Display/storage name for this fuzz run. Defaults to fuzz_target if not set."
+        required: false
+        type: string
+        default: ""
+      max_time:
+        description: "Maximum fuzzing time in seconds"
+        required: false
+        type: number
+        default: 5400
+      runner:
+        description: "Runner name from .github-private runs-on.yml (e.g., arm64-fuzz, gpu)"
+        required: false
+        type: string
+        default: "arm64-fuzz"
+      extra_features:
+        description: "Extra cargo features to enable (e.g., cuda)"
+        required: false
+        type: string
+        default: ""
+      extra_env:
+        description: "Extra environment variables to set (space-separated KEY=VALUE pairs)"
+        required: false
+        type: string
+        default: ""
+      jobs:
+        description: "Number of parallel fuzzing jobs (libfuzzer -fork=N)."
+        required: false
+        type: number
+        default: 1
+      fuzzer_artifact:
+        description: "Precompiled fuzzer artifact. Builds locally when omitted."
+        required: false
+        type: string
+        default: ""
+    outputs:
+      crashes_found:
+        description: "Whether crashes were found"
+        value: ${{ jobs.fuzz.outputs.crashes_found }}
+      first_crash_name:
+        description: "Name of the first crash file"
+        value: ${{ jobs.fuzz.outputs.first_crash_name }}
+      artifact_url:
+        description: "URL of the uploaded crash artifacts"
+        value: ${{ jobs.fuzz.outputs.artifact_url }}
+    secrets:
+      R2_FUZZ_ACCESS_KEY_ID:
+        required: true
+      R2_FUZZ_SECRET_ACCESS_KEY:
+        required: true
+
+env:
+  NIGHTLY_TOOLCHAIN: nightly-2026-09-10
+
+jobs:
+  fuzz:
+    name: "Run ${{ inputs.fuzz_name || inputs.fuzz_target }}"
+    env:
+      FUZZ_NAME: ${{ inputs.fuzz_name || inputs.fuzz_target }}
+      FUZZ_TARGET: ${{ inputs.fuzz_target }}
+      FUZZER_ARTIFACT: ${{ inputs.fuzzer_artifact }}
+      EXTRA_FEATURES: ${{ inputs.extra_features }}
+      EXTRA_ENV: ${{ inputs.extra_env }}
+      FUZZ_JOBS: ${{ inputs.jobs }}
+      MAX_TIME: ${{ inputs.max_time }}
+    timeout-minutes: 180
+    runs-on: >-
+      ${{ github.repository == 'vortex-data/vortex'
+          && format('runs-on={0}/runner={1}/tag={2}-fuzz', github.run_id, inputs.runner, inputs.fuzz_name || inputs.fuzz_target)
+          || 'ubuntu-latest' }}
+    outputs:
+      crashes_found: ${{ steps.check.outputs.crashes_found }}
+      first_crash_name: ${{ steps.check.outputs.first_crash_name }}
+      artifact_url: ${{ steps.upload_artifacts.outputs.artifact-url }}
+    steps:
+      - uses: runs-on/action@v2
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      - uses: ./.github/actions/setup-prebuild
+        if: >-
+          inputs.fuzzer_artifact == '' &&
+          github.repository == 'vortex-data/vortex' &&
+          contains(fromJSON('["arm64-fuzz", "arm64-medium"]'), inputs.runner)
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          toolchain: ${{ env.NIGHTLY_TOOLCHAIN }}
+          enable-sccache: "false"
+
+      - uses: ./.github/actions/setup-rust
+        if: >-
+          inputs.fuzzer_artifact == '' &&
+          (github.repository != 'vortex-data/vortex' ||
+          !contains(fromJSON('["arm64-fuzz", "arm64-medium"]'), inputs.runner))
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          toolchain: ${{ env.NIGHTLY_TOOLCHAIN }}
+          enable-sccache: "false"
+
+      - name: Check LLVM toolchain
+        id: llvm-toolchain
+        if: inputs.fuzzer_artifact == ''
+        shell: bash
+        run: |
+          if command -v clang >/dev/null && command -v llvm-symbolizer >/dev/null; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "installed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install llvm
+        if: inputs.fuzzer_artifact == '' && steps.llvm-toolchain.outputs.installed != 'true'
+        uses: aminya/setup-cpp@v1
+        with:
+          compiler: llvm
+
+      - name: Install cargo-fuzz
+        if: inputs.fuzzer_artifact == ''
+        uses: taiki-e/cache-cargo-install-action@66c9585ef5ca780ee69399975a5e911f47905995
+        with:
+          tool: cargo-fuzz
+
+      - name: Download precompiled fuzzer
+        if: inputs.fuzzer_artifact != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
+        with:
+          name: ${{ inputs.fuzzer_artifact }}
+
+      - name: Extract precompiled fuzzer
+        if: inputs.fuzzer_artifact != ''
+        run: tar -xf cpu-fuzzers.tar.zst
+
+      - name: Restore corpus
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_FUZZ_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_FUZZ_SECRET_ACCESS_KEY }}
+          AWS_REGION: "us-east-1"
+          AWS_ENDPOINT_URL: "https://01e9655179bbec953276890b183039bc.r2.cloudflarestorage.com"
+        run: .github/scripts/restore-fuzz-corpus.sh explore
+
+      - name: Run fuzzing target
+        id: fuzz
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_FUZZ_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_FUZZ_SECRET_ACCESS_KEY }}
+          AWS_REGION: "us-east-1"
+          AWS_ENDPOINT_URL: "https://01e9655179bbec953276890b183039bc.r2.cloudflarestorage.com"
+        run: .github/scripts/run-fuzzer.sh
+        continue-on-error: true
+
+      - name: Check for crashes
+        id: check
+        run: .github/scripts/check-fuzz-crashes.sh
+
+      - name: Reproduce crash for full output
+        if: steps.check.outputs.crashes_found == 'true' && inputs.jobs > 1
+        env:
+          FIRST_CRASH: ${{ steps.check.outputs.first_crash }}
+        run: .github/scripts/reproduce-fuzz-crash.sh
+
+      - name: Archive crash artifacts
+        id: upload_artifacts
+        if: steps.check.outputs.crashes_found == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: ${{ env.FUZZ_NAME }}-crash-artifacts
+          path: fuzz/artifacts
+          retention-days: 180
+
+      - name: Archive fuzzer output log
+        if: steps.check.outputs.crashes_found == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: ${{ env.FUZZ_NAME }}-logs
+          path: fuzz_output.log
+          retention-days: 90
+
+      - name: Persist corpus
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_FUZZ_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_FUZZ_SECRET_ACCESS_KEY }}
+          AWS_REGION: "us-east-1"
+          AWS_ENDPOINT_URL: "https://01e9655179bbec953276890b183039bc.r2.cloudflarestorage.com"
+        run: >-
+          .github/scripts/checkpoint-fuzz-corpus.sh
+          "fuzz/corpus/$FUZZ_NAME" "${FUZZ_NAME}_corpus.tar.zst" "$RUNNER_TEMP/${FUZZ_NAME}.etag"
+
+      - name: Fail job if fuzzing failed
+        if: steps.fuzz.outcome == 'failure' || steps.check.outputs.crashes_found == 'true'
+        run: exit 1

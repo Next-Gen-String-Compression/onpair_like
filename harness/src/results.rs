@@ -30,6 +30,12 @@ pub struct CellKey {
     pub dataset: String,
     pub dataset_checksum: String,
     pub chunk_rows: u64,
+    /// The selection the cell ran under (ABI v7) and how many rows it
+    /// admits; absent on build rows and, for the row count, under `all`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selection: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selection_rows: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]

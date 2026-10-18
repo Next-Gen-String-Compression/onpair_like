@@ -1,0 +1,12 @@
+machine,cpu,kib,cold_gbs,seq_gbs
+m4pro,Apple M4 Pro,64,74.9,187.8
+m4pro,Apple M4 Pro,256,92.5,112.3
+m4pro,Apple M4 Pro,1024,95.0,112.6
+m4pro,Apple M4 Pro,2048,91.7,113.7
+m4pro,Apple M4 Pro,4096,93.1,111.2
+m4pro,Apple M4 Pro,8192,92.3,108.8
+m4pro,Apple M4 Pro,16384,93.0,109.3
+m4pro,Apple M4 Pro,65536,91.2,93.6
+m4pro,Apple M4 Pro,262144,90.7,91.1
+m4pro,Apple M4 Pro,524288,89.4,89.1
+m4pro,Apple M4 Pro,1048576,90.0,89.8

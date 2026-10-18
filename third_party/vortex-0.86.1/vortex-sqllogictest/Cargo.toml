@@ -1,0 +1,43 @@
+[package]
+name = "vortex-sqllogictest"
+authors = { workspace = true }
+description = "Test runner for SQL integrations"
+edition = { workspace = true }
+homepage = { workspace = true }
+include = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+publish = false
+readme = "README.md"
+repository = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+bigdecimal = { workspace = true }
+datafusion-sqllogictest = { workspace = true }
+regex = { workspace = true }
+rstest = { workspace = true }
+sqllogictest = "0.29.1"
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+vortex = { workspace = true, features = ["tokio"] }
+vortex-duckdb = { workspace = true }
+
+[dev-dependencies]
+datafusion = { workspace = true, features = ["parquet"] }
+datafusion-functions-nested.workspace = true
+futures = { workspace = true }
+indicatif = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+vortex-datafusion = { workspace = true }
+
+[lints]
+workspace = true
+
+[[test]]
+harness = false
+name = "sqllogictests"
+path = "bin/sqllogictests-runner.rs"

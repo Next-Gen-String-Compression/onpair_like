@@ -5,6 +5,12 @@
 // Match-in-place backends (all compressed-domain, all per-query setup):
 //   - "interp": build the interpreted LikePatternAutomatonParser for the query,
 //     drive parse() over each row's compressed bytes.
+//   - "interp-block": the same parser over 64-row blocks first, rows only in a
+//     block that matches (contains ops only). "interp-simd" and
+//     "interp-simd-block" add the -simd kernels' SSE4.2 skip to the
+//     interpreter, "interp-bits" and "interp-bits-block" fsst_prefilter's u8
+//     bit table (patch 3 of fsst_like_src_patches.cmake). "cpp-simd-block" and
+//     "llvm-simd-block" do the same with the compiled -simd kernels.
 //   - "cpp" / "cpp-simd" (registered only when a runtime clang++ exists; -simd
 //     additionally requires x86-64): the DaMoN'26 C++ codegen backend —
 //     generate a specialized C++ kernel for the query automaton, clang++
@@ -51,6 +57,7 @@
 #include "llvm/Support/TargetSelect.h"
 #endif
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -199,10 +206,99 @@ int run_interp(void* self, const lb_query* query, uint64_t* out_bitmap_words,
                                                                setup_start)
               .count());
     }
-    for (uint64_t i = 0; i < h->b.num_rows; i++) {
+    const auto scan_start = stats_or_null ? Clock::now() : Clock::time_point{};
+    auto row = [&](uint64_t i) {
       const uint8_t* p = h->b.compressed.data() + h->b.coffsets[i];
       const size_t len = size_t(h->b.coffsets[i + 1] - h->b.coffsets[i]);
       if (parser.parse(std::span<const uint8_t>(p, len))) set_bit(i);
+    };
+    // Under a selection the automaton runs over the selected rows only.
+    if (query->selection) {
+      for (uint64_t k = 0; k < query->selection->count; k++) row(query->selection->rows[k]);
+    } else {
+      for (uint64_t i = 0; i < h->b.num_rows; i++) row(i);
+    }
+    if (stats_or_null) {
+      stats_or_null->scan_ns = uint64_t(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+                                                               scan_start)
+              .count());
+    }
+    return 0;
+  } catch (...) {
+    return 12;
+  }
+}
+
+// Blocked scans (the *-block strategies): the automaton, first run over the
+// concatenated compressed bytes of a block of kBlockRows rows; only a block it
+// matches is parsed row by row. A row match implies a block match, so a block
+// miss skips every row in it; a match spanning two rows only costs the recheck.
+// FSST escapes never cross a row, so a block parses as its rows do. CONTAINS and
+// MULTI_CONTAINS only: a PREFIX or SUFFIX pattern is anchored to the block's ends.
+constexpr uint64_t kBlockRows = 64;
+
+template <typename Parse>
+void match_blocks(const Handle& h, Parse&& parse, uint64_t* out_bitmap_words) {
+  const uint8_t* base = h.b.compressed.data();
+  const auto& off = h.b.coffsets;
+  for (uint64_t lo = 0; lo < h.b.num_rows; lo += kBlockRows) {
+    const uint64_t hi = std::min(lo + kBlockRows, h.b.num_rows);
+    if (!parse(base + off[lo], size_t(off[hi] - off[lo]))) continue;
+    for (uint64_t i = lo; i < hi; i++) {
+      if (parse(base + off[i], size_t(off[i + 1] - off[i]))) {
+        out_bitmap_words[i >> 6] |= uint64_t(1) << (i & 63);
+      }
+    }
+  }
+}
+
+bool is_contains(const lb_query* query) {
+  return query->op == LB_CONTAINS || query->op == LB_MULTI_CONTAINS;
+}
+
+// "interp-block", "interp-simd(-block)", "interp-bits(-block)": the interpreter
+// blocked, with a SIMD skip (patch 3 in fsst_like_src_patches.cmake; `simd` is
+// its mode: 1 the -simd kernels' SSE4.2 compares, 2 fsst_prefilter's bit
+// table), or both.
+int run_interp_variant(void* self, const lb_query* query, int simd, bool block,
+                       uint64_t* out_bitmap_words, lb_run_stats* stats_or_null) {
+  auto* h = static_cast<Handle*>(self);
+  if (block && !is_contains(query)) return 11;
+  std::vector<uint8_t> pat;
+  if (!to_like_pattern(query, pat)) return 11;
+
+  using Clock = std::chrono::steady_clock;
+  const auto setup_start = stats_or_null ? Clock::now() : Clock::time_point{};
+  try {
+    automata::parsing::LikePatternAutomatonParser parser(
+        std::span<const uint8_t>(pat.data(), pat.size()), *h->encoder);
+    if (simd) parser.enableSimd(simd);
+    if (stats_or_null) {
+      stats_or_null->setup_ns = uint64_t(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+                                                               setup_start)
+              .count());
+    }
+    const auto scan_start = stats_or_null ? Clock::now() : Clock::time_point{};
+    auto parse = [&](const uint8_t* p, size_t len) {
+      return parser.parse(std::span<const uint8_t>(p, len));
+    };
+    if (block) {
+      match_blocks(*h, parse, out_bitmap_words);
+    } else {
+      for (uint64_t i = 0; i < h->b.num_rows; i++) {
+        if (parse(h->b.compressed.data() + h->b.coffsets[i],
+                  size_t(h->b.coffsets[i + 1] - h->b.coffsets[i]))) {
+          out_bitmap_words[i >> 6] |= uint64_t(1) << (i & 63);
+        }
+      }
+    }
+    if (stats_or_null) {
+      stats_or_null->scan_ns = uint64_t(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+                                                               scan_start)
+              .count());
     }
     return 0;
   } catch (...) {
@@ -251,9 +347,10 @@ bool all_needles_empty(const lb_query* query) {
 // clang++ + dlopen is the paper's per-query compile cost — self-timed into
 // setup_ns. A failed compile leaves no .so, so compile() throws (dlopen null)
 // -> 12; the generated .cpp/.so are unlinked by ~CppCompiler on all paths.
-int run_codegen(void* self, const lb_query* query, bool simd,
+int run_codegen(void* self, const lb_query* query, bool simd, bool block,
                 uint64_t* out_bitmap_words, lb_run_stats* stats_or_null) {
   auto* h = static_cast<Handle*>(self);
+  if (block && !is_contains(query)) return 11;
   std::vector<uint8_t> pat;
   if (!to_like_pattern(query, pat)) return 11;  // e.g. CONTAINS_ANY (unsupported)
   if (all_needles_empty(query)) {
@@ -280,12 +377,24 @@ int run_codegen(void* self, const lb_query* query, bool simd,
                                                                setup_start)
               .count());
     }
-    for (uint64_t i = 0; i < h->b.num_rows; i++) {
-      const uint8_t* p = h->b.compressed.data() + h->b.coffsets[i];
-      const size_t len = size_t(h->b.coffsets[i + 1] - h->b.coffsets[i]);
-      if (parser->parse(p, len)) {
-        out_bitmap_words[i >> 6] |= uint64_t(1) << (i & 63);
+    const auto scan_start = stats_or_null ? Clock::now() : Clock::time_point{};
+    if (block) {
+      match_blocks(*h, [&](const uint8_t* p, size_t len) { return parser->parse(p, len); },
+                   out_bitmap_words);
+    } else {
+      for (uint64_t i = 0; i < h->b.num_rows; i++) {
+        const uint8_t* p = h->b.compressed.data() + h->b.coffsets[i];
+        const size_t len = size_t(h->b.coffsets[i + 1] - h->b.coffsets[i]);
+        if (parser->parse(p, len)) {
+          out_bitmap_words[i >> 6] |= uint64_t(1) << (i & 63);
+        }
       }
+    }
+    if (stats_or_null) {
+      stats_or_null->scan_ns = uint64_t(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+                                                               scan_start)
+              .count());
     }
     return 0;
   } catch (...) {
@@ -297,9 +406,10 @@ int run_codegen(void* self, const lb_query* query, bool simd,
 // Strategies "llvm"/"llvm-simd": ORC LLJIT the query automaton in-process —
 // no external compiler, no filesystem artifacts. automaton + IR gen + JIT is
 // the per-query compile cost, self-timed into setup_ns like the cpp backend.
-int run_llvm(void* self, const lb_query* query, bool simd,
+int run_llvm(void* self, const lb_query* query, bool simd, bool block,
              uint64_t* out_bitmap_words, lb_run_stats* stats_or_null) {
   auto* h = static_cast<Handle*>(self);
+  if (block && !is_contains(query)) return 11;
   std::vector<uint8_t> pat;
   if (!to_like_pattern(query, pat)) return 11;  // e.g. CONTAINS_ANY (unsupported)
   if (all_needles_empty(query)) {
@@ -328,12 +438,24 @@ int run_llvm(void* self, const lb_query* query, bool simd,
                                                                setup_start)
               .count());
     }
-    for (uint64_t i = 0; i < h->b.num_rows; i++) {
-      const uint8_t* p = h->b.compressed.data() + h->b.coffsets[i];
-      const size_t len = size_t(h->b.coffsets[i + 1] - h->b.coffsets[i]);
-      if (parser->parse(p, len)) {
-        out_bitmap_words[i >> 6] |= uint64_t(1) << (i & 63);
+    const auto scan_start = stats_or_null ? Clock::now() : Clock::time_point{};
+    if (block) {
+      match_blocks(*h, [&](const uint8_t* p, size_t len) { return parser->parse(p, len); },
+                   out_bitmap_words);
+    } else {
+      for (uint64_t i = 0; i < h->b.num_rows; i++) {
+        const uint8_t* p = h->b.compressed.data() + h->b.coffsets[i];
+        const size_t len = size_t(h->b.coffsets[i + 1] - h->b.coffsets[i]);
+        if (parser->parse(p, len)) {
+          out_bitmap_words[i >> 6] |= uint64_t(1) << (i & 63);
+        }
       }
+    }
+    if (stats_or_null) {
+      stats_or_null->scan_ns = uint64_t(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+                                                               scan_start)
+              .count());
     }
     return 0;
   } catch (...) {
@@ -344,7 +466,9 @@ int run_llvm(void* self, const lb_query* query, bool simd,
 
 // Registered strategy index -> backend. Filled alongside the strategy list in
 // lb_candidate_fsst_like_tum(); indices past interp depend on build/host gating.
-enum class Backend { kInterp, kCpp, kCppSimd, kLlvm, kLlvmSimd };
+enum class Backend {
+  kInterp, kInterpBlock, kInterpSimd, kInterpSimdBlock, kInterpBits, kInterpBitsBlock, kCpp, kCppSimd, kCppSimdBlock, kLlvm, kLlvmSimd, kLlvmSimdBlock
+};
 std::vector<Backend> g_backends;
 
 int cand_run(void* self, uint32_t strategy_index, const lb_query* query,
@@ -353,19 +477,40 @@ int cand_run(void* self, uint32_t strategy_index, const lb_query* query,
   switch (g_backends[strategy_index]) {
     case Backend::kInterp:
       return run_interp(self, query, out_bitmap_words, stats_or_null);
+    case Backend::kInterpBlock:
+      return run_interp_variant(self, query, /*simd=*/0, /*block=*/true,
+                                out_bitmap_words, stats_or_null);
+    case Backend::kInterpSimd:
+      return run_interp_variant(self, query, /*simd=*/1, /*block=*/false,
+                                out_bitmap_words, stats_or_null);
+    case Backend::kInterpSimdBlock:
+      return run_interp_variant(self, query, /*simd=*/1, /*block=*/true,
+                                out_bitmap_words, stats_or_null);
+    case Backend::kInterpBits:
+      return run_interp_variant(self, query, /*simd=*/2, /*block=*/false,
+                                out_bitmap_words, stats_or_null);
+    case Backend::kInterpBitsBlock:
+      return run_interp_variant(self, query, /*simd=*/2, /*block=*/true,
+                                out_bitmap_words, stats_or_null);
     case Backend::kCpp:
-      return run_codegen(self, query, /*simd=*/false, out_bitmap_words,
-                         stats_or_null);
+      return run_codegen(self, query, /*simd=*/false, /*block=*/false,
+                         out_bitmap_words, stats_or_null);
     case Backend::kCppSimd:
-      return run_codegen(self, query, /*simd=*/true, out_bitmap_words,
-                         stats_or_null);
+      return run_codegen(self, query, /*simd=*/true, /*block=*/false,
+                         out_bitmap_words, stats_or_null);
+    case Backend::kCppSimdBlock:
+      return run_codegen(self, query, /*simd=*/true, /*block=*/true,
+                         out_bitmap_words, stats_or_null);
 #ifdef HAVE_LLVM
     case Backend::kLlvm:
-      return run_llvm(self, query, /*simd=*/false, out_bitmap_words,
-                      stats_or_null);
+      return run_llvm(self, query, /*simd=*/false, /*block=*/false,
+                      out_bitmap_words, stats_or_null);
     case Backend::kLlvmSimd:
-      return run_llvm(self, query, /*simd=*/true, out_bitmap_words,
-                      stats_or_null);
+      return run_llvm(self, query, /*simd=*/true, /*block=*/false,
+                      out_bitmap_words, stats_or_null);
+    case Backend::kLlvmSimdBlock:
+      return run_llvm(self, query, /*simd=*/true, /*block=*/true,
+                      out_bitmap_words, stats_or_null);
 #endif
     default:
       return 10;
@@ -402,14 +547,32 @@ lb_candidate_fsst_like_tum(void) {
     constexpr uint32_t kLikeOps = LB_OP_BIT(LB_PREFIX) | LB_OP_BIT(LB_SUFFIX) |
                                   LB_OP_BIT(LB_CONTAINS) |
                                   LB_OP_BIT(LB_MULTI_CONTAINS);
-    g_strategies = {{"interp", kLikeOps}};
-    g_backends = {Backend::kInterp};
+    g_strategies = {{"interp", kLikeOps, LB_STRATEGY_TAKES_SELECTION},
+                    {"interp-block", LB_OP_BIT(LB_CONTAINS) | LB_OP_BIT(LB_MULTI_CONTAINS)}};
+    g_backends = {Backend::kInterp, Backend::kInterpBlock};
+#if defined(__SSE4_2__)
+    g_strategies.push_back({"interp-simd", kLikeOps});
+    g_backends.push_back(Backend::kInterpSimd);
+    g_strategies.push_back(
+        {"interp-simd-block", LB_OP_BIT(LB_CONTAINS) | LB_OP_BIT(LB_MULTI_CONTAINS)});
+    g_backends.push_back(Backend::kInterpSimdBlock);
+#endif
+#if defined(__AVX512BW__) || defined(__ARM_NEON)
+    g_strategies.push_back({"interp-bits", kLikeOps});
+    g_backends.push_back(Backend::kInterpBits);
+    g_strategies.push_back(
+        {"interp-bits-block", LB_OP_BIT(LB_CONTAINS) | LB_OP_BIT(LB_MULTI_CONTAINS)});
+    g_backends.push_back(Backend::kInterpBitsBlock);
+#endif
     if (runtime_cxx_compiler_found()) {
       g_strategies.push_back({"cpp", kLikeOps});
       g_backends.push_back(Backend::kCpp);
 #if defined(__x86_64__)
       g_strategies.push_back({"cpp-simd", kLikeOps});
       g_backends.push_back(Backend::kCppSimd);
+      g_strategies.push_back(
+          {"cpp-simd-block", LB_OP_BIT(LB_CONTAINS) | LB_OP_BIT(LB_MULTI_CONTAINS)});
+      g_backends.push_back(Backend::kCppSimdBlock);
 #endif
     }
 #ifdef HAVE_LLVM
@@ -418,6 +581,9 @@ lb_candidate_fsst_like_tum(void) {
 #if defined(__x86_64__)
     g_strategies.push_back({"llvm-simd", kLikeOps});
     g_backends.push_back(Backend::kLlvmSimd);
+    g_strategies.push_back(
+        {"llvm-simd-block", LB_OP_BIT(LB_CONTAINS) | LB_OP_BIT(LB_MULTI_CONTAINS)});
+    g_backends.push_back(Backend::kLlvmSimdBlock);
 #endif
 #endif
     g_vtable = {

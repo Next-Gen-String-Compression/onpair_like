@@ -11,6 +11,7 @@ pub mod oracle;
 pub mod registry;
 pub mod results;
 pub mod runner;
+pub mod selection;
 pub mod spec;
 pub mod suite;
 pub mod timing;

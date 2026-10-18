@@ -1,0 +1,61 @@
+# Row group sizes on the 2^20-row roster, on AVX-512: the whole column and
+# 512k down to 2k rows in steps of 4, with the needles of micro/fast.toml.
+# The AVX-512 panel of the row group figure; rowgroup-neon.toml is the NEON one.
+#
+#   paper/gen-rows.sh
+
+strategies = ["pf_walk", "decode", "interp", "fsst-prefilter", "direct"]
+
+[[datasets]]
+path = "../../../datasets/clickbench-url-1mi"
+
+[[datasets]]
+path = "../../../datasets/amazon-title-1mi"
+
+[[datasets]]
+path = "../../../datasets/dbpedia-abstract-1mi"
+
+# char_name.name: short, nearly every row distinct.
+[[datasets]]
+path = "../../../datasets/imdb-charname-1mi"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/clickbench-url-1mi/sa-lcp-v1-s42-n1-b006c9544343c139"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/amazon-title-1mi/sa-lcp-v1-s42-n1-fbad68395e05e8ae"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa-lcp-v1-s42-n1-05988707fed4b1ef"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/sa-lcp-v1-s42-n1-5205012fad43b02d"
+
+# pf_walk, and `decode`: OnPair as a codec, the chunk decoded and then searched.
+[[candidates]]
+name = "onpair_spiral"
+configs = ['{"bits":12,"prune":1.0}', '{"bits":16,"prune":1.0}']
+
+[[candidates]]
+name = "fsst_like_tum"
+
+[[candidates]]
+name = "fsst"
+
+[[candidates]]
+name = "fsst_prefilter"
+
+# memmem-hay over the raw view (`direct`), no codec at all.
+[[candidates]]
+name = "uncompressed"
+
+# Bulk scan: one pass over the chunk's payload, hits mapped back to rows.
+[[scanners]]
+name = "memmem-hay"
+
+[measure]
+chunk_rows = [0, 524288, 131072, 32768, 8192, 2048]
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true

@@ -1,80 +1,26 @@
-//! The alignment DAG, rebuilt for drawing.
+//! The alignment DAG as the figure draws it, built from a plan log.
 //!
-//! Same structure OnPair's planner builds — one lane per feasible first-token
-//! alignment, lanes merging wherever greedy tokenization reaches the same needle
-//! byte offset — but carrying the things a figure needs and a planner must not
-//! pay for: token strings, human labels, per-probe term *and* row frequencies,
-//! and convergence counters.
-//!
-//! Nodes come in two flavours. **Probe** nodes carry a [`Probe`] and are the only
-//! ones a cut may select; their capacity is the probe's weight. **Structural**
-//! nodes (source, sink, alignment junctions, byte-offset states) carry no probe
-//! and are uncuttable. A cut of this DAG is exactly a sound probe cover for the
-//! boundary-crossing case, which is what makes the picture worth looking at.
+//! Nodes are needle offsets: `0` is the start and the needle length the accept
+//! position. Every edge is one parse step carrying the probe a scan looks for to
+//! catch it, and the planner's cut is a set of such edges. The log says what each
+//! step probes; this module names the tokens, weighs the probes and classifies
+//! the steps for the renderer.
 
-use std::collections::{BTreeMap, HashMap};
+use crate::load::{Cut, Label, LogEdge, Query, Symbols};
 
-use onpair::search::{TokenFrequencyIndex, prefix_range};
-use onpair::{ColumnView, DictionaryView, MAX_TOKEN_SIZE, Offset, Token, TokenRange};
-use serde::Serialize;
+/// A code id: OnPair's `u16` token or an FSST byte code.
+pub type Token = u16;
 
-use crate::Error;
+/// Bytes of a token the figure spells out: OnPair's longest token, so no token
+/// is ever shown cut.
+pub(crate) const TOKEN_PREVIEW: usize = 16;
 
-/// Largest first-token set drawn as one explicit probe. Beyond this an alignment
-/// is entered unprobed and the cut has to catch it further down the lane, which
-/// is exactly what OnPair does with its own `SET_CAP`.
-pub const SET_CAP: usize = 16;
-
-/// Which frequency a cut minimizes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ProbeWeight {
-    /// Token occurrences in the code stream — what OnPair's planner minimizes.
-    TermFrequency,
-    /// As [`TermFrequency`](Self::TermFrequency), but tokens that already contain
-    /// the whole needle count as free: they are mandatory members, so charging
-    /// for them twice distorts the choice.
-    ResidualTermFrequency,
-    /// Rows holding the token, summed over the probe's ids. Closer to candidate
-    /// count, and not something OnPair's index can answer.
-    RowFrequency,
-    /// [`RowFrequency`](Self::RowFrequency) with mandatory tokens made free.
-    ResidualRowFrequency,
-}
-
-impl ProbeWeight {
-    /// Every metric, in declaration order.
-    pub const ALL: [Self; 4] = [
-        Self::TermFrequency,
-        Self::ResidualTermFrequency,
-        Self::RowFrequency,
-        Self::ResidualRowFrequency,
-    ];
-
-    /// Short name, as accepted on the command line.
-    pub const fn name(self) -> &'static str {
-        match self {
-            Self::TermFrequency => "tf",
-            Self::ResidualTermFrequency => "tf_residual",
-            Self::RowFrequency => "df",
-            Self::ResidualRowFrequency => "df_residual",
-        }
-    }
-
-    /// Parse a [`name`](Self::name).
-    pub fn parse(text: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|metric| metric.name() == text)
-    }
-
-    /// Whether this metric needs row frequencies, which only a column can supply.
-    pub const fn needs_rows(self) -> bool {
-        matches!(self, Self::RowFrequency | Self::ResidualRowFrequency)
-    }
-}
+/// Ids of one probe the figure names, heaviest first. The rest become an "and N
+/// more" tail.
+const TOKEN_LIST_CAP: usize = 10;
 
 /// The token ids one probe tests for.
-#[derive(Clone, Debug, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[derive(Clone, Debug)]
 pub enum ProbeSet {
     /// One id.
     Point {
@@ -88,8 +34,7 @@ pub enum ProbeSet {
         /// Last id.
         hi: Token,
     },
-    /// An enumerated set — the tokens ending with some needle prefix, which are
-    /// scattered through the dictionary rather than contiguous.
+    /// An enumerated set, scattered through the dictionary.
     Explicit {
         /// The ids, ascending.
         ids: Vec<Token>,
@@ -97,19 +42,6 @@ pub enum ProbeSet {
 }
 
 impl ProbeSet {
-    /// A single-id set.
-    pub fn point(id: Token) -> Self {
-        Self::Point { id }
-    }
-
-    /// A set covering a dictionary prefix range.
-    pub fn range(range: TokenRange) -> Self {
-        Self::Range {
-            lo: range.begin,
-            hi: range.last,
-        }
-    }
-
     /// Visit every id in the set.
     pub fn for_each(&self, mut f: impl FnMut(Token)) {
         match self {
@@ -137,178 +69,129 @@ impl ProbeSet {
         self.len() == 0
     }
 
-    /// Total weight of the set under a cumulative per-token weight array.
-    fn prefix_weight(&self, cumulative: &[u64]) -> u64 {
-        match self {
-            Self::Point { id } => cumulative[*id as usize + 1] - cumulative[*id as usize],
-            Self::Range { lo, hi } => cumulative[*hi as usize + 1] - cumulative[*lo as usize],
-            Self::Explicit { ids } => ids
-                .iter()
-                .map(|&id| cumulative[id as usize + 1] - cumulative[id as usize])
-                .sum(),
-        }
+    fn term_frequency(&self, frequency: &[u64]) -> u64 {
+        let mut sum = 0;
+        self.for_each(|id| sum += frequency.get(id as usize).copied().unwrap_or(0));
+        sum
     }
 }
 
-/// One testable set of token ids, weighted four ways and labelled for drawing.
-#[derive(Clone, Debug, Serialize)]
+/// One testable set of token ids, weighted and labelled for drawing.
+#[derive(Clone, Debug)]
 pub struct Probe {
     /// The ids this probe tests for.
     pub set: ProbeSet,
     /// Token occurrences in the code stream.
     pub term_frequency: u64,
-    /// Rows containing at least one of the ids, summed per id.
-    pub row_frequency: u64,
-    /// [`term_frequency`](Self::term_frequency) with mandatory tokens zeroed.
-    pub residual_term_frequency: u64,
-    /// [`row_frequency`](Self::row_frequency) with mandatory tokens zeroed.
-    pub residual_row_frequency: u64,
     /// Short label, drawn on the card.
     pub label: String,
     /// Longer explanation, drawn under the label and used as the SVG tooltip.
     pub detail: String,
+    /// Up to [`TOKEN_LIST_CAP`] of an explicit set's ids, term frequency
+    /// descending, for the figure to name. Empty for points and ranges.
+    pub heaviest: Vec<Token>,
 }
 
-impl Probe {
-    /// This probe's weight under `metric`.
-    pub const fn weight(&self, metric: ProbeWeight) -> u64 {
-        match metric {
-            ProbeWeight::TermFrequency => self.term_frequency,
-            ProbeWeight::ResidualTermFrequency => self.residual_term_frequency,
-            ProbeWeight::RowFrequency => self.row_frequency,
-            ProbeWeight::ResidualRowFrequency => self.residual_row_frequency,
-        }
-    }
-}
-
-/// What a node stands for, and where the renderer should put it.
-#[derive(Clone, Debug, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum NodeKind {
-    /// Single entry node, upstream of every alignment.
-    Source,
-    /// Single accepting node.
-    Sink,
-    /// Entry point of one feasible alignment.
-    Junction {
-        /// Human-readable reason this alignment exists, or why it is unprobed.
-        label: String,
-        /// The alignment's `k`, i.e. how many needle bytes the first token holds.
-        offset: Option<usize>,
-    },
-    /// Parsing has consumed the needle up to this byte offset.
-    State {
-        /// Needle byte offset.
-        offset: usize,
-    },
-    /// The one interior token greedy parsing takes from `offset`.
-    Point {
-        /// Needle byte offset the token starts at.
-        offset: usize,
-        /// Byte offset after it.
-        next_offset: usize,
-    },
-    /// Tokens whose prefix is the whole remaining needle: reaching one is a match.
-    TerminalRange {
-        /// Needle byte offset the remainder starts at.
-        offset: usize,
-    },
-    /// The tokens ending with `needle[..alignment]`, entering that alignment.
-    FirstSet {
+/// What a parse step is.
+#[derive(Clone, Copy, Debug)]
+pub enum EdgeKind {
+    /// Entering alignment `k`: the occurrence's first token ends with
+    /// `needle[..k]`.
+    Entry {
         /// The alignment's `k`.
         alignment: usize,
+        /// Tokens that qualify as that first token, reported even when the step
+        /// carries no probe because there were too many.
+        qualifying: usize,
     },
+    /// One code covering `needle[from..to]` short of the accept position: a
+    /// greedy interior token, or FSST's escape code and the literal byte after it.
+    Step {
+        /// That code.
+        token: Token,
+    },
+    /// Tokens the remaining needle is a prefix of: reaching one is a match.
+    Terminal,
+    /// Tokens holding the whole needle after their first byte: one step, start
+    /// to accept.
+    Contained {
+        /// How many tokens hold it.
+        tokens: usize,
+    },
+    /// FSST's escape code carrying the needle's last byte: an accepting step.
+    Escape,
 }
 
-/// A DAG node.
-#[derive(Clone, Debug, Serialize)]
-pub struct GraphNode {
-    /// Index of this node in [`PathGraph::nodes`].
+/// One parse step, and the probe that catches every layout crossing it.
+#[derive(Clone, Debug)]
+pub struct GraphEdge {
+    /// Index of this edge in [`PathGraph::edges`].
     pub id: usize,
-    /// What it stands for.
-    pub kind: NodeKind,
-    /// Present exactly on cuttable nodes.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Needle offset the step leaves; `0` is the start.
+    pub from: usize,
+    /// Needle offset it reaches; `needle.len()` is the accept position.
+    pub to: usize,
+    /// Which shape it is.
+    pub kind: EdgeKind,
+    /// The set a scan looks for, or `None` on a step no cut may select.
     pub probe: Option<Probe>,
 }
 
-/// A directed edge.
-#[derive(Clone, Copy, Debug, Serialize)]
-pub struct GraphEdge {
-    /// Tail node id.
-    pub from: usize,
-    /// Head node id.
-    pub to: usize,
-}
-
 /// Shape counters worth reporting next to a figure.
-#[derive(Clone, Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct GraphStats {
-    /// Alignments with at least one dictionary token ending in that needle prefix.
+    /// Alignments a layout can enter through: `k = 0` plus every entry step.
     pub feasible_alignments: usize,
-    /// Distinct (alignment, accepting terminal) pairs — paths a match can take.
-    pub terminal_paths: usize,
-    /// States each alignment would visit if lanes were kept separate.
-    pub state_visits_before_merge: usize,
-    /// States actually materialized, after merging by byte offset.
+    /// Offsets a parse step leaves or reaches.
     pub unique_states: usize,
-    /// Materialized states reached by more than one alignment.
+    /// States more than one step reaches.
     pub converged_states: usize,
-    /// Visits saved by merging: `state_visits_before_merge - unique_states`.
-    pub convergence_savings: usize,
-    /// Alignments sharing the busiest state.
-    pub max_state_uses: usize,
-    /// Nodes a cut may select.
-    pub selectable_probe_nodes: usize,
+    /// Steps into the accept position.
+    pub terminal_paths: usize,
+    /// Edges a cut may select.
+    pub selectable_probe_edges: usize,
+    /// States with no step out that are not the accept position.
+    pub dead_end_states: usize,
 }
 
-/// The alignment DAG for one needle over one dictionary.
-#[derive(Clone, Debug, Serialize)]
+/// The alignment DAG for one needle over one row group's dictionary.
+#[derive(Clone, Debug)]
 pub struct PathGraph {
     /// The needle this graph was built for.
     pub needle: Vec<u8>,
-    /// All nodes, indexed by [`GraphNode::id`].
-    pub nodes: Vec<GraphNode>,
-    /// All edges.
+    /// Every parse step.
     pub edges: Vec<GraphEdge>,
-    /// Id of the [`Source`](NodeKind::Source) node.
-    pub source: usize,
-    /// Id of the [`Sink`](NodeKind::Sink) node.
-    pub sink: usize,
-    /// Token ids containing the whole needle. Mandatory members of every cover,
-    /// and deliberately outside the DAG: such a token matches without crossing a
-    /// boundary, so no path stands for it and no cut could select it.
+    /// Offsets any step leaves or reaches, ascending.
+    pub states: Vec<usize>,
+    /// Token ids holding the whole needle away from their start.
     pub contained: Vec<Token>,
+    /// Ids a code can take: one past the largest id in the symbol table.
+    pub code_space: usize,
     /// Shape counters.
     pub stats: GraphStats,
-    /// Dictionary token count.
-    pub dictionary_size: usize,
-    /// Total token occurrences in the code stream the weights came from.
+    /// Total code occurrences over the symbol table.
     pub total_codes: u64,
-    /// Row count, or zero when the weights came from an index alone.
-    pub total_rows: u64,
+    /// Rows in the row group.
+    pub column_rows: u64,
+    /// Every id, previewed and escaped, so the drawing can name a probe by what
+    /// it matches.
+    pub token_text: Vec<String>,
 }
 
 impl PathGraph {
-    /// Flow capacity of a node: its probe weight, or zero for structural nodes.
-    pub fn node_capacity(&self, node: &GraphNode, metric: ProbeWeight) -> u64 {
-        node.probe.as_ref().map_or(0, |probe| probe.weight(metric))
+    /// The accept position: every needle byte consumed.
+    pub fn end(&self) -> usize {
+        self.needle.len()
     }
 
-    /// The token ids a cut selects, plus the mandatory contained ones.
-    ///
-    /// # Panics
-    /// If `selected_nodes` names a structural node.
-    pub fn membership_for_cut(&self, selected_nodes: &[usize]) -> Vec<bool> {
-        let mut members = vec![false; self.dictionary_size];
-        for &id in &self.contained {
-            members[id as usize] = true;
-        }
-        for &node_id in selected_nodes {
-            self.nodes[node_id]
+    /// The token ids a cut selects: the union of the selected edges' sets.
+    pub fn membership_for_cut(&self, selected_edges: &[usize]) -> Vec<bool> {
+        let mut members = vec![false; self.code_space];
+        for &edge in selected_edges {
+            self.edges[edge]
                 .probe
                 .as_ref()
-                .expect("cut selected a non-probe node")
+                .expect("cut selected an unprobed step")
                 .set
                 .for_each(|id| members[id as usize] = true);
         }
@@ -316,207 +199,286 @@ impl PathGraph {
     }
 }
 
-/// Per-token weights, as prefix sums so a range costs two lookups.
-///
-/// Term frequencies come straight out of OnPair's own index, so a figure's
-/// numbers are the ones its planner actually optimized. Row frequencies are not
-/// in that index — a column is needed to count them.
+/// A logged query's graph, with the edges its cut takes outright and the edges
+/// it takes only as the second code of a pair.
 #[derive(Clone, Debug)]
-pub struct Weights {
-    cum_tf: Vec<u64>,
-    cum_df: Vec<u64>,
-    total_rows: u64,
+pub struct LoggedGraph {
+    /// The graph.
+    pub graph: PathGraph,
+    /// Edges the cut takes on their own.
+    pub cut: Vec<usize>,
+    /// Edges the cut takes paired with the code before them.
+    pub paired: Vec<usize>,
+    /// Those pairs as (code before, the edge's code), ascending.
+    pub pairs: Vec<(Token, Token)>,
 }
 
-impl Weights {
-    /// Term frequencies from `frequencies`; row frequencies counted from `view`.
-    ///
-    /// # Errors
-    /// [`Error::IndexMismatch`] if the index does not describe this column.
-    pub fn from_column<O: Offset>(
-        view: ColumnView<'_, O>,
-        frequencies: &TokenFrequencyIndex,
-    ) -> Result<Self, Error> {
-        let num_tokens = view.dict.num_tokens();
-        if frequencies.num_tokens() != num_tokens {
-            return Err(Error::IndexMismatch {
-                index_tokens: frequencies.num_tokens(),
-                dict_tokens: num_tokens,
-            });
-        }
+/// Build the drawable graph for `query` from its logged edges and symbol table.
+///
+/// # Errors
+/// An edge whose endpoints do not fit its label: a set that is neither an entry
+/// out of the start nor the whole-needle step, or a range not ending at accept.
+pub fn from_log(query: &Query, edges: &[LogEdge], symbols: &Symbols) -> Result<LoggedGraph, String> {
+    let needle = &query.needle;
+    let n = needle.len();
+    let text = |id: Token| match symbols.content.get(id as usize) {
+        Some(Some(bytes)) if bytes.is_empty() => "<ESC>".to_string(),
+        Some(Some(bytes)) => preview(bytes, TOKEN_PREVIEW),
+        _ => format!("<code {id}>"),
+    };
+    let weigh = |set: ProbeSet, label: String, detail: String| Probe {
+        term_frequency: set.term_frequency(&symbols.frequency),
+        heaviest: heaviest(&set, &symbols.frequency),
+        set,
+        label,
+        detail,
+    };
+    // Tokens ending with needle[..k] and longer than k, for an entry whose set
+    // was too big to log.
+    let qualifying = |k: usize| {
+        symbols
+            .content
+            .iter()
+            .flatten()
+            .filter(|t| t.len() > k && t.ends_with(&needle[..k]))
+            .count()
+    };
 
-        let mut df = vec![0u64; num_tokens];
-        let mut last_row = vec![usize::MAX; num_tokens];
-        for row in 0..view.num_rows() {
-            for &code in view.row_codes(row) {
-                let id = code as usize;
-                if last_row[id] != row {
-                    last_row[id] = row;
-                    df[id] += 1;
-                }
+    let mut graph_edges = Vec::with_capacity(edges.len());
+    let (mut cut, mut paired, mut pairs, mut contained) =
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for (id, edge) in edges.iter().enumerate() {
+        let (from, to) = (edge.from, edge.to);
+        if from >= to || to > n {
+            return Err(format!("edge {from}->{to} outside a {n}-byte needle"));
+        }
+        let (kind, probe) = match &edge.label {
+            Label::Code(token) if to < n => (
+                EdgeKind::Step { token: *token },
+                Some(weigh(
+                    ProbeSet::Point { id: *token },
+                    format!("token #{token} @ {from}"),
+                    format!("\"{}\" → byte {to}", text(*token)),
+                )),
+            ),
+            Label::EscapeCode(byte) => {
+                let escape = symbols.escape().ok_or("escape edge without an escape code")?;
+                (
+                    if to == n {
+                        EdgeKind::Escape
+                    } else {
+                        EdgeKind::Step { token: escape }
+                    },
+                    Some(weigh(
+                        ProbeSet::Point { id: escape },
+                        format!("escape @ {from}"),
+                        format!("<ESC>{} → byte {to}", preview(&[*byte], 1)),
+                    )),
+                )
+            }
+            Label::CodeRange(lo, hi) if to == n => (
+                EdgeKind::Terminal,
+                Some(weigh(
+                    ProbeSet::Range { lo: *lo, hi: *hi },
+                    format!("terminal range @ {from}"),
+                    format!(
+                        "ids {lo}..{hi} ({}), prefix \"{}\"",
+                        hi - lo + 1,
+                        preview(&needle[from..], TOKEN_PREVIEW)
+                    ),
+                )),
+            ),
+            Label::CodeSet(ids) if from == 0 && to == n => {
+                contained.extend_from_slice(ids);
+                (
+                    EdgeKind::Contained { tokens: ids.len() },
+                    Some(weigh(
+                        ProbeSet::Explicit { ids: ids.clone() },
+                        "contains the whole needle".to_string(),
+                        format!(
+                            "{} token{} contain \"{}\"",
+                            ids.len(),
+                            if ids.len() == 1 { "" } else { "s" },
+                            preview(needle, TOKEN_PREVIEW)
+                        ),
+                    )),
+                )
+            }
+            Label::CodeSet(ids) if from == 0 => (
+                EdgeKind::Entry {
+                    alignment: to,
+                    qualifying: ids.len(),
+                },
+                Some(weigh(
+                    ProbeSet::Explicit { ids: ids.clone() },
+                    format!("first-token set k={to}"),
+                    format!(
+                        "{} tokens ending with \"{}\"",
+                        ids.len(),
+                        preview(&needle[..to], TOKEN_PREVIEW)
+                    ),
+                )),
+            ),
+            Label::None if from == 0 => (
+                EdgeKind::Entry {
+                    alignment: to,
+                    qualifying: qualifying(to),
+                },
+                None,
+            ),
+            other => return Err(format!("{other:?} does not fit edge {from}->{to}")),
+        };
+        match &edge.cut {
+            Cut::No => {}
+            Cut::Yes => cut.push(id),
+            Cut::Paired(before) => {
+                let second = match edge.label {
+                    Label::Code(token) => token,
+                    Label::CodeRange(lo, hi) if lo == hi => lo,
+                    _ => return Err(format!("edge {from}->{to} is paired but not one code")),
+                };
+                paired.push(id);
+                pairs.extend(before.iter().map(|&first| (first, second)));
             }
         }
-
-        Ok(Self {
-            cum_tf: cumulative_from_index(frequencies),
-            cum_df: cumulative(&df),
-            total_rows: view.num_rows() as u64,
-        })
+        graph_edges.push(GraphEdge {
+            id,
+            from,
+            to,
+            kind,
+            probe,
+        });
     }
 
-    /// Term frequencies only. Row-frequency metrics silently reuse them, which
-    /// is why [`from_column`](Self::from_column) is the one to prefer.
-    pub fn from_index(frequencies: &TokenFrequencyIndex) -> Self {
-        let cum_tf = cumulative_from_index(frequencies);
-        Self {
-            cum_df: cum_tf.clone(),
-            cum_tf,
-            total_rows: 0,
-        }
+    let mut states: Vec<usize> = graph_edges.iter().flat_map(|e| [e.from, e.to]).collect();
+    states.sort_unstable();
+    states.dedup();
+    let mut incoming = vec![0usize; n + 1];
+    let mut outgoing = vec![0usize; n + 1];
+    for edge in &graph_edges {
+        incoming[edge.to] += 1;
+        outgoing[edge.from] += 1;
     }
+    let stats = GraphStats {
+        feasible_alignments: 1 + graph_edges
+            .iter()
+            .filter(|e| matches!(e.kind, EdgeKind::Entry { .. }))
+            .count(),
+        unique_states: states.len(),
+        converged_states: states.iter().filter(|&&at| incoming[at] > 1).count(),
+        terminal_paths: graph_edges
+            .iter()
+            .filter(|e| matches!(e.kind, EdgeKind::Terminal))
+            .count(),
+        selectable_probe_edges: graph_edges.iter().filter(|e| e.probe.is_some()).count(),
+        dead_end_states: states
+            .iter()
+            .filter(|&&at| at != n && outgoing[at] == 0)
+            .count(),
+    };
 
-    /// Dictionary size these weights were built for.
-    pub fn num_tokens(&self) -> usize {
-        self.cum_tf.len() - 1
-    }
-
-    /// Total token occurrences.
-    pub fn total_codes(&self) -> u64 {
-        self.cum_tf[self.num_tokens()]
-    }
-
-    /// Total weight of a membership table under the term-frequency metric.
-    pub fn membership_term_frequency(&self, members: &[bool]) -> u64 {
-        membership_frequency(members, &self.cum_tf)
-    }
-}
-
-fn cumulative_from_index(frequencies: &TokenFrequencyIndex) -> Vec<u64> {
-    let per_token: Vec<u64> = (0..frequencies.num_tokens())
-        .map(|id| u64::from(frequencies.frequency(id as Token)))
-        .collect();
-    cumulative(&per_token)
-}
-
-/// Exclusive prefix sums, one longer than the input.
-pub fn cumulative(values: &[u64]) -> Vec<u64> {
-    let mut out = Vec::with_capacity(values.len() + 1);
-    out.push(0);
-    for &value in values {
-        let next = out.last().copied().unwrap() + value;
-        out.push(next);
-    }
-    out
-}
-
-/// Total weight of the selected ids.
-pub fn membership_frequency(members: &[bool], cumulative: &[u64]) -> u64 {
-    members
-        .iter()
-        .enumerate()
-        .filter(|(_, selected)| **selected)
-        .map(|(id, _)| cumulative[id + 1] - cumulative[id])
-        .sum()
+    let code_space = symbols.content.len();
+    Ok(LoggedGraph {
+        graph: PathGraph {
+            needle: needle.clone(),
+            edges: graph_edges,
+            states,
+            contained,
+            code_space,
+            stats,
+            total_codes: symbols.frequency.iter().sum(),
+            column_rows: query.rows,
+            token_text: (0..code_space).map(|id| text(id as Token)).collect(),
+        },
+        cut,
+        paired,
+        pairs: {
+            pairs.sort_unstable();
+            pairs.dedup();
+            pairs
+        },
+    })
 }
 
 /// How a membership table looks once expressed as points and ranges.
-#[derive(Clone, Copy, Debug, Default, Serialize)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct CoverShape {
-    /// Token ids actually probed for.
+    /// Token ids probed for.
     pub member_ids: usize,
     /// Runs of length one.
     pub points: usize,
     /// Runs of length two or more.
     pub ranges: usize,
-    /// SIMD comparisons the cover costs: one per point, one per range.
+    /// SIMD comparisons the cover costs: one per run.
     pub cmp_cost: usize,
-    /// Ids the cut selected that pruning took back out.
-    pub dead_ids: usize,
 }
 
-/// A cut's membership as OnPair actually probes for it.
+/// One probe the scan issues: a run of token ids, `begin == last` for a point.
+#[derive(Clone, Copy, Debug)]
+pub struct CoverTerm {
+    /// First id of the run.
+    pub begin: Token,
+    /// Last id of the run, inclusive.
+    pub last: Token,
+    /// Occurrences of the run's tokens in the code stream. Over the row count
+    /// this is the planner's estimate of the rows the term admits, and an upper
+    /// bound on them.
+    pub term_frequency: u64,
+}
+
+/// A cut's membership as the scan probes for it.
 #[derive(Clone, Debug)]
-pub struct LiveCover {
-    /// The surviving ids — what the kernels compare codes against.
+pub struct Cover {
+    /// The ids probed for.
     pub members: Vec<bool>,
     /// Their point/range shape and comparison cost.
     pub shape: CoverShape,
+    /// The probes themselves, ascending: the terms of the scan's disjunction.
+    pub terms: Vec<CoverTerm>,
 }
 
-impl LiveCover {
-    /// Whether pruning left nothing to probe for, which settles the query: no row
-    /// holds a covered code, so no row matches.
-    pub fn is_empty(&self) -> bool {
-        self.shape.cmp_cost == 0
-    }
-}
-
-/// The cover OnPair compiles from a cut's `members`: every maximal run of set ids
-/// as one probe, minus the ids `frequencies` counts no occurrences of.
-///
-/// # Mirrored from OnPair, by hand
-/// Two rules of the pinned library are reproduced here — `ProbeCover::from_membership`
-/// merging membership into maximal runs, and `plan::live_span` trimming unused ids
-/// off their ends — because both are crate-private there, and a figure drawing
-/// probes the scan does not issue is a figure that lies. **When the `onpair` pin in
-/// `Cargo.toml` moves, re-read those two functions and reconcile this one.** The
-/// crate's own soundness check cannot catch a mismatch: pruned ids occur nowhere,
-/// so keeping them changes no candidate row.
-///
-/// The trim deliberately stops at run ends, which is OnPair's reasoning too. A
-/// range costs the same single comparison however wide it is, so an unused id
-/// between two used ones rides along for free — dropping it would split the run
-/// and add a comparison to every vector of the scan.
-pub fn live_cover(members: &[bool], frequencies: &TokenFrequencyIndex) -> LiveCover {
-    let unused = |id: usize| frequencies.frequency(id as Token) == 0;
-    let mut live = members.to_vec();
+/// The cover a cut's `members` compile to: every maximal run of set ids as one
+/// probe, which is how both planners merge a cut's probes.
+pub fn compile_cover(members: &[bool], frequency: &[u64]) -> Cover {
     let mut shape = CoverShape::default();
+    let mut terms = Vec::new();
 
     let mut id = 0usize;
-    while id < live.len() {
-        if !live[id] {
+    while id < members.len() {
+        if !members[id] {
             id += 1;
             continue;
         }
         let begin = id;
-        while id < live.len() && live[id] {
+        while id < members.len() && members[id] {
             id += 1;
         }
         let last = id - 1;
 
-        let mut lo = begin;
-        let mut hi = last;
-        while lo <= hi && unused(lo) {
-            lo += 1;
-        }
-        if lo > hi {
-            live[begin..=last].fill(false);
-            shape.dead_ids += last - begin + 1;
-            continue;
-        }
-        while unused(hi) {
-            hi -= 1;
-        }
-
-        live[begin..lo].fill(false);
-        live[hi + 1..=last].fill(false);
-        shape.dead_ids += (lo - begin) + (last - hi);
-        shape.member_ids += hi - lo + 1;
-        if lo == hi {
+        shape.member_ids += last - begin + 1;
+        if begin == last {
             shape.points += 1;
         } else {
             shape.ranges += 1;
         }
         shape.cmp_cost += 1;
+        terms.push(CoverTerm {
+            begin: begin as Token,
+            last: last as Token,
+            term_frequency: frequency[begin..=last].iter().sum(),
+        });
     }
 
-    LiveCover {
-        members: live,
+    Cover {
+        members: members.to_vec(),
         shape,
+        terms,
     }
 }
 
-fn preview(bytes: &[u8], max: usize) -> String {
+/// A byte string as the figure shows it: printable ASCII kept, everything else
+/// escaped, and nothing longer than `max` bytes shown.
+pub(crate) fn preview(bytes: &[u8], max: usize) -> String {
     let mut out = String::new();
     for &byte in bytes.iter().take(max) {
         match byte {
@@ -532,308 +494,20 @@ fn preview(bytes: &[u8], max: usize) -> String {
     out
 }
 
-/// The token greedy parsing takes at the head of `suffix`, and its length.
-fn greedy_in_needle<V: DictionaryView>(dict: V, suffix: &[u8]) -> (Token, usize) {
-    let max_len = suffix.len().min(MAX_TOKEN_SIZE);
-    for len in (1..=max_len).rev() {
-        let range = prefix_range(dict, &suffix[..len]);
-        if !range.is_empty() && dict.token_len(range.begin) == len {
-            return (range.begin, len);
-        }
-    }
-    let range = prefix_range(dict, &suffix[..1]);
-    (range.begin, 1)
-}
-
-struct Builder<'a, V: DictionaryView> {
-    dict: V,
-    needle: &'a [u8],
-    cum_tf: &'a [u64],
-    cum_df: &'a [u64],
-    residual_cum_tf: Vec<u64>,
-    residual_cum_df: Vec<u64>,
-    nodes: Vec<GraphNode>,
-    edges: Vec<GraphEdge>,
-    source: usize,
-    sink: usize,
-    state_nodes: BTreeMap<usize, usize>,
-    range_nodes: HashMap<usize, usize>,
-}
-
-impl<'a, V: DictionaryView> Builder<'a, V> {
-    fn add_node(&mut self, kind: NodeKind, probe: Option<Probe>) -> usize {
-        let id = self.nodes.len();
-        self.nodes.push(GraphNode { id, kind, probe });
-        id
-    }
-
-    fn add_edge(&mut self, from: usize, to: usize) {
-        self.edges.push(GraphEdge { from, to });
-    }
-
-    fn probe(&self, set: ProbeSet, label: String, detail: String) -> Probe {
-        Probe {
-            term_frequency: set.prefix_weight(self.cum_tf),
-            row_frequency: set.prefix_weight(self.cum_df),
-            residual_term_frequency: set.prefix_weight(&self.residual_cum_tf),
-            residual_row_frequency: set.prefix_weight(&self.residual_cum_df),
-            set,
-            label,
-            detail,
-        }
-    }
-
-    /// Materialize the state at `offset` and everything downstream of it, once.
-    /// Re-entering an existing offset is what merges two alignments into one lane.
-    fn ensure_state(&mut self, offset: usize) -> usize {
-        if let Some(&node) = self.state_nodes.get(&offset) {
-            return node;
-        }
-
-        let state = self.add_node(NodeKind::State { offset }, None);
-        self.state_nodes.insert(offset, state);
-        let suffix = &self.needle[offset..];
-        let terminal = prefix_range(self.dict, suffix);
-        if !terminal.is_empty() {
-            let set = ProbeSet::range(terminal);
-            let label = format!("terminal range @ {offset}");
-            let detail = format!(
-                "ids {}..{} ({}), prefix \"{}\"",
-                terminal.begin,
-                terminal.last,
-                terminal.len(),
-                preview(suffix, 12)
-            );
-            let probe = self.probe(set, label, detail);
-            let range_node = self.add_node(NodeKind::TerminalRange { offset }, Some(probe));
-            self.range_nodes.insert(offset, range_node);
-            self.add_edge(state, range_node);
-            self.add_edge(range_node, self.sink);
-        }
-
-        let (token, len) = greedy_in_needle(self.dict, suffix);
-        let next_offset = offset + len;
-        if next_offset < self.needle.len() {
-            let tok = self.dict.token(token);
-            let set = ProbeSet::point(token);
-            let label = format!("token #{token} @ {offset}");
-            let detail = format!("\"{}\" → byte {next_offset}", preview(tok, 12));
-            let probe = self.probe(set, label, detail);
-            let point_node = self.add_node(
-                NodeKind::Point {
-                    offset,
-                    next_offset,
-                },
-                Some(probe),
-            );
-            let next_state = self.ensure_state(next_offset);
-            self.add_edge(state, point_node);
-            self.add_edge(point_node, next_state);
-        } else {
-            assert!(
-                !terminal.is_empty(),
-                "the exact final token must belong to its prefix range"
-            );
-        }
-        state
-    }
-}
-
-/// Dictionary tokens containing the whole needle.
-fn contained_tokens<V: DictionaryView>(dict: V, needle: &[u8]) -> Vec<Token> {
-    if needle.len() > MAX_TOKEN_SIZE {
+/// The ids of an explicit set, term frequency descending, capped at
+/// [`TOKEN_LIST_CAP`].
+fn heaviest(set: &ProbeSet, frequency: &[u64]) -> Vec<Token> {
+    let ProbeSet::Explicit { ids } = set else {
         return Vec::new();
-    }
-    (0..dict.num_tokens())
-        .filter_map(|id| {
-            let token = dict.token(id as Token);
-            (token.len() >= needle.len()
-                && token.windows(needle.len()).any(|window| window == needle))
-            .then_some(id as Token)
-        })
-        .collect()
-}
-
-/// Build the alignment DAG for `needle`.
-///
-/// States merge exactly when they begin at the same needle byte offset, which is
-/// sound because the remaining parsing problem is then identical.
-///
-/// # Errors
-/// [`Error::EmptyPattern`] for an empty needle, [`Error::IndexMismatch`] if the
-/// weights were built for a different dictionary size.
-pub fn build_path_graph<V: DictionaryView>(
-    dict: V,
-    needle: &[u8],
-    weights: &Weights,
-) -> Result<PathGraph, Error> {
-    if needle.is_empty() {
-        return Err(Error::EmptyPattern);
-    }
-    if weights.num_tokens() != dict.num_tokens() {
-        return Err(Error::IndexMismatch {
-            index_tokens: weights.num_tokens(),
-            dict_tokens: dict.num_tokens(),
-        });
-    }
-
-    let contained = contained_tokens(dict, needle);
-    let mut mandatory = vec![false; dict.num_tokens()];
-    for &id in &contained {
-        mandatory[id as usize] = true;
-    }
-    let residual = |cum: &[u64]| -> Vec<u64> {
-        let per_token: Vec<u64> = (0..dict.num_tokens())
-            .map(|id| {
-                if mandatory[id] {
-                    0
-                } else {
-                    cum[id + 1] - cum[id]
-                }
-            })
-            .collect();
-        cumulative(&per_token)
     };
-
-    let mut builder = Builder {
-        dict,
-        needle,
-        cum_tf: &weights.cum_tf,
-        cum_df: &weights.cum_df,
-        residual_cum_tf: residual(&weights.cum_tf),
-        residual_cum_df: residual(&weights.cum_df),
-        nodes: Vec::new(),
-        edges: Vec::new(),
-        source: 0,
-        sink: 0,
-        state_nodes: BTreeMap::new(),
-        range_nodes: HashMap::new(),
-    };
-
-    builder.source = builder.add_node(NodeKind::Source, None);
-    builder.sink = builder.add_node(NodeKind::Sink, None);
-
-    // Pass A: which alignments are feasible, and the tokens that enter them.
-    // `k` bytes of the needle sit at the tail of the first token, so k=0 is the
-    // token-boundary case and always feasible.
-    let kmax = needle.len().min(MAX_TOKEN_SIZE);
-    let mut feasible = vec![false; kmax];
-    let mut first_count = vec![0usize; kmax];
-    let mut first_members = vec![Vec::<Token>::new(); kmax];
-    feasible[0] = true;
-    for id in 0..dict.num_tokens() {
-        let token = dict.token(id as Token);
-        let hi = kmax.min(token.len() + 1);
-        for k in 1..hi {
-            if token[token.len() - k..] == needle[..k] {
-                first_count[k] += 1;
-                if first_count[k] <= SET_CAP {
-                    first_members[k].push(id as Token);
-                }
-            }
-        }
-    }
-    for k in 1..kmax {
-        feasible[k] = first_count[k] > 0;
-    }
-
-    // Pass B: one lane per feasible alignment, merging on shared byte offsets.
-    let mut state_uses: HashMap<usize, usize> = HashMap::new();
-    for k in 0..kmax {
-        if !feasible[k] {
-            continue;
-        }
-        let alignment = builder.add_node(
-            NodeKind::Junction {
-                label: if k == 0 {
-                    "alignment k=0 (token boundary)".to_string()
-                } else if first_count[k] <= SET_CAP {
-                    format!("alignment k={k}")
-                } else {
-                    format!("alignment k={k}; first set {} > cap", first_count[k])
-                },
-                offset: Some(k),
-            },
-            None,
-        );
-        builder.add_edge(builder.source, alignment);
-        let state = builder.ensure_state(k);
-        if k >= 1 && first_count[k] <= SET_CAP {
-            let ids = first_members[k].clone();
-            let set = ProbeSet::Explicit { ids };
-            let label = format!("first-token set k={k}");
-            let detail = format!(
-                "{} ids ending with \"{}\"",
-                first_count[k],
-                preview(&needle[..k], 12)
-            );
-            let probe = builder.probe(set, label, detail);
-            let node = builder.add_node(NodeKind::FirstSet { alignment: k }, Some(probe));
-            builder.add_edge(alignment, node);
-            builder.add_edge(node, state);
-        } else {
-            // Above the cap the entry goes unprobed: the cut must block this
-            // alignment somewhere down its lane instead.
-            builder.add_edge(alignment, state);
-        }
-
-        // Walk the lane once for the convergence counters and the terminal count.
-        let mut p = k;
-        loop {
-            *state_uses.entry(p).or_insert(0) += 1;
-            let (_, len) = greedy_in_needle(dict, &needle[p..]);
-            p += len;
-            if p == needle.len() {
-                break;
-            }
-        }
-    }
-
-    let mut terminal_paths = 0usize;
-    for (k, &ok) in feasible.iter().enumerate() {
-        if !ok {
-            continue;
-        }
-        let mut p = k;
-        loop {
-            if builder.range_nodes.contains_key(&p) {
-                terminal_paths += 1;
-            }
-            let (_, len) = greedy_in_needle(dict, &needle[p..]);
-            p += len;
-            if p == needle.len() {
-                break;
-            }
-        }
-    }
-
-    let state_visits_before_merge: usize = state_uses.values().sum();
-    let unique_states = state_uses.len();
-    let stats = GraphStats {
-        feasible_alignments: feasible.iter().filter(|&&value| value).count(),
-        terminal_paths,
-        state_visits_before_merge,
-        unique_states,
-        converged_states: state_uses.values().filter(|&&uses| uses > 1).count(),
-        convergence_savings: state_visits_before_merge.saturating_sub(unique_states),
-        max_state_uses: state_uses.values().copied().max().unwrap_or(0),
-        selectable_probe_nodes: builder
-            .nodes
-            .iter()
-            .filter(|node| node.probe.is_some())
-            .count(),
-    };
-
-    Ok(PathGraph {
-        needle: needle.to_vec(),
-        nodes: builder.nodes,
-        edges: builder.edges,
-        source: builder.source,
-        sink: builder.sink,
-        contained,
-        stats,
-        dictionary_size: dict.num_tokens(),
-        total_codes: weights.total_codes(),
-        total_rows: weights.total_rows,
-    })
+    let mut ranked = ids.clone();
+    // Frequency first, then id, so the order is the data's rather than the sort's.
+    ranked.sort_by_key(|&id| {
+        (
+            std::cmp::Reverse(frequency.get(id as usize).copied().unwrap_or(0)),
+            id,
+        )
+    });
+    ranked.truncate(TOKEN_LIST_CAP);
+    ranked
 }

@@ -1,0 +1,255 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: Copyright the Vortex contributors
+
+use std::any::Any;
+use std::fmt::Debug;
+use std::panic::AssertUnwindSafe;
+use std::panic::catch_unwind;
+use std::sync::Arc;
+
+use cudarc::driver::CudaContext;
+use vortex::array::ArrayId;
+use vortex::array::VortexSessionExecute;
+use vortex::error::VortexResult;
+use vortex::error::vortex_err;
+use vortex::session::SessionExt;
+use vortex::session::SessionGuard;
+use vortex::session::SessionVar;
+use vortex::utils::aliases::dash_map::DashMap;
+
+use crate::ExportDeviceArray;
+use crate::arrow::CanonicalDeviceArrayExport;
+use crate::executor::CudaExecute;
+pub use crate::executor::CudaExecutionCtx;
+use crate::initialize_cuda;
+use crate::kernel::KernelLoader;
+use crate::pinned::PinnedByteBufferPool;
+use crate::stream::VortexCudaStream;
+use crate::stream_pool::VortexCudaStreamPool;
+
+/// Default maximum number of streams in the pool.
+const DEFAULT_STREAM_POOL_CAPACITY: usize = 4;
+
+/// Arrow Device layout used when exporting variable-length UTF-8 and binary arrays.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum VarBinExportLayout {
+    /// Offset-based Arrow `Utf8`/`Binary` with one contiguous values buffer.
+    #[default]
+    VarBin,
+    /// Arrow `Utf8View`/`BinaryView` with 16-byte views and variadic data buffers.
+    VarBinView,
+}
+
+/// Controls whether Arrow Device exports keep dictionary encoding or fully decode it,
+/// including dictionaries nested inside structs and lists.
+///
+/// For example, indices `[0, 1, 0]` and dictionary values `["apple", "pear"]` export as:
+///
+/// - [`Preserve`](Self::Preserve): separate index and dictionary-value arrays, with an Arrow
+///   dictionary type.
+/// - [`Decode`](Self::Decode): the plain string array `["apple", "pear", "apple"]`, with no
+///   dictionary indices or dictionary child.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DictionaryExport {
+    /// Keep separate index and dictionary-value arrays rather than expanding repeated values.
+    /// The Arrow schema retains the dictionary type, including its index type.
+    #[default]
+    Preserve,
+    /// Expand dictionaries into plain values for a stable schema across batches.
+    /// May increase device memory use; device-resident inputs require CUDA decoding support.
+    Decode,
+}
+
+/// CUDA session for GPU accelerated execution.
+///
+/// Maintains a registry of CUDA kernel implementations for array encodings.
+/// Holds the CUDA context for all GPU operations and caches compiled PTX modules.
+#[derive(Clone, Debug)]
+pub struct CudaSession {
+    context: Arc<CudaContext>,
+    kernels: Arc<DashMap<ArrayId, &'static dyn CudaExecute>>,
+    export_device_array: Arc<dyn ExportDeviceArray>,
+    varbin_export_layout: VarBinExportLayout,
+    dictionary_export: DictionaryExport,
+    kernel_loader: Arc<KernelLoader>,
+    stream_pool: Arc<VortexCudaStreamPool>,
+    pinned_buffer_pool: Arc<PinnedByteBufferPool>,
+}
+
+impl CudaSession {
+    /// Creates a new CUDA session with the provided context and default stream pool capacity.
+    pub fn new(context: Arc<CudaContext>) -> Self {
+        Self::with_stream_pool_capacity(context, DEFAULT_STREAM_POOL_CAPACITY)
+    }
+
+    /// Creates a new CUDA session with the provided context and stream pool capacity.
+    pub fn with_stream_pool_capacity(
+        context: Arc<CudaContext>,
+        stream_pool_capacity: usize,
+    ) -> Self {
+        let stream_pool = Arc::new(VortexCudaStreamPool::new(
+            Arc::clone(&context),
+            stream_pool_capacity,
+        ));
+        let pinned_buffer_pool = Arc::new(PinnedByteBufferPool::new(Arc::clone(&context)));
+        Self {
+            context,
+            kernels: Arc::new(DashMap::default()),
+            kernel_loader: Arc::new(KernelLoader::new()),
+            export_device_array: Arc::new(CanonicalDeviceArrayExport),
+            varbin_export_layout: VarBinExportLayout::default(),
+            dictionary_export: DictionaryExport::default(),
+            stream_pool,
+            pinned_buffer_pool,
+        }
+    }
+
+    /// Selects the Arrow Device layout for variable-length UTF-8 and binary exports.
+    pub fn with_varbin_export_layout(mut self, layout: VarBinExportLayout) -> Self {
+        self.varbin_export_layout = layout;
+        self
+    }
+
+    /// Returns the Arrow Device layout used for variable-length UTF-8 and binary exports.
+    pub fn varbin_export_layout(&self) -> VarBinExportLayout {
+        self.varbin_export_layout
+    }
+
+    /// Selects whether Arrow Device exports preserve or decode dictionaries.
+    pub fn with_dictionary_export(mut self, policy: DictionaryExport) -> Self {
+        self.dictionary_export = policy;
+        self
+    }
+
+    /// Returns the dictionary policy used for Arrow Device exports.
+    pub fn dictionary_export(&self) -> DictionaryExport {
+        self.dictionary_export
+    }
+
+    /// Creates a default CUDA session using device 0, with all GPU array kernels preloaded.
+    ///
+    /// Unlike [`Default::default`], this returns an error instead of panicking when CUDA cannot be
+    /// initialized.
+    pub fn try_default() -> VortexResult<Self> {
+        // cudarc panics rather than returning an error when the CUDA driver library cannot be
+        // loaded, so catch any unwind here to uphold this constructor's no-panic contract.
+        match catch_unwind(AssertUnwindSafe(|| -> VortexResult<Self> {
+            let context = CudaContext::new(0)
+                .map_err(|err| vortex_err!("failed to initialize CUDA device 0: {err}"))?;
+            let this = Self::new(context);
+            initialize_cuda(&this);
+            Ok(this)
+        })) {
+            Ok(result) => result,
+            Err(_) => Err(vortex_err!(
+                "failed to initialize CUDA: the driver library is unavailable"
+            )),
+        }
+    }
+
+    /// Creates a new CUDA execution context.
+    pub fn create_execution_ctx(
+        vortex_session: &vortex::session::VortexSession,
+    ) -> VortexResult<CudaExecutionCtx> {
+        let stream = vortex_session.cuda_session().stream()?;
+        Ok(CudaExecutionCtx::new(
+            stream,
+            vortex_session.create_execution_ctx(),
+        ))
+    }
+
+    /// Returns a CUDA stream from the pool.
+    ///
+    /// The pool reuses existing streams in round-robin fashion.
+    pub fn stream(&self) -> VortexResult<VortexCudaStream> {
+        self.stream_pool.stream()
+    }
+
+    /// Returns the session-scoped pool used for staging file reads in pinned host memory.
+    pub fn pinned_buffer_pool(&self) -> &Arc<PinnedByteBufferPool> {
+        &self.pinned_buffer_pool
+    }
+
+    /// Registers CUDA support for an array encoding.
+    ///
+    /// # Arguments
+    ///
+    /// * `array_id` - The encoding ID to register support for
+    /// * `executor` - A static reference to the CUDA support implementation
+    pub fn register_kernel(
+        &self,
+        array_id: impl Into<ArrayId>,
+        executor: &'static dyn CudaExecute,
+    ) {
+        self.kernels.insert(array_id.into(), executor);
+    }
+
+    /// Retrieves the CUDA support implementation for an encoding, if registered.
+    ///
+    /// # Arguments
+    ///
+    /// * `array_id` - The encoding ID to look up
+    pub fn kernel(&self, array_id: &ArrayId) -> Option<&'static dyn CudaExecute> {
+        self.kernels.get(array_id).map(|entry| *entry.value())
+    }
+
+    /// Loads a CUDA kernel function by module name and type suffixes.
+    ///
+    /// This is a lower-level version of `load_function` that accepts string suffixes
+    /// directly, useful for types that don't have a `PType` (e.g., i128, i256).
+    ///
+    /// The kernel name is generated as `{module_name}_{suffix[0]}_{suffix[1]}...`
+    ///
+    /// # Arguments
+    ///
+    /// * `module_name` - Kernel source name without the `.cu` extension
+    /// * `type_suffixes` - List of type suffix strings to generate kernel name
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the module was not embedded or the kernel cannot be loaded.
+    pub fn load_function_with_suffixes(
+        &self,
+        module_name: &str,
+        type_suffixes: &[&str],
+    ) -> VortexResult<cudarc::driver::CudaFunction> {
+        self.kernel_loader
+            .load_function(module_name, type_suffixes, &self.context)
+    }
+
+    /// Get a handle to the exporter that converts Vortex arrays to `ArrowDeviceArray`.
+    pub fn export_device_array(&self) -> &Arc<dyn ExportDeviceArray> {
+        &self.export_device_array
+    }
+}
+
+impl Default for CudaSession {
+    /// Creates a default CUDA session using device 0, with all GPU array kernels preloaded.
+    ///
+    /// # Panics
+    ///
+    /// Panics if CUDA device 0 cannot be initialized.
+    #[expect(clippy::expect_used)]
+    fn default() -> Self {
+        Self::try_default().expect("Failed to initialize CUDA device 0")
+    }
+}
+
+impl SessionVar for CudaSession {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+/// Extension trait for accessing the CUDA session from a Vortex session.
+pub trait CudaSessionExt: SessionExt {
+    /// Returns the CUDA session.
+    fn cuda_session(&self) -> SessionGuard<'_, CudaSession> {
+        self.get::<CudaSession>()
+    }
+}
+impl<S: SessionExt> CudaSessionExt for S {}

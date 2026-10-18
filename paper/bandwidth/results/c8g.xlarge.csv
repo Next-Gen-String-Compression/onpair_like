@@ -1,0 +1,12 @@
+machine,cpu,kib,seq_gbs,rand_ns,rand_gbs
+c8g.xlarge,Neoverse-V2 (Graviton 4),64,106.4,1.4,714.1
+c8g.xlarge,Neoverse-V2 (Graviton 4),256,82.4,4.0,255.9
+c8g.xlarge,Neoverse-V2 (Graviton 4),1024,76.0,5.4,188.0
+c8g.xlarge,Neoverse-V2 (Graviton 4),2048,60.0,10.5,97.9
+c8g.xlarge,Neoverse-V2 (Graviton 4),4096,47.9,19.7,52.0
+c8g.xlarge,Neoverse-V2 (Graviton 4),8192,45.9,25.6,40.6
+c8g.xlarge,Neoverse-V2 (Graviton 4),16384,43.8,106.3,16.0
+c8g.xlarge,Neoverse-V2 (Graviton 4),65536,32.8,126.3,8.1
+c8g.xlarge,Neoverse-V2 (Graviton 4),262144,31.5,127.5,8.0
+c8g.xlarge,Neoverse-V2 (Graviton 4),524288,31.4,128.9,7.9
+c8g.xlarge,Neoverse-V2 (Graviton 4),1048576,32.3,134.8,7.6

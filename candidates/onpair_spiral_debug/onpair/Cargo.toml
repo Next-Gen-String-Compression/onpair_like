@@ -1,0 +1,23 @@
+# our OnPair fork at df8eb10 with the switches onpair_spiral_debug reads: Config::sorted and
+# uniform_token_frequency_index. Its own package name so it can sit beside third_party/onpair.
+[package]
+name = "onpair-debug"
+version = "0.2.1"
+license = "Apache-2.0"
+edition = "2024"
+
+[lib]
+name = "onpair"
+
+[lints.rust]
+warnings = "deny"
+missing_docs = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+
+[dependencies]
+hashbrown = "0.16.1"
+memchr = "2"
+rand = "0.9.0"
+

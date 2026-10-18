@@ -107,6 +107,20 @@ any candidate sees the query.
     timing-mode median by them; that is why they must be exact and not
     estimates.
 
+11. **A selection is a contract, not a hint (ABI v7).** A strategy that
+    declares `LB_STRATEGY_TAKES_SELECTION` receives in `lb_query.selection`
+    the chunk's admitted rows, ascending and without repeats, and must set
+    no bit outside them; the gate compares against the oracle ANDed with the
+    selection. It may skip any work the selection makes unnecessary, and
+    `prefilter_candidates` counts survivors among the selected rows. A
+    strategy without the flag never sees a selection: the harness runs it
+    over every row and ANDs its bitmap with the selection inside the timed
+    region, which is the cost of having no pushdown. NULL means every row,
+    and is what every strategy sees under the `all` selection and in
+    scanner `prepare()`. A candidate with `decode_selected` (ABI v8) takes
+    the selection on the `decode` strategy: it decodes the listed rows only,
+    packed, and the harness maps the scanner's bits back to them.
+
 ## Error convention
 
 `build()`/`prepare()` return NULL on failure (`build` fills `err_buf` with a

@@ -29,6 +29,9 @@ fn main() {
     }
     println!("cargo:rerun-if-changed=cpp/fsst_like_tum_candidate.cpp");
     println!("cargo:rerun-if-changed=cpp/CMakeLists.txt");
+    println!("cargo:rerun-if-changed=../../pins.env");
+    println!("cargo:rerun-if-changed=../common/pins.cmake");
+    println!("cargo:rerun-if-changed=cpp/fsst_like_src_patches.cmake");
     println!("cargo:rerun-if-changed=../common/fsst_common/fsst_build.hpp");
     println!("cargo:rerun-if-changed=../../contract/lb_candidate.h");
 }

@@ -17,88 +17,58 @@ path = "src/lib.rs"
 default = [
     "cand-uncompressed",
     "cand-uncompressed-memmem",
-    "cand-uncompressed-prefilter",
-    "cand-dict-uncompressed-prefilter",
-    "cand-dict-fsst-like-tum",
-    "cand-fsst-decode-prefilter",
     "cand-fsst-prefilter",
     "cand-dict-onpair",
     "cand-gate-canary",
     "cand-cpp-identity",
-    "cand-onpair",
     "cand-onpair-spiral",
+    "cand-onpair-spiral-debug",
+    "cand-fsst-prefilter-debug",
     "cand-lz4",
-    "cand-zstd",
     "cand-fsst",
     "cand-fsst-like-tum",
-    "cand-fsst-like-utn",
-    "cand-llm-token-tum",
-    "cand-llm-token-prefilter",
     "scan-memmem",
     "scan-prefilter",
     "scan-cpp-std-find",
     "scan-classics",
-    "scan-multi",
-    "scan-composed",
-    "scan-libc",
     "scan-stringzilla",
 ]
 cand-uncompressed = ["dep:lb-cand-uncompressed"]
 cand-uncompressed-memmem = ["dep:lb-cand-uncompressed-memmem"]
-cand-uncompressed-prefilter = ["dep:lb-cand-uncompressed-prefilter"]
-cand-dict-uncompressed-prefilter = ["dep:lb-cand-dict-uncompressed-prefilter"]
-cand-dict-fsst-like-tum = ["dep:lb-cand-dict-fsst-like-tum"]
-cand-fsst-decode-prefilter = ["dep:lb-cand-fsst-decode-prefilter"]
 cand-fsst-prefilter = ["dep:lb-cand-fsst-prefilter"]
 cand-dict-onpair = ["dep:lb-cand-dict-onpair"]
 cand-gate-canary = ["dep:lb-cand-gate-canary"]
 cand-cpp-identity = ["dep:lb-cand-cpp-identity"]
-cand-onpair = ["dep:lb-cand-onpair"]
 cand-onpair-spiral = ["dep:lb-cand-onpair-spiral"]
+cand-onpair-spiral-debug = ["dep:lb-cand-onpair-spiral-debug"]
+cand-fsst-prefilter-debug = ["dep:lb-cand-fsst-prefilter-debug"]
 cand-lz4 = ["dep:lb-cand-lz4"]
-cand-zstd = ["dep:lb-cand-zstd"]
 cand-fsst = ["dep:lb-cand-fsst"]
 cand-fsst-like-tum = ["dep:lb-cand-fsst-like-tum"]
-cand-fsst-like-utn = ["dep:lb-cand-fsst-like-utn"]
-cand-llm-token-tum = ["dep:lb-cand-llm-token-tum"]
-cand-llm-token-prefilter = ["dep:lb-cand-llm-token-prefilter"]
 scan-memmem = ["dep:lb-scan-memmem"]
 scan-prefilter = ["dep:lb-scan-prefilter"]
 scan-cpp-std-find = ["dep:lb-scan-cpp-std-find"]
 scan-classics = ["dep:lb-scan-classics"]
-scan-multi = ["dep:lb-scan-multi"]
-scan-composed = ["dep:lb-scan-composed"]
-scan-libc = ["dep:lb-scan-libc"]
 scan-stringzilla = ["dep:lb-scan-stringzilla"]
 
 [dependencies]
 lb-abi = { workspace = true }
 lb-cand-uncompressed = { path = "../candidates/uncompressed", optional = true }
 lb-cand-uncompressed-memmem = { path = "../candidates/uncompressed_memmem", optional = true }
-lb-cand-uncompressed-prefilter = { path = "../candidates/uncompressed_prefilter", optional = true }
-lb-cand-dict-uncompressed-prefilter = { path = "../candidates/dict_uncompressed_prefilter", optional = true }
-lb-cand-dict-fsst-like-tum = { path = "../candidates/dict_fsst_like_tum", optional = true }
-lb-cand-fsst-decode-prefilter = { path = "../candidates/fsst_decode_prefilter", optional = true }
 lb-cand-fsst-prefilter = { path = "../candidates/fsst_prefilter", optional = true }
 lb-cand-dict-onpair = { path = "../candidates/dict_onpair", optional = true }
 lb-cand-gate-canary = { path = "../candidates/gate_canary", optional = true }
 lb-cand-cpp-identity = { path = "../candidates/cpp_identity", optional = true }
-lb-cand-onpair = { path = "../candidates/onpair", optional = true }
 lb-cand-onpair-spiral = { path = "../candidates/onpair_spiral", optional = true }
+lb-cand-onpair-spiral-debug = { path = "../candidates/onpair_spiral_debug", optional = true }
+lb-cand-fsst-prefilter-debug = { path = "../candidates/fsst_prefilter_debug", optional = true }
 lb-cand-lz4 = { path = "../candidates/lz4", optional = true }
-lb-cand-zstd = { path = "../candidates/zstd", optional = true }
 lb-cand-fsst = { path = "../candidates/fsst", optional = true }
 lb-cand-fsst-like-tum = { path = "../candidates/fsst_like_tum", optional = true }
-lb-cand-fsst-like-utn = { path = "../candidates/fsst_like_utn", optional = true }
-lb-cand-llm-token-tum = { path = "../candidates/llm_token_tum", optional = true }
-lb-cand-llm-token-prefilter = { path = "../candidates/llm_token_prefilter", optional = true }
 lb-scan-memmem = { path = "../scanners/memmem", optional = true }
 lb-scan-prefilter = { path = "../scanners/prefilter", optional = true }
 lb-scan-cpp-std-find = { path = "../scanners/cpp_std_find", optional = true }
 lb-scan-classics = { path = "../scanners/classics", optional = true }
-lb-scan-multi = { path = "../scanners/multi", optional = true }
-lb-scan-composed = { path = "../scanners/composed", optional = true }
-lb-scan-libc = { path = "../scanners/libc", optional = true }
 lb-scan-stringzilla = { path = "../scanners/stringzilla", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -111,6 +81,7 @@ base64 = "0.22.1"
 humantime = "2.4.0"
 core_affinity = "0.8.3"
 clap = { version = "4.6.1", features = ["derive"] }
+libsais-rs = "=0.2.2"
 
 [dev-dependencies]
 tempfile = "3"

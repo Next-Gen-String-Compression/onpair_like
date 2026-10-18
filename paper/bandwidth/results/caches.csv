@@ -1,0 +1,7 @@
+machine,core,l1d,l1i,l2,l2_shared_by,l3,l3_scope
+m4pro,Apple M4 Pro P-core,131072,196608,16777216,4,,none
+c8g.xlarge,Neoverse V2 (Graviton 4),65536,65536,2097152,1,37748736,socket
+c7a.xlarge,AMD EPYC 9R14 (Zen 4),32768,32768,1048576,1,16777216,core complex
+c7i.xlarge,Xeon Platinum 8488C (Sapphire Rapids),49152,32768,2097152,1,110100480,socket
+c8id.xlarge,Xeon 6975P-C (Granite Rapids),49152,65536,2097152,1,503316480,socket
+c8id.4xlarge,Xeon 6975P-C (Granite Rapids),49152,65536,2097152,1,503316480,socket

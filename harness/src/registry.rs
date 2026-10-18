@@ -17,17 +17,6 @@ pub fn candidates() -> Vec<Candidate> {
     v.push(lb_cand_uncompressed::vtable());
     #[cfg(feature = "cand-uncompressed-memmem")]
     v.push(lb_cand_uncompressed_memmem::vtable());
-    #[cfg(feature = "cand-uncompressed-prefilter")]
-    v.push(lb_cand_uncompressed_prefilter::vtable());
-    #[cfg(feature = "cand-dict-uncompressed-prefilter")]
-    v.push(lb_cand_dict_uncompressed_prefilter::vtable());
-    #[cfg(feature = "cand-dict-fsst-like-tum")]
-    v.push(lb_cand_dict_fsst_like_tum::vtable());
-    #[cfg(feature = "cand-fsst-decode-prefilter")]
-    {
-        v.push(lb_cand_fsst_decode_prefilter::vtable());
-        v.push(lb_cand_fsst_decode_prefilter::vtable_dict());
-    }
     #[cfg(feature = "cand-fsst-prefilter")]
     {
         v.push(lb_cand_fsst_prefilter::vtable());
@@ -35,39 +24,24 @@ pub fn candidates() -> Vec<Candidate> {
     }
     #[cfg(feature = "cand-dict-onpair")]
     {
-        v.push(lb_cand_dict_onpair::vtable());
         v.push(lb_cand_dict_onpair::vtable_spiral());
     }
     #[cfg(feature = "cand-gate-canary")]
     v.push(lb_cand_gate_canary::vtable());
     #[cfg(feature = "cand-cpp-identity")]
     v.push(lb_cand_cpp_identity::vtable());
-    #[cfg(feature = "cand-onpair")]
-    {
-        v.push(lb_cand_onpair::vtable());
-        // OnPair as a plain codec (decompress-then-eval), a decode-only peer of
-        // lz4/zstd/fsst — distinct from the compressed-domain `onpair` candidate.
-        v.push(lb_cand_onpair::vtable_decode());
-    }
     #[cfg(feature = "cand-onpair-spiral")]
     v.push(lb_cand_onpair_spiral::vtable());
+    #[cfg(feature = "cand-onpair-spiral-debug")]
+    v.push(lb_cand_onpair_spiral_debug::vtable());
+    #[cfg(feature = "cand-fsst-prefilter-debug")]
+    v.push(lb_cand_fsst_prefilter_debug::vtable());
     #[cfg(feature = "cand-lz4")]
     v.push(lb_cand_lz4::vtable());
-    #[cfg(feature = "cand-zstd")]
-    v.push(lb_cand_zstd::vtable());
     #[cfg(feature = "cand-fsst")]
     v.push(lb_cand_fsst::vtable());
     #[cfg(feature = "cand-fsst-like-tum")]
     v.push(lb_cand_fsst_like_tum::vtable());
-    #[cfg(feature = "cand-fsst-like-utn")]
-    v.push(lb_cand_fsst_like_utn::vtable());
-    #[cfg(feature = "cand-llm-token-tum")]
-    v.push(lb_cand_llm_token_tum::vtable());
-    #[cfg(feature = "cand-llm-token-prefilter")]
-    {
-        v.push(lb_cand_llm_token_prefilter::vtable());
-        v.push(lb_cand_llm_token_prefilter::vtable_dict());
-    }
     v.into_iter()
         .map(|vt| Candidate::validate(vt).expect("registered candidate failed validation"))
         .collect()
@@ -86,12 +60,6 @@ pub fn scanners() -> Vec<Scanner> {
     v.push(lb_scan_cpp_std_find::vtable());
     #[cfg(feature = "scan-classics")]
     v.extend(lb_scan_classics::vtables());
-    #[cfg(feature = "scan-multi")]
-    v.extend(lb_scan_multi::vtables());
-    #[cfg(feature = "scan-composed")]
-    v.extend(lb_scan_composed::vtables());
-    #[cfg(feature = "scan-libc")]
-    v.push(lb_scan_libc::vtable());
     #[cfg(feature = "scan-stringzilla")]
     v.push(lb_scan_stringzilla::vtable());
     v.into_iter()
@@ -132,6 +100,8 @@ pub struct StrategyInfo {
     pub index: u32,
     pub name: String,
     pub supported_ops: u32,
+    /// `LB_STRATEGY_*` bits (ABI v7).
+    pub flags: u32,
 }
 
 #[derive(Clone)]
@@ -177,6 +147,7 @@ impl Candidate {
                 index: i,
                 name: sname,
                 supported_ops: s.supported_ops,
+                flags: s.flags,
             });
         }
         if !strategies.is_empty() && vt.run.is_none() {
@@ -302,6 +273,28 @@ impl BuiltChunk {
     }
 }
 
+impl BuiltChunk {
+    pub fn has_decode_selected(&self) -> bool {
+        self.vt.decode_selected.is_some()
+    }
+
+    /// `decode` of the rows in `rows` only, packed (ABI v8); `offsets_out`
+    /// has `rows.len() + 1` slots.
+    pub fn decode_selected(&self, rows: &[u32], bytes_out: &mut [u8], offsets_out: &mut [u64]) -> i32 {
+        debug_assert!(offsets_out.len() == rows.len() + 1);
+        unsafe {
+            (self.vt.decode_selected.unwrap())(
+                self.handle,
+                rows.as_ptr(),
+                rows.len() as u64,
+                bytes_out.as_mut_ptr(),
+                bytes_out.len() as u64,
+                offsets_out.as_mut_ptr(),
+            )
+        }
+    }
+}
+
 impl Drop for BuiltChunk {
     fn drop(&mut self) {
         unsafe { (self.vt.destroy.unwrap())(self.handle) }
@@ -416,10 +409,20 @@ impl QueryFfi {
             op,
             needles: descriptors.as_ptr(),
             needle_count: descriptors.len() as u32,
+            selection: core::ptr::null(),
         };
         QueryFfi {
             _needles: descriptors,
             query,
         }
+    }
+
+    /// Hand the next run() call this chunk's selection (ABI v7).
+    pub fn set_selection(&mut self, sel: &lb_abi::LbSelection) {
+        self.query.selection = sel;
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.query.selection = core::ptr::null();
     }
 }

@@ -1,0 +1,136 @@
+# The micro-benchmark under a pre-selection, AVX-512 only: an upstream
+# predicate has admitted a share of the rows and every system answers only for
+# those. Each share two ways: uniform rows, and runs of 1..16 rows (harness
+# `runs`: one run per period, length uniform in the range). The
+# needles of micro/fast.toml, the whole column as one row group, shares
+# 2^-9 .. 2^-1 (2k .. 512k of the 2^20 rows, the row group sizes of
+# rows/rowgroup.toml) plus `all`. The right panel of the row group /
+# pre-selection figure.
+#
+#   paper/gen-rows.sh
+#
+# The cut scans go through their selection layer, the pattern automaton over
+# the selected rows, memmem per selected row below 25% selected and over the
+# whole column from there (row-hay), and decompress + memmem
+# decompresses the selected rows only (decode_selected) for memmem-hay.
+# `llvm-simd` takes no selection: the harness runs it over every row and
+# intersects, the work of a system without pushdown.
+
+strategies = ["pf_walk", "fsst-prefilter", "interp", "llvm-simd", "decode", "row-hay"]
+
+[[selections]]
+kind = "all"
+
+[[selections]]
+kind = "uniform"
+fraction = 0.001953125
+seed = 7
+
+[[selections]]
+kind = "runs"
+run_rows_min = 1
+run_rows_max = 16
+fraction = 0.001953125
+seed = 7
+
+[[selections]]
+kind = "uniform"
+fraction = 0.0078125
+seed = 7
+
+[[selections]]
+kind = "runs"
+run_rows_min = 1
+run_rows_max = 16
+fraction = 0.0078125
+seed = 7
+
+[[selections]]
+kind = "uniform"
+fraction = 0.03125
+seed = 7
+
+[[selections]]
+kind = "runs"
+run_rows_min = 1
+run_rows_max = 16
+fraction = 0.03125
+seed = 7
+
+[[selections]]
+kind = "uniform"
+fraction = 0.125
+seed = 7
+
+[[selections]]
+kind = "runs"
+run_rows_min = 1
+run_rows_max = 16
+fraction = 0.125
+seed = 7
+
+[[selections]]
+kind = "uniform"
+fraction = 0.5
+seed = 7
+
+[[selections]]
+kind = "runs"
+run_rows_min = 1
+run_rows_max = 16
+fraction = 0.5
+seed = 7
+
+[[datasets]]
+path = "../../../datasets/clickbench-url-1mi"
+
+[[datasets]]
+path = "../../../datasets/amazon-title-1mi"
+
+[[datasets]]
+path = "../../../datasets/dbpedia-abstract-1mi"
+
+# char_name.name: short, nearly every row distinct.
+[[datasets]]
+path = "../../../datasets/imdb-charname-1mi"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/clickbench-url-1mi/sa-lcp-v1-s42-n1-b006c9544343c139"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/amazon-title-1mi/sa-lcp-v1-s42-n1-fbad68395e05e8ae"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa-lcp-v1-s42-n1-05988707fed4b1ef"
+
+[[suites]]
+path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/sa-lcp-v1-s42-n1-5205012fad43b02d"
+
+# pf_walk, and `decode`: OnPair as a codec, the chunk decoded and then searched.
+[[candidates]]
+name = "onpair_spiral"
+configs = ['{"bits":12,"prune":1.0}', '{"bits":16,"prune":1.0}']
+
+[[candidates]]
+name = "fsst_prefilter"
+
+[[candidates]]
+name = "fsst_like_tum"
+
+[[candidates]]
+name = "fsst"
+
+# memmem over the uncompressed column: one pass under `all`, spans of
+# selected rows otherwise.
+[[candidates]]
+name = "uncompressed_memmem"
+
+[[scanners]]
+name = "memmem-hay"
+
+[measure]
+chunk_rows = [0]
+warmup = 2
+min_iters = 3
+min_millis = 0
+skip_checksum_verify = true
