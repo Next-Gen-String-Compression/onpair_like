@@ -64,32 +64,26 @@ faint in its place.
 
 `data/` holds one sweep per instruction set: NEON on the M4 Pro, AVX2 and
 AVX-512 on the EPYC 9R14 of a `c7a.xlarge`, the matcher sweeps from
-2026-10-14 (all three; the x86 ones named `_2026-10-14b`). No figure draws
-the resolver sweeps; they only refit the policy. The u8 sweeps of the FSST
+2026-10-14 (all three; the x86 ones named `_2026-10-14b`). The u8 sweeps of the FSST
 port are named `*_fsst_*`. Every matcher sweep walks 1 MiB of code stream, so
 the two encodings are read against one memory ceiling: 2^19 codes for u16
 (`loader.rs`'s default, `SWEEP_CODES` overrides it) and `loader.hpp`'s
 `CODES = 1u << 20` on the FSST side. At 8 MiB a vector kernel on a server
 core measures the memory system rather than itself (see `bandwidth/`); 1 MiB
-stays in L2 on every machine fitted. The resolver sources now walk 8 MiB,
-`CODES = 1 << 22` in `resolver_fit.rs` and `RESOLVER_CODES = 8u << 20` in
-`resolver_fit.cpp`, the IMDb stream at its own shorter length.
+stays in L2 on every machine fitted.
 **The AVX-512 kernels are compile-time gated** on `target_feature =
 "avx512bw"`, so a default build reports `avx2` in the `machine` column; run
 the sweep twice on an x86 host, once plainly and once under
 `RUSTFLAGS="-C target-cpu=native"`, and name the second CSV
 `matcher_x86_64_avx512_<date>.csv`.
 
-The sweeps live in `scan::bench::{matcher_fit,resolver_fit}::sweep`. The walk
+The OnPair sweep lives in `scan::bench::matcher_fit::sweep`. The walk
 has no sweep of its own; its cost comes out of the harness run, see below.
 
-`reproduce-kernel.sh` does the whole kernel block from a clone: it fetches
-the two kernel repos at their pins when missing, runs both gen scripts (twice
-on an AVX-512 host, native build first) and draws the figure into
-`paper/out/kernel-<date>/`. By hand, regenerating the sweeps takes the two kernel repos as siblings
-of this one, `../onpair` at `ONPAIR_SHA` and `../duckdb/third_party/fsst/upstream`
-(or any checkout, passed as the first argument) at `FSST_SHA`, both from
-`pins.env`; each gen script stops on a checkout that is not clean at its pin.
+`reproduce-kernel.sh` does the whole kernel block from a clone: it runs both
+gen scripts (twice on an AVX-512 host, native build first) and draws the
+figure into `paper/out/kernel-<date>/`. Both build the kernels from this
+repository, `third_party/onpair` and `third_party/fsst`.
 The matcher sweeps read one stream, `ch/hits/URL_1m`, which the scripts build
 when missing: `gen-kernel.sh` runs onpair's `bench_corpus ch` over
 `~/ch.duckdb` (the `duckdb` CLI on `PATH`) and `bench_needles` over the
@@ -99,10 +93,7 @@ corpus's 2^20 rows in table order; the streams come out byte-identical to the
 ones from `e2e/data.sh`'s full table. Then
 `gen-kernel-fsst.sh` then encodes onpair's raw `URL_1m.csv` with
 `prefilter_corpus` and draws its catalog with the same `bench_needles`. Run
-`gen-kernel.sh` first. The resolver sweeps also read
-`imdb/name/name_1m`, so they run only when `bench_corpus imdb` has been run
-over `~/imdb.duckdb` and `bench_needles` over its onpair16 stream; no figure
-draws them. Besides the Rust and C++ toolchains the sweeps need nothing else;
+`gen-kernel.sh` first. Besides the Rust and C++ toolchains the sweeps need nothing else;
 the plot needs `uv` and a TeX install with libertine, zi4 and newtxmath. The
 URL stream changed when `ch.duckdb` was rewritten on 2026-09-17, so a matcher
 sweep run since reads different codes from the pinned ones.
@@ -188,7 +179,7 @@ memmem is drawn as a curve like the compressed-domain systems.
 
 `plot_matcher.py` draws both encodings into every panel of
 `kernel-matcher/`: onpair16's u16 codes solid, the u8 sweep of the FSST port
-(`../duckdb/third_party/fsst/upstream/search/prefilter/scan/bench`, at the fsst pin) dashed, one colour per kernel. The u16
+(`third_party/fsst/search/prefilter/scan/bench`) dashed, one colour per kernel. The u16
 build has no plain nibble bitmap and the u8 build no byte table, so each has a
 series the other does not; the u8 sweep does measure a byte table, and
 `DROPPED` keeps it out. The u8 stream is the same ClickBench URL prefix

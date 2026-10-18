@@ -1,4 +1,4 @@
-# fsst_prefilter with two switches for ablations, over its own copy of the gropaul/fsst
+# fsst_prefilter with two switches for ablations, over its own copy of our FSST
 # fork (fsst/, bdaab1d plus the switches): "sorted" keeps or skips fsst_sort_codes,
 # "uniform" plans with every code weighed codes / 256 instead of its count.
 [package]

@@ -5,8 +5,7 @@
 #
 #   paper/gen-plan-cut.sh [fast|medium|full]     default: full
 #
-# Needs the onpair checkout beside this repository (override with ONPAIR=...)
-# and builds the FSST fork in third_party/fsst; the
+# Builds OnPair and the FSST fork from third_party/onpair and third_party/fsst; the
 # loggers are onpair's examples/plan_log.rs and the fork's
 # search/tools/plan_log.cpp. Writes results/plan-log/micro-<size>-<date>/
 # with queries.csv, symbols.csv and graph.csv, which tools/graph-viz draws and
@@ -14,7 +13,7 @@
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT="$HERE/.."
-ONPAIR=$(cd "${ONPAIR:-$ROOT/../onpair}" && pwd)
+ONPAIR=$(cd "$ROOT/third_party/onpair" && pwd)
 FSST=$ROOT/third_party/fsst
 BUILD=$ROOT/target/fsst-search
 ROW_GROUP=524288

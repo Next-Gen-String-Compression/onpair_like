@@ -2,10 +2,10 @@
 # Regenerates the plan-log fixtures the tests read, from the two corpora below,
 # with onpair's examples/plan_log.rs (bits 16) and the plan_log of the FSST fork
 # in third_party/fsst.
-#   [ONPAIR=path/to/onpair] tests/fixtures/make.sh
+#   tests/fixtures/make.sh
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
-onpair="$(cd "${ONPAIR:-$here/../../../../../onpair}" && pwd)"
+onpair="$(cd "$here/../../../../third_party/onpair" && pwd)"
 fsst="$(cd "$here/../../../../third_party/fsst" && pwd)"
 build="$here/../../../../target/fsst-search"
 tmp="$(mktemp -d)"

@@ -1,5 +1,5 @@
 //! `onpair_spiral` with two switches for ablations, over its own copy of the
-//! onpair crate (`onpair/`, gropaul/onpair at df8eb10 plus the switches):
+//! onpair crate (`onpair/`, our OnPair fork at df8eb10 plus the switches):
 //!
 //!   - `"sorted"` (default true): false leaves the trained dictionary in merge
 //!     order, so the planner finds its greedy steps and terminal tokens by a pass

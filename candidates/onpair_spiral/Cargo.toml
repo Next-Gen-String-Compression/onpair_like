@@ -12,5 +12,4 @@ license.workspace = true
 lb-abi = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-# branch = "feat/search-prefilter", head 5927cce at time of integration.
-onpair = { path = "../../../onpair" }
+onpair = { path = "../../third_party/onpair" }

@@ -1,5 +1,5 @@
 # fsst_prefilter_debug: fsst_prefilter with the "sorted" and "uniform" switches, built
-# from this candidate's own copy of the gropaul/fsst fork (../fsst, bdaab1d plus the
+# from this candidate's own copy of our FSST fork (../fsst, bdaab1d plus the
 # switches), not from the pin. All FSST symbols are localized at link, leaving only
 # lb_candidate_fsst_prefilter_debug exported (cf. fsst_prefilter/cpp/CMakeLists.txt).
 cmake_minimum_required(VERSION 3.21)

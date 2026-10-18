@@ -1,5 +1,5 @@
 # onpair_spiral with two switches for ablations, over its own copy of the onpair crate
-# (onpair/, gropaul/onpair at df8eb10 plus the switches): "sorted" trains a dictionary in
+# (onpair/, our OnPair fork at df8eb10 plus the switches): "sorted" trains a dictionary in
 # byte order or leaves it in merge order, "uniform" plans with every token weighed
 # codes / tokens instead of its count. With both at their defaults it is onpair_spiral.
 [package]

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Reproduces the paper's NEON measurements on an arm64 Mac (the M4 Pro), end to
-# end from a clone: sibling repos at their pins, build and tests, the four
+# end from a clone: build and tests, the four
 # columns, the needle suites, every block the paper runs on NEON, and the
 # end-to-end runs. reproduce-avx512.sh measures the x86 side; with both
 # machines' results/ and paper/data in one tree, paper/make-figures.sh draws
@@ -20,8 +20,6 @@
 # data, into datasets/ and $E2E_DATA (default e2e/data).
 set -euo pipefail
 cd "$(dirname "$0")"
-ROOT=$(pwd)
-. ./pins.env
 
 case $(uname -m) in arm64 | aarch64) ;; *) echo "reproduce-neon.sh runs on arm64" >&2; exit 2 ;; esac
 SIZE=fast PER_CELL=1 ABLATION=fast PREFIX_SUFFIX=
@@ -37,11 +35,6 @@ for arg in "$@"; do
 done
 
 stage() { echo; echo "===== reproduce: $* ====="; }
-
-stage "sibling repos at their pins"
-ONPAIR=$ROOT/../onpair
-[ -d "$ONPAIR" ] || { git clone -q "$ONPAIR_URL" "$ONPAIR" && git -C "$ONPAIR" checkout -q "$ONPAIR_SHA"; }
-export ONPAIR
 
 stage "build and test"
 cargo build --release --workspace

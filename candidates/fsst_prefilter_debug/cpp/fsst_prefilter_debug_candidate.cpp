@@ -1,5 +1,5 @@
 // fsst_prefilter_debug: fsst_prefilter with two switches for ablations, over its own
-// copy of the gropaul/fsst fork (../fsst, bdaab1d plus the switches). The config is
+// copy of our FSST fork (../fsst, bdaab1d plus the switches). The config is
 // {"sorted": bool, "uniform": bool}, both optional:
 //
 //   "sorted"  (default true)  false skips fsst_sort_codes, so the codes keep FSST's own

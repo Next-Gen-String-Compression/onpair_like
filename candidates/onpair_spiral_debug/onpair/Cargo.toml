@@ -1,5 +1,5 @@
-# gropaul/onpair at df8eb10 with the switches onpair_spiral_debug reads: Config::sorted and
-# uniform_token_frequency_index. Its own package name so it can sit beside ../onpair.
+# our OnPair fork at df8eb10 with the switches onpair_spiral_debug reads: Config::sorted and
+# uniform_token_frequency_index. Its own package name so it can sit beside third_party/onpair.
 [package]
 name = "onpair-debug"
 version = "0.2.1"

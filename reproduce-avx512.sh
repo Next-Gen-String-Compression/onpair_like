@@ -1,8 +1,8 @@
 #!/bin/bash
 # Reproduces the paper's x86 measurements on an AVX-512 Linux host (the EPYC
-# 9R14 of a c7a.xlarge), end to end from a clone: sibling repos at their pins,
-# build and tests, the four columns, the needle suites, and every block the
-# paper runs on AVX-512, with the kernel sweep on AVX2 as well.
+# 9R14 of a c7a.xlarge), end to end from a clone: build and tests, the four
+# columns, the needle suites, and every block the paper runs on AVX-512, with
+# the kernel sweep on AVX2 as well.
 # reproduce-neon.sh measures the arm64 side; with both machines' results/ and
 # paper/data in one tree, paper/make-figures.sh draws every figure.
 #
@@ -18,8 +18,6 @@
 # four columns into datasets/.
 set -euo pipefail
 cd "$(dirname "$0")"
-ROOT=$(pwd)
-. ./pins.env
 
 [ "$(uname -m)" = x86_64 ] && grep -q avx512bw /proc/cpuinfo \
   || { echo "reproduce-avx512.sh runs on an x86_64 host with AVX-512BW" >&2; exit 2; }
@@ -35,11 +33,6 @@ for arg in "$@"; do
 done
 
 stage() { echo; echo "===== reproduce: $* ====="; }
-
-stage "sibling repos at their pins"
-ONPAIR=$ROOT/../onpair
-[ -d "$ONPAIR" ] || { git clone -q "$ONPAIR_URL" "$ONPAIR" && git -C "$ONPAIR" checkout -q "$ONPAIR_SHA"; }
-export ONPAIR
 
 # The AVX-512 kernels are compile-time gated, so the harness is built native.
 export RUSTFLAGS="-C target-cpu=native"

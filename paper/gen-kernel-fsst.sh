@@ -7,14 +7,14 @@
 # sweep, which no figure draws, runs only when onpair's raw IMDb name stream
 # exists, encoding it the same way.
 #
-#   paper/gen-kernel-fsst.sh [path/to/onpair]     default ../onpair
+#   paper/gen-kernel-fsst.sh
 #
 # The build is -march=native, so on x86 the CSV carries the host's widest
 # instruction set; name an AVX-512 host's CSV matcher_fsst_x86_64_avx512_<date>.csv.
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 FSST=$(cd "$HERE/../third_party/fsst" && pwd)
-ONPAIR=$(cd "${1:-"$HERE/../../onpair"}" && pwd)
+ONPAIR=$(cd "$HERE/../third_party/onpair" && pwd)
 BUILD="$HERE/../target/fsst-search"
 MACHINE=$(uname -m)
 DATE=$(date +%F)
