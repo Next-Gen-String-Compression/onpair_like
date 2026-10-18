@@ -317,10 +317,10 @@ def matrix_pivot(d, values, aggfunc):
 
 
 def matrix_grid(df, label):
-    """Mean GB/s per (selectivity bucket, needle length bucket) for one
+    """Median GB/s per (selectivity bucket, needle length bucket) for one
     system."""
     d = df[df["label"] == label]
-    return None if d.empty else matrix_pivot(d, "gbps", "mean")
+    return None if d.empty else matrix_pivot(d, "gbps", "median")
 
 
 def cell_text(v):
