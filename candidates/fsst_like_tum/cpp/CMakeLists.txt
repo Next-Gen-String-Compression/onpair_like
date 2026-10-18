@@ -71,6 +71,43 @@ else()
     message(STATUS "fsst_like_tum: no LLVM 14–16 — llvm backends disabled")
 endif()
 
+# How the harness links LLVM: the shared libLLVM-<major> when the install has one (distribution
+# packages), else the static component libraries and their system libraries from llvm-config
+# (LLVM's release tarballs ship only those). A system library the linker cannot find disables
+# the backends rather than failing the harness link.
+if(LB_FL_HAVE_LLVM)
+    find_library(LB_LLVM_SHARED NAMES LLVM-${LLVM_VERSION_MAJOR} PATHS ${LLVM_LIBRARY_DIRS} NO_DEFAULT_PATH)
+    if(LB_LLVM_SHARED)
+        set(LB_LLVM_LINK "dylib=LLVM-${LLVM_VERSION_MAJOR}")
+    else()
+        set(LB_LLVM_COMPONENTS core orcjit native nativecodegen ipo scalaropts instcombine passes)
+        execute_process(COMMAND ${LLVM_TOOLS_BINARY_DIR}/llvm-config --link-static --libnames ${LB_LLVM_COMPONENTS}
+                        OUTPUT_VARIABLE LB_LLVM_LIBNAMES OUTPUT_STRIP_TRAILING_WHITESPACE)
+        execute_process(COMMAND ${LLVM_TOOLS_BINARY_DIR}/llvm-config --link-static --system-libs ${LB_LLVM_COMPONENTS}
+                        OUTPUT_VARIABLE LB_LLVM_SYSLIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
+        set(LB_LLVM_LINK "")
+        separate_arguments(LB_LLVM_LIBNAMES)
+        foreach(lib IN LISTS LB_LLVM_LIBNAMES)
+            string(REGEX REPLACE "^lib(.*)\\.a$" "\\1" lib "${lib}")
+            list(APPEND LB_LLVM_LINK "static:-bundle=${lib}")
+        endforeach()
+        separate_arguments(LB_LLVM_SYSLIBS)
+        foreach(flag IN LISTS LB_LLVM_SYSLIBS)
+            string(REGEX REPLACE "^-l" "" lib "${flag}")
+            find_library(LB_LLVM_SYS_${lib} NAMES ${lib})
+            if(NOT LB_LLVM_SYS_${lib})
+                set(LB_FL_HAVE_LLVM FALSE)
+                message(STATUS "fsst_like_tum: static LLVM needs lib${lib}, not found — llvm backends disabled")
+            endif()
+            list(APPEND LB_LLVM_LINK "dylib=${lib}")
+        endforeach()
+        if(NOT LB_LLVM_LIBNAMES)
+            set(LB_FL_HAVE_LLVM FALSE)
+            message(STATUS "fsst_like_tum: no libLLVM-${LLVM_VERSION_MAJOR} and no static libraries — llvm backends disabled")
+        endif()
+    endif()
+endif()
+
 # Curated subset: the interpreted matcher plus the cpp codegen backend (and the
 # LLVM backend when available) — no vectorscan/hybrid_string_search, no
 # serializer/utils (file I/O the matcher does not need; cppcodegen uses only the
@@ -154,13 +191,12 @@ install(TARGETS lb_fsst_like_tum ARCHIVE DESTINATION lib)
 
 # Tell build.rs how to link LLVM into the final harness binary (the archive
 # above only *references* LLVM symbols; the library itself is linked at the
-# Rust level). Line 1: link-search dir; remaining lines: dylib names. The
-# shared libLLVM-<major>.so keeps the harness link simple and symbol-clash-free
-# (candidate objects are localized; LLVM stays a normal shared dep). build.rs
-# links LLVM only when this file exists, so compile-time HAVE_LLVM and the
-# final link always agree.
+# Rust level). Line 1: link-search dir; remaining lines: `kind=name` for
+# cargo:rustc-link-lib. build.rs links LLVM only when this file exists, so
+# compile-time HAVE_LLVM and the final link always agree.
 if(LB_FL_HAVE_LLVM)
+    list(JOIN LB_LLVM_LINK "\n" LB_LLVM_LINK_LINES)
     file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/lb_llvm_link.txt
-        "${LLVM_LIBRARY_DIRS}\nLLVM-${LLVM_VERSION_MAJOR}\n")
+        "${LLVM_LIBRARY_DIRS}\n${LB_LLVM_LINK_LINES}\n")
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/lb_llvm_link.txt DESTINATION lib)
 endif()

@@ -37,6 +37,30 @@ stage() { echo; echo "===== reproduce: $* ====="; }
 # The AVX-512 kernels are compile-time gated, so the harness is built native.
 export RUSTFLAGS="-C target-cpu=native"
 
+# LLVM 14-16 for fsst_like_tum's compiled backends (llvm, llvm-simd), which distributions after 2024
+# no longer package: an installed one, else LLVM's 16.0.4 release in target/llvm-16, whose static
+# libraries link zstd. Optional: without it those backends are skipped.
+stage "LLVM 16 (optional)"
+if [ -z "${LLVM_ROOT:-}" ]; then
+  for v in 16 15 14; do
+    [ -d /usr/lib/llvm-$v/lib/cmake/llvm ] && { export LLVM_ROOT=/usr/lib/llvm-$v; break; }
+  done
+fi
+if [ -z "${LLVM_ROOT:-}" ]; then
+  LLVM=$PWD/target/llvm-16
+  if [ -x "$LLVM/bin/llvm-config" ] || { mkdir -p "$LLVM" && curl -fsSL \
+      https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.4/clang+llvm-16.0.4-x86_64-linux-gnu-ubuntu-22.04.tar.xz \
+      | tar -xJ -C "$LLVM" --strip-components=1; }; then
+    export LLVM_ROOT=$LLVM
+  else
+    rm -rf "$LLVM"
+  fi
+fi
+if [ -n "${LLVM_ROOT:-}" ] && ! ldconfig -p | grep -q 'libzstd\.so '; then
+  sudo -n apt-get install -y -q libzstd-dev >/dev/null 2>&1 || true
+fi
+echo "LLVM: ${LLVM_ROOT:-none, the llvm and llvm-simd backends are skipped}"
+
 stage "build and test"
 cargo build --release --workspace
 cargo test --release --workspace

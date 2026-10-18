@@ -15,7 +15,7 @@ fn main() {
         println!("cargo:rustc-link-lib=dylib=dl");
     }
     // CMake writes lib/lb_llvm_link.txt only when it compiled the llvm backends
-    // (HAVE_LLVM): line 1 = link-search dir, remaining lines = dylib names.
+    // (HAVE_LLVM): line 1 = link-search dir, remaining lines = `kind=name`.
     // Linking from that file keeps compile-time HAVE_LLVM and the final harness
     // link in agreement by construction.
     if let Ok(link_info) = std::fs::read_to_string(dst.join("lib/lb_llvm_link.txt")) {
@@ -24,9 +24,10 @@ fn main() {
             println!("cargo:rustc-link-search=native={}", dir.trim());
         }
         for lib in lines {
-            println!("cargo:rustc-link-lib=dylib={}", lib.trim());
+            println!("cargo:rustc-link-lib={}", lib.trim());
         }
     }
+    println!("cargo:rerun-if-env-changed=LLVM_ROOT");
     println!("cargo:rerun-if-changed=cpp/fsst_like_tum_candidate.cpp");
     println!("cargo:rerun-if-changed=cpp/CMakeLists.txt");
     println!("cargo:rerun-if-changed=../../pins.env");
