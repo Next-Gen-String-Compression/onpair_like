@@ -6,12 +6,12 @@ find_package(Threads REQUIRED)
 
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-# upstream/ is our FSST fork, third_party/fsst of this repository. NONOPT_FSST drops the
+# Our FSST fork is third_party/fsst of this repository, three levels up. NONOPT_FSST drops the
 # AVX-512 encoder, which parses strings in 511-byte chunks the prefilter cannot follow.
-add_library(duckdb_fsst STATIC upstream/libfsst.cpp)
+add_library(duckdb_fsst STATIC ${CMAKE_CURRENT_SOURCE_DIR}/../../../fsst/libfsst.cpp)
 target_compile_definitions(duckdb_fsst PRIVATE NONOPT_FSST)
 
-target_include_directories(duckdb_fsst PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/upstream>)
+target_include_directories(duckdb_fsst PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../../fsst>)
 set_target_properties(duckdb_fsst PROPERTIES EXPORT_NAME duckdb_fsst)
 
 install(TARGETS duckdb_fsst
@@ -21,6 +21,6 @@ install(TARGETS duckdb_fsst
 
 disable_target_warnings(duckdb_fsst)
 
-# upstream/search: the header-only substring prefilter over FSST code streams
+# search/: the header-only substring prefilter over FSST code streams
 add_library(fsst_search INTERFACE)
-target_include_directories(fsst_search INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/upstream/search>)
+target_include_directories(fsst_search INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../../fsst/search>)

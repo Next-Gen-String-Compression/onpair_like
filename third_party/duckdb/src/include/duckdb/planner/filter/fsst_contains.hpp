@@ -27,7 +27,7 @@ struct FSSTPattern {
 };
 
 //! A filter for a literal that answers FSST vectors on their codes, with the substring search of
-//! third_party/fsst/upstream/search. Other vectors, and those its planner declines, go to `exact`; without one
+//! third_party/fsst/search of this repository. Other vectors, and those its planner declines, go to `exact`; without one
 //! it keeps them, as a prefilter in front of a pattern checked after it. A build without the search returns
 //! `exact` itself.
 unique_ptr<ExpressionFilterExecutor> CreateContainsExecutor(ClientContext &context, FSSTPattern pattern,
