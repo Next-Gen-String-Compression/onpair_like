@@ -1,7 +1,6 @@
 #pragma once
 
 // The FSST symbol table as the planner reads it: code to bytes and length.
-// See docs/prefilter.md section 3.
 
 #include <array>
 #include <cassert>

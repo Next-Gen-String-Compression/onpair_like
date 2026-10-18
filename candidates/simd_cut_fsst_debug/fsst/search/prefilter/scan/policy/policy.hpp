@@ -3,7 +3,7 @@
 // Which matcher and which resolver, from the cover and the region, and what
 // the scan they make costs. Every constant is a fit to the sweeps in bench/;
 // refit with `prefilter_matcher_sweep --refit` and `prefilter_resolver_sweep
-// --refit` and paste the printed blocks here. See docs/prefilter.md 6.5.
+// --refit` and paste the printed blocks here.
 
 #include <algorithm>
 #include <cmath>

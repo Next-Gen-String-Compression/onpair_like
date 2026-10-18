@@ -5,7 +5,7 @@
 // from a node to the sink until a terminal set, backward takes the one step
 // into each node until the source or an entry the planner did not enumerate. An escape is two codes,
 // marker then literal; a position is a literal iff the run of 255s before it
-// has odd length. See docs/prefilter.md sections 7 and 9.
+// has odd length.
 
 #include <algorithm>
 #include <array>

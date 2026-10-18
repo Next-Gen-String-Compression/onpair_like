@@ -8,8 +8,7 @@
 // the kernel nothing, and by eq_or's fitted cost, for covers narrow enough
 // that it pays for every code. scan_ns prices both as the covers they become
 // and the cheaper is the plan. A cover between the two, where the batched
-// kernel wins, can be missed, which is accepted. See docs/prefilter.md
-// section 5.
+// kernel wins, can be missed, which is accepted.
 
 #include <cmath>
 #include <cstdint>

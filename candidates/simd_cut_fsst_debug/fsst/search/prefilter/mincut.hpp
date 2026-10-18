@@ -1,8 +1,7 @@
 #pragma once
 
 // Minimum-weight cut of the alignment graph by Dinic max flow over a CSR
-// residual graph. Built once per graph, refilled per weighting. See
-// docs/prefilter.md section 5.
+// residual graph. Built once per graph, refilled per weighting.
 
 #include <algorithm>
 #include <cassert>

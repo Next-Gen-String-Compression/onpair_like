@@ -2,8 +2,7 @@
 
 // Which matcher, from the cover and the region, and what the scan it makes
 // costs. The kernel rows are a fit to the sweep in bench/; refit with
-// `prefilter_matcher_sweep --refit` and paste the printed block here. See
-// docs/prefilter.md 6.5.
+// `prefilter_matcher_sweep --refit` and paste the printed block here.
 
 #include <cmath>
 #include <cstddef>

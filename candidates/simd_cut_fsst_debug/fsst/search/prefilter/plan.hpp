@@ -3,7 +3,7 @@
 // Pattern to probe cover: build the alignment graph, unroll it for pairs,
 // cut it under frequency + lambda * (points + 2 * ranges + 2 * pairs) at the
 // lambda the cost model names and at the narrowest, price both with scan_ns
-// and keep the cheaper. See docs/prefilter.md section 5.
+// and keep the cheaper.
 
 #include <algorithm>
 #include <cstdint>

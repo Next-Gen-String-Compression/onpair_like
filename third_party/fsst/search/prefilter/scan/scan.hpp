@@ -1,7 +1,7 @@
 #pragma once
 
 // Codes to bit mask (matcher/), bit mask to rows (resolver/), and the block
-// driver joining them. See docs/prefilter.md section 6.
+// driver joining them.
 
 #include <algorithm>
 #include <array>

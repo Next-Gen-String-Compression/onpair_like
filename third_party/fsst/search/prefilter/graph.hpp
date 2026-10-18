@@ -3,7 +3,7 @@
 // The alignment graph: every layout of the needle across symbol boundaries
 // as one DAG, whose source-to-sink cuts are the sound covers. Node offset is
 // the parse position at needle[offset..], node 0 the source, node needle_len
-// the sink. See docs/prefilter.md sections 4 and 9.
+// the sink.
 
 #include <algorithm>
 #include <array>
@@ -33,8 +33,7 @@ enum class Probe : uint8_t { Point, Escape, Range, Set, SetTooBig, Pair };
 // Where the pattern must sit in the row. None is a substring anywhere. Start is a prefix: the pattern
 // begins at the row's first byte, so the alignments that begin it inside a symbol are not layouts it can
 // have. End is a suffix: the pattern ends at the row's last byte, and no symbol runs past it, so every
-// step is the greedy one and the last symbol ends exactly on the needle's end. See docs/prefilter.md
-// section 4.
+// step is the greedy one and the last symbol ends exactly on the needle's end.
 enum class Anchor : uint8_t { None, Start, End };
 
 // An edge's codes, up to INLINE of them in place: a point or an escape is one
