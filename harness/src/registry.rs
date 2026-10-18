@@ -17,19 +17,6 @@ pub fn candidates() -> Vec<Candidate> {
     v.push(lb_cand_uncompressed::vtable());
     #[cfg(feature = "cand-uncompressed-memmem")]
     v.push(lb_cand_uncompressed_memmem::vtable());
-    #[cfg(feature = "cand-uncompressed-vectorscan")]
-    v.push(lb_cand_uncompressed_vectorscan::vtable());
-    #[cfg(feature = "cand-uncompressed-prefilter")]
-    v.push(lb_cand_uncompressed_prefilter::vtable());
-    #[cfg(feature = "cand-dict-uncompressed-prefilter")]
-    v.push(lb_cand_dict_uncompressed_prefilter::vtable());
-    #[cfg(feature = "cand-dict-fsst-like-tum")]
-    v.push(lb_cand_dict_fsst_like_tum::vtable());
-    #[cfg(feature = "cand-fsst-decode-prefilter")]
-    {
-        v.push(lb_cand_fsst_decode_prefilter::vtable());
-        v.push(lb_cand_fsst_decode_prefilter::vtable_dict());
-    }
     #[cfg(feature = "cand-fsst-prefilter")]
     {
         v.push(lb_cand_fsst_prefilter::vtable());
@@ -38,8 +25,6 @@ pub fn candidates() -> Vec<Candidate> {
     #[cfg(feature = "cand-dict-onpair")]
     {
         v.push(lb_cand_dict_onpair::vtable_spiral());
-        #[cfg(feature = "cand-fsst-rs")]
-        v.push(lb_cand_dict_onpair::vtable_fsst_rs());
     }
     #[cfg(feature = "cand-gate-canary")]
     v.push(lb_cand_gate_canary::vtable());
@@ -47,41 +32,16 @@ pub fn candidates() -> Vec<Candidate> {
     v.push(lb_cand_cpp_identity::vtable());
     #[cfg(feature = "cand-onpair-spiral")]
     v.push(lb_cand_onpair_spiral::vtable());
-    // The same candidate built against the pinned upstream revision rather than
-    // the local checkout, so a spec can put the two side by side.
-    #[cfg(feature = "cand-onpair-spiral-pinned")]
-    v.push(lb_cand_onpair_spiral_pinned::vtable());
     #[cfg(feature = "cand-onpair-spiral-debug")]
     v.push(lb_cand_onpair_spiral_debug::vtable());
     #[cfg(feature = "cand-fsst-prefilter-debug")]
     v.push(lb_cand_fsst_prefilter_debug::vtable());
-    // And against the `codex/prefilter-scan-refactor` branch, a third line.
-    #[cfg(feature = "cand-onpair-spiral-refactor")]
-    v.push(lb_cand_onpair_spiral_refactor::vtable());
-    #[cfg(feature = "cand-onpair-spiral-substring")]
-    v.push(lb_cand_onpair_spiral_substring::vtable());
     #[cfg(feature = "cand-lz4")]
     v.push(lb_cand_lz4::vtable());
-    #[cfg(feature = "cand-zstd")]
-    v.push(lb_cand_zstd::vtable());
     #[cfg(feature = "cand-fsst")]
     v.push(lb_cand_fsst::vtable());
-    // FSST's symbol table, planned over by OnPair's Rust min-cut prefilter — distinct
-    // from `fsst` (decode-then-eval) and `fsst_prefilter` (the C++ port of that
-    // planner and walk inside the gropaul/fsst fork).
-    #[cfg(feature = "cand-fsst-rs")]
-    v.push(lb_cand_fsst_rs::vtable());
     #[cfg(feature = "cand-fsst-like-tum")]
     v.push(lb_cand_fsst_like_tum::vtable());
-    #[cfg(feature = "cand-fsst-like-utn")]
-    v.push(lb_cand_fsst_like_utn::vtable());
-    #[cfg(feature = "cand-llm-token-tum")]
-    v.push(lb_cand_llm_token_tum::vtable());
-    #[cfg(feature = "cand-llm-token-prefilter")]
-    {
-        v.push(lb_cand_llm_token_prefilter::vtable());
-        v.push(lb_cand_llm_token_prefilter::vtable_dict());
-    }
     v.into_iter()
         .map(|vt| Candidate::validate(vt).expect("registered candidate failed validation"))
         .collect()
@@ -100,12 +60,6 @@ pub fn scanners() -> Vec<Scanner> {
     v.push(lb_scan_cpp_std_find::vtable());
     #[cfg(feature = "scan-classics")]
     v.extend(lb_scan_classics::vtables());
-    #[cfg(feature = "scan-multi")]
-    v.extend(lb_scan_multi::vtables());
-    #[cfg(feature = "scan-composed")]
-    v.extend(lb_scan_composed::vtables());
-    #[cfg(feature = "scan-libc")]
-    v.push(lb_scan_libc::vtable());
     #[cfg(feature = "scan-stringzilla")]
     v.push(lb_scan_stringzilla::vtable());
     v.into_iter()

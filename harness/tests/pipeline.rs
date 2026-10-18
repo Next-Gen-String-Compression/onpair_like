@@ -272,7 +272,7 @@ fn cli_end_to_end_exit_codes_and_artifacts() {
 
 /// §16 scanners & codecs: every new scanner passes the correctness gate on
 /// the ops it supports (and is Unsupported elsewhere, never Error), across
-/// both the uncompressed `direct` path and the lz4/zstd `decode` path. This
+/// both the uncompressed `direct` path and the lz4 `decode` path. This
 /// is the oracle-gated proof for the whole batch; the crate unit tests only
 /// check the algorithms in isolation.
 #[test]
@@ -281,11 +281,9 @@ fn section16_scanners_and_codecs_pass_all_gates() {
     let (ds_dir, suite_dir) = prepare_fixture(tmp.path());
 
     let scanners = [
-        "memmem", "memmem-hay", "cpp_std_find", "libc-memmem", "stringzilla", "bndm", "kmp",
-        "bmh", "aho_corasick", "teddy", "pf-none", "pf-first-byte", "pf-rare-byte",
-        "pf-first-last", "pf-rare-pair",
+        "memmem", "memmem-hay", "cpp_std_find", "stringzilla", "bndm", "kmp", "bmh",
     ];
-    let candidates = ["uncompressed", "lz4", "zstd"];
+    let candidates = ["uncompressed", "lz4"];
     let scanner_blocks: String = scanners
         .iter()
         .map(|s| format!("[[scanners]]\nname = \"{s}\"\n\n"))
@@ -314,9 +312,9 @@ fn section16_scanners_and_codecs_pass_all_gates() {
 
         let rows = read_rows(&out_path);
         let queries: Vec<_> = rows.iter().filter(|r| r["kind"] == "query").collect();
-        // 28 queries × 15 scanners × 2 chunk sizes, one strategy each
-        // (uncompressed → direct; lz4/zstd → decode).
-        assert_eq!(queries.len(), 28 * 15 * 2, "{cand}: cell count");
+        // 28 queries × 7 scanners × 2 chunk sizes, one strategy each
+        // (uncompressed → direct; lz4 → decode).
+        assert_eq!(queries.len(), 28 * 7 * 2, "{cand}: cell count");
         assert!(
             queries
                 .iter()
