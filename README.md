@@ -117,7 +117,7 @@ fetching it:
 | folder | contents |
 |---|---|
 | `onpair/` | OnPair with the SIMD cut scan |
-| `fsst/` | FSST writing codes in symbol byte order, with the cut-scan prefilter under `search/` |
+| `fsst/` | FSST with the SIMD cut scan |
 | `duckdb/` | DuckDB with the compressed-domain `contains` on FSST, without its `data/` and `test/` |
 | `vortex-0.86.1/`, `vortex-onpair/` | Vortex 0.86.1 and Vortex with OnPair strings, each with a per-file segment cache |
 
