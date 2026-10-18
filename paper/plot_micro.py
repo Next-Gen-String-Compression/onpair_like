@@ -53,16 +53,16 @@ FIGURE_MACHINE = "ARM, NEON"
 # columns of two, and matplotlib fills a column at a time, so the pairs here
 # are the pairs on the page.
 SYSTEMS = [
-    ("onpair_spiral/pf_walk@bits=12,prune=1.0", name("onpair12", "cut"), config.COLOR["onpair12-cut"], "s"),
-    ("onpair_spiral/pf_walk@bits=16,prune=1.0", name("onpair16", "cut"), config.COLOR["onpair16-cut"], "o"),
+    ("simd_cut_onpair/simd-cut@bits=12,prune=1.0", name("onpair12", "cut"), config.COLOR["onpair12-cut"], "s"),
+    ("simd_cut_onpair/simd-cut@bits=16,prune=1.0", name("onpair16", "cut"), config.COLOR["onpair16-cut"], "o"),
     # The same planner and walk over an FSST symbol table.
-    ("fsst_prefilter/fsst-prefilter", name("fsst", "cut"), config.COLOR["fsst-cut"], "^"),
+    ("simd_cut_fsst/simd-cut", name("fsst", "cut"), config.COLOR["fsst-cut"], "^"),
     ("fsst_like_tum/interp", name("fsst", "automaton"), config.COLOR["fsst-automaton"], "D"),
     # The same automaton compiled by LLVM per row group, x86 only; the compile
     # is in the query time.
     ("fsst_like_tum/llvm-simd", name("fsst", "compiled"), config.COLOR["fsst-compiled"], "d"),
     ("fsst/decode+memmem-hay", name("fsst", "decode"), config.COLOR["fsst-decode"], "v"),
-    ("onpair_spiral/decode+memmem-hay@bits=16,prune=1.0", name("onpair16", "decode"), config.COLOR["onpair-decode"], "^"),
+    ("simd_cut_onpair/decode+memmem-hay@bits=16,prune=1.0", name("onpair16", "decode"), config.COLOR["onpair-decode"], "^"),
     ("uncompressed/direct+memmem-hay", name("uncompressed", "memmem"), config.COLOR["uncompressed"], "x"),
 ]
 LEGEND_COLS = 4
@@ -82,7 +82,7 @@ LEGEND_GROUPS = [
 # quartile band or per-query points: the level the compressed-domain series is
 # read against. row-hay is uncompressed memmem under a pre-selection.
 BASELINES = {
-    "onpair_spiral/decode+memmem-hay@bits=16,prune=1.0": (0, (1, 1.2)),
+    "simd_cut_onpair/decode+memmem-hay@bits=16,prune=1.0": (0, (1, 1.2)),
     "fsst/decode+memmem-hay": (0, (3, 1, 1, 1)),
     "uncompressed/direct+memmem-hay": (0, (4, 1.5)),
     "uncompressed_memmem/row-hay": (0, (4, 1.5)),
@@ -281,10 +281,10 @@ def dataset_width(n):
 # Slowest average cell first, as the paper orders them: the first panel
 # carries the row labels. FSST's minimum cut scan is drawn but not in the paper.
 MATRIX_SYSTEMS = [("fsst_like_tum/interp", "fsst-automaton"),
-                  ("onpair_spiral/decode+memmem-hay@bits=16,prune=1.0", "onpair-decode"),
+                  ("simd_cut_onpair/decode+memmem-hay@bits=16,prune=1.0", "onpair-decode"),
                   ("uncompressed/direct+memmem-hay", "uncompressed"),
-                  ("onpair_spiral/pf_walk@bits=16,prune=1.0", "onpair16-cut"),
-                  ("fsst_prefilter/fsst-prefilter", "fsst-cut")]
+                  ("simd_cut_onpair/simd-cut@bits=16,prune=1.0", "onpair16-cut"),
+                  ("simd_cut_fsst/simd-cut", "fsst-cut")]
 # Rows are decades of selectivity under a zero-match row; columns are the
 # needle panel's buckets.
 MATRIX_SEL_EDGES = [1e-5, 1e-4, 1e-3, 1e-2, 1e-1]
@@ -440,7 +440,7 @@ def facet_panel(ax, df):
 
 
 # `micro-datasets` marks where this series' median first falls below this baseline's.
-CROSS_SERIES = "onpair_spiral/pf_walk@bits=16,prune=1.0"
+CROSS_SERIES = "simd_cut_onpair/simd-cut@bits=16,prune=1.0"
 CROSS_BASELINE = "uncompressed/direct+memmem-hay"
 
 
