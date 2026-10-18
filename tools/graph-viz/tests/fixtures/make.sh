@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 # Regenerates the plan-log fixtures the tests read, from the two corpora below,
-# with onpair's examples/plan_log.rs (bits 16) and the fsst fork's plan_log, the
-# DuckDB checkout's submodule clean at FSST_SHA in pins.env.
-#   [ONPAIR=path/to/onpair] [FSST=path/to/fsst] tests/fixtures/make.sh
+# with onpair's examples/plan_log.rs (bits 16) and the plan_log of the FSST fork
+# in third_party/fsst.
+#   [ONPAIR=path/to/onpair] tests/fixtures/make.sh
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 onpair="$(cd "${ONPAIR:-$here/../../../../../onpair}" && pwd)"
-fsst="$(cd "${FSST:-$here/../../../../../duckdb/third_party/fsst/upstream}" && pwd)"
-. "$here/../../../../pins.env"
-[ "$(git -C "$fsst" describe --always --dirty --abbrev=40)" = "$FSST_SHA" ] || { echo "$fsst is not clean at FSST_SHA $FSST_SHA" >&2; exit 1; }
+fsst="$(cd "$here/../../../../third_party/fsst" && pwd)"
+build="$here/../../../../target/fsst-search"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
@@ -54,11 +53,12 @@ for name, rows in (("plain", plain), ("repetitive", repetitive)):
 EOF
 
 (cd "$onpair" && cargo build --release --example plan_log -q)
-cmake --build "$fsst/build-search" --target plan_log >/dev/null
+cmake -S "$fsst" -B "$build" -DCMAKE_BUILD_TYPE=Release >/dev/null
+cmake --build "$build" --target plan_log >/dev/null
 for name in plain repetitive; do
     rm -rf "$here/$name"
     "$onpair/target/release/examples/plan_log" --col "$tmp/$name.col" --needles "$tmp/$name.ndl" \
         --dataset "$name" --bits 16 --out "$here/$name" 2>/dev/null
-    "$fsst/build-search/search/plan_log" --col "$tmp/$name.col" --needles "$tmp/$name.ndl" \
+    "$build/search/plan_log" --col "$tmp/$name.col" --needles "$tmp/$name.ndl" \
         --dataset "$name" --out "$here/$name" 2>/dev/null
 done

@@ -1,44 +1,12 @@
-# Author-owned build for fsst_prefilter + dict_fsst_prefilter: the gropaul/fsst
-# fork (branch search/prefilter-simple: whole-string compression, codes written in
-# byte order, and the header-only min-cut prefilter under search/prefilter)
-# plus the Matcher core. A further FSST copy in the harness, so all FSST
-# symbols are localized at link, leaving only the two lb_candidate_* entry
-# points exported (cf. fsst_decode_prefilter/CMakeLists.txt).
-#
-# Built from the fork at FSST_SHA in pins.env. The DuckDB checkout beside this
-# repository, ../duckdb/third_party/fsst/upstream, the one working copy of the
-# fork, is used when it is clean at the pin, else the pin is fetched.
-# FSST_SOURCE_DIR=/path/to/fsst overrides both.
+# Author-owned build for fsst_prefilter + dict_fsst_prefilter: our FSST fork in
+# third_party/fsst (whole-string compression, codes written in byte order, and
+# the header-only min-cut prefilter under search/prefilter) plus the Matcher
+# core. A further FSST copy in the harness, so all FSST symbols are localized
+# at link, leaving only the two lb_candidate_* entry points exported.
 cmake_minimum_required(VERSION 3.21)
 project(lb_fsst_prefilter CXX)
 
-include(FetchContent)
-include(${CMAKE_CURRENT_SOURCE_DIR}/../../common/pins.cmake)
-lb_pin(FSST_SHA)
-set(LB_FSST_LOCAL "${CMAKE_CURRENT_SOURCE_DIR}/../../../../duckdb/third_party/fsst/upstream")
-# FetchContent keeps this as a cache entry, so a plain set() would lose to the
-# empty value an earlier configure cached.
-if(DEFINED ENV{FSST_SOURCE_DIR})
-    set(FETCHCONTENT_SOURCE_DIR_FSST_FORK "$ENV{FSST_SOURCE_DIR}" CACHE PATH "" FORCE)
-else()
-    execute_process(COMMAND git -C "${LB_FSST_LOCAL}" describe --always --dirty --abbrev=40
-                    OUTPUT_VARIABLE LB_FSST_LOCAL_HEAD OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-    if(LB_FSST_LOCAL_HEAD STREQUAL "${FSST_SHA}")
-        set(FETCHCONTENT_SOURCE_DIR_FSST_FORK "${LB_FSST_LOCAL}" CACHE PATH "" FORCE)
-    else()
-        unset(FETCHCONTENT_SOURCE_DIR_FSST_FORK CACHE)
-    endif()
-endif()
-if(FETCHCONTENT_SOURCE_DIR_FSST_FORK)
-    message(STATUS "lb_fsst_prefilter: using local FSST checkout ${FETCHCONTENT_SOURCE_DIR_FSST_FORK}")
-endif()
-FetchContent_Declare(
-    fsst_fork
-    GIT_REPOSITORY https://github.com/gropaul/fsst.git
-    GIT_TAG        ${FSST_SHA}
-    SOURCE_SUBDIR  __lb_no_configure__
-)
-FetchContent_MakeAvailable(fsst_fork)
+set(fsst_fork_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/fsst")
 
 include(CheckCXXCompilerFlag)
 # The prefilter kernels are NEON, AVX-512BW or AVX2 by what -march defines;

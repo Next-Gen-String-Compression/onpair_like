@@ -5,9 +5,8 @@
 #
 #   paper/gen-plan-cut.sh [fast|medium|full]     default: full
 #
-# Needs the onpair checkout beside this repository and the FSST fork as the
-# DuckDB checkout beside it holds it, clean at FSST_SHA in pins.env (override with
-# ONPAIR=... FSST=...); the
+# Needs the onpair checkout beside this repository (override with ONPAIR=...)
+# and builds the FSST fork in third_party/fsst; the
 # loggers are onpair's examples/plan_log.rs and the fork's
 # search/tools/plan_log.cpp. Writes results/plan-log/micro-<size>-<date>/
 # with queries.csv, symbols.csv and graph.csv, which tools/graph-viz draws and
@@ -16,9 +15,8 @@ set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT="$HERE/.."
 ONPAIR=$(cd "${ONPAIR:-$ROOT/../onpair}" && pwd)
-FSST=$(cd "${FSST:-$ROOT/../duckdb/third_party/fsst/upstream}" && pwd)
-. "$ROOT/pins.env"
-[ "$(git -C "$FSST" describe --always --dirty --abbrev=40)" = "$FSST_SHA" ] || { echo "$FSST is not clean at FSST_SHA $FSST_SHA" >&2; exit 1; }
+FSST=$ROOT/third_party/fsst
+BUILD=$ROOT/target/fsst-search
 ROW_GROUP=524288
 
 SIZE=${1:-full}
@@ -29,7 +27,8 @@ DUMP=$(mktemp -d)
 trap 'rm -rf "$DUMP"' EXIT
 
 (cd "$ONPAIR" && cargo build --release --example plan_log -q)
-cmake --build "$FSST/build-search" --target plan_log >/dev/null
+cmake -S "$FSST" -B "$BUILD" -DCMAKE_BUILD_TYPE=Release >/dev/null
+cmake --build "$BUILD" --target plan_log >/dev/null
 uv run "$HERE/plan_log_dump.py" "$SPEC" "$DUMP"
 rm -rf "$OUT"
 
@@ -39,7 +38,7 @@ for col in "$DUMP"/*.col; do
     "$ONPAIR/target/release/examples/plan_log" --col "$col" --needles "$DUMP/$ds.ndl" \
       --dataset "$ds" --chunk-rows $ROW_GROUP --bits $bits --prune 1.0 --out "$OUT"
   done
-  "$FSST/build-search/search/plan_log" --col "$col" --needles "$DUMP/$ds.ndl" \
+  "$BUILD/search/plan_log" --col "$col" --needles "$DUMP/$ds.ndl" \
     --dataset "$ds" --chunk-rows $ROW_GROUP --out "$OUT"
 done
 echo "$OUT"

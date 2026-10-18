@@ -1,6 +1,6 @@
 //! Glue crate for the C++ `fsst_prefilter` and `dict_fsst_prefilter`
-//! candidates: exact contains in the FSST-compressed domain through the
-//! gropaul/fsst fork's min-cut prefilter and alignment walk (Matcher-based;
+//! candidates: exact contains in the FSST-compressed domain through our FSST
+//! fork's (third_party/fsst) min-cut prefilter and alignment walk (Matcher-based;
 //! see candidates/common/matcher). One FSST copy, two entry points.
 
 use lb_abi::LbCandidate;

@@ -41,10 +41,7 @@ stage() { echo; echo "===== reproduce: $* ====="; }
 stage "sibling repos at their pins"
 ONPAIR=$ROOT/../onpair
 [ -d "$ONPAIR" ] || { git clone -q "$ONPAIR_URL" "$ONPAIR" && git -C "$ONPAIR" checkout -q "$ONPAIR_SHA"; }
-FSST=$ROOT/../duckdb/third_party/fsst/upstream
-[ -d "$FSST" ] || FSST=$ROOT/../fsst
-[ -d "$FSST" ] || { git clone -q "$FSST_URL" "$FSST" && git -C "$FSST" checkout -q "$FSST_SHA"; }
-export ONPAIR FSST
+export ONPAIR
 
 stage "build and test"
 cargo build --release --workspace
@@ -63,6 +60,7 @@ paper/gen-micro.sh "$SIZE" neon
 paper/gen-rows.sh
 paper/gen-phases.sh "$SIZE" neon
 paper/gen-ablation.sh "$ABLATION"
+paper/gen-fig1.sh
 paper/reproduce-kernel.sh
 paper/gen-plan-cut.sh "$SIZE"
 

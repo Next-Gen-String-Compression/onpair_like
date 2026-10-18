@@ -13,16 +13,13 @@ fn main() {
     }
     println!("cargo:rerun-if-changed=cpp/fsst_prefilter_candidate.cpp");
     println!("cargo:rerun-if-changed=cpp/CMakeLists.txt");
-    println!("cargo:rerun-if-changed=../../pins.env");
-    println!("cargo:rerun-if-changed=../common/pins.cmake");
     println!("cargo:rerun-if-changed=cpp/localize.sh");
     println!("cargo:rerun-if-changed=../common/fsst_common/fsst_build.hpp");
     println!("cargo:rerun-if-changed=../common/matcher/matcher.hpp");
     println!("cargo:rerun-if-changed=../common/matcher/dict_matcher.hpp");
     println!("cargo:rerun-if-changed=../../contract/lb_candidate.h");
-    // The sibling checkout cpp/CMakeLists.txt builds from when present.
-    println!("cargo:rerun-if-changed=../../../duckdb/third_party/fsst/upstream/search/prefilter");
-    println!("cargo:rerun-if-changed=../../../duckdb/third_party/fsst/upstream/libfsst.cpp");
-    println!("cargo:rerun-if-env-changed=FSST_SOURCE_DIR");
+    // The FSST fork cpp/CMakeLists.txt builds from.
+    println!("cargo:rerun-if-changed=../../third_party/fsst/search/prefilter");
+    println!("cargo:rerun-if-changed=../../third_party/fsst/libfsst.cpp");
     println!("cargo:rerun-if-env-changed=LB_FSST_MARCH");
 }

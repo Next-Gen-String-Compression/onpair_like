@@ -115,6 +115,10 @@ def check(inputs, con):
     if run(name, "prefix-suffix"):
         suites["prefix-suffix"] = suites_of_run(name)
 
+    # Figure 1 runs the fast needles too, outside the mixed-suite check.
+    for what, name in inputs["fig1"].items():
+        run(name, f"fig1 {what}")
+
     # The rows block keeps the fast needles whatever size micro runs, so it
     # stays out of the mixed-suite check.
     for what, entry in inputs["rows"].items():

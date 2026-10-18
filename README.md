@@ -13,6 +13,8 @@ Design: [DESIGN.md](DESIGN.md) (the reference spec). Contract:
 
 ```sh
 cargo build --release
+# the Python every run loads its results into results/bench.duckdb with
+python3 -m venv .venv && .venv/bin/pip install -r datasets/requirements.txt
 
 # 1. ingest: raw source -> canonical artifact (cached, deterministic)
 ./target/release/bench ingest --source datasets/fixtures/mini.csv \

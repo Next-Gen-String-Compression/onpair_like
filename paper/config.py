@@ -104,15 +104,13 @@ INPUTS = {
         # Uniform rows and runs of 1-16 and 1-256 rows at each share.
         "selection": {"run": "selection-fast-avx512-2026-10-15b"},
     },
-    # fig1/: specs/fig1/{lz4,uncompressed,onpair}.toml, gen-fig1.sh.
-    # plot_fig1.py; FSST decompress and automaton from the NEON selection run.
+    # fig1/: specs/fig1/*.toml, gen-fig1.sh, NEON. plot_fig1.py. `selection` holds
+    # FSST decompress and automaton.
     "fig1": {
         "selection": "micro-selection-1mi-fast-whole-neon-2026-10-12",
         "lz4": "fig1-lz4-neon-2026-10-14e",
         "uncompressed": "fig1-uncompressed-neon-2026-10-14e",
         "onpair": "fig1-onpair-neon-2026-10-14f",
-        # Built from the FSST submodule's uncommitted per-row port
-        # (FSST_SOURCE_DIR), not yet the pin in pins.env.
         "fsst": "fig1-fsst-neon-2026-10-14f",
     },
     # phases/: specs/phases/verify-<size>.toml, gen-phases.sh.

@@ -374,8 +374,11 @@ fn ingest_into_db(out_dir: &std::path::Path) -> Result<(), Error> {
     // The DB indexes this repo's results/ tree. A run written elsewhere (a
     // scratch directory, an integration test's tempdir) is out of its scope —
     // say so rather than inserting rows nobody can locate again.
-    let results_root = std::fs::canonicalize(root.join("results"))?;
-    if !std::fs::canonicalize(out_dir)?.starts_with(&results_root) {
+    // A fresh clone has no results/ until its first run writes one there.
+    let results_root = root.join("results");
+    let inside = std::fs::canonicalize(&results_root)
+        .is_ok_and(|r| std::fs::canonicalize(out_dir).is_ok_and(|o| o.starts_with(r)));
+    if !inside {
         println!(
             "not ingested: {} is outside {} (the DB indexes that tree only)",
             out_dir.display(),
@@ -386,12 +389,16 @@ fn ingest_into_db(out_dir: &std::path::Path) -> Result<(), Error> {
     let python = root.join(".venv/bin/python");
     let loader = root.join("tools/results-db/load.py");
     if !python.exists() {
-        return Err(format!(
-            "ingest: {} not found — create it with `python3 -m venv .venv && \
-             .venv/bin/pip install -r datasets/requirements.txt`",
-            python.display()
-        )
-        .into());
+        // The run measured and wrote everything; the DB is derived from it, so a
+        // missing interpreter is a note, not a failed run.
+        eprintln!(
+            "note: skipping ingest, {} not found — create it with `python3 -m venv \
+             .venv && .venv/bin/pip install -r datasets/requirements.txt`, then \
+             re-ingest with `.venv/bin/python tools/results-db/load.py {}`",
+            python.display(),
+            out_dir.display()
+        );
+        return Ok(());
     }
     let status = std::process::Command::new(&python)
         .arg(&loader)

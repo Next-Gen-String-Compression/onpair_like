@@ -25,3 +25,5 @@ tools/dashboard/__marimo__/
 .idea
 paper/out/
 
+/third_party/fsst/search/prefilter/scan/bench/data/
+/third_party/fsst/search/prefilter/scan/bench/output/

@@ -1,24 +1,21 @@
 #!/usr/bin/env sh
 # Runs the FSST port's stage-one sweep, the matcher figure's input, and copies
-# the CSV into paper/data. The checkout must be clean at FSST_SHA in pins.env.
+# the CSV into paper/data. The FSST fork is third_party/fsst.
 # The stream and catalog are built first when missing: prefilter_corpus over
 # onpair's raw ch/hits/URL_1m.csv (gen-kernel.sh writes it), then onpair's
 # bench_needles example over the URL_1m.fsst.csv it writes. The stage-two
 # sweep, which no figure draws, runs only when onpair's raw IMDb name stream
 # exists, encoding it the same way.
 #
-#   paper/gen-kernel-fsst.sh [path/to/fsst] [path/to/onpair]
-#       defaults ../duckdb/third_party/fsst/upstream and ../onpair
+#   paper/gen-kernel-fsst.sh [path/to/onpair]     default ../onpair
 #
 # The build is -march=native, so on x86 the CSV carries the host's widest
 # instruction set; name an AVX-512 host's CSV matcher_fsst_x86_64_avx512_<date>.csv.
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
-FSST=$(cd "${1:-"$HERE/../../duckdb/third_party/fsst/upstream"}" && pwd)
-ONPAIR=$(cd "${2:-"$HERE/../../onpair"}" && pwd)
-. "$HERE/../pins.env"
-[ "$(git -C "$FSST" describe --always --dirty --abbrev=40)" = "$FSST_SHA" ] || { echo "$FSST is not clean at FSST_SHA $FSST_SHA" >&2; exit 1; }
-BUILD="$FSST/build-search"
+FSST=$(cd "$HERE/../third_party/fsst" && pwd)
+ONPAIR=$(cd "${1:-"$HERE/../../onpair"}" && pwd)
+BUILD="$HERE/../target/fsst-search"
 MACHINE=$(uname -m)
 DATE=$(date +%F)
 DATA="$FSST/search/prefilter/scan/bench/data"

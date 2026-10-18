@@ -39,10 +39,7 @@ stage() { echo; echo "===== reproduce: $* ====="; }
 stage "sibling repos at their pins"
 ONPAIR=$ROOT/../onpair
 [ -d "$ONPAIR" ] || { git clone -q "$ONPAIR_URL" "$ONPAIR" && git -C "$ONPAIR" checkout -q "$ONPAIR_SHA"; }
-FSST=$ROOT/../duckdb/third_party/fsst/upstream
-[ -d "$FSST" ] || FSST=$ROOT/../fsst
-[ -d "$FSST" ] || { git clone -q "$FSST_URL" "$FSST" && git -C "$FSST" checkout -q "$FSST_SHA"; }
-export ONPAIR FSST
+export ONPAIR
 
 # The AVX-512 kernels are compile-time gated, so the harness is built native.
 export RUSTFLAGS="-C target-cpu=native"
