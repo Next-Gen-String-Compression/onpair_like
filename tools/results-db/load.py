@@ -28,6 +28,23 @@ SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 # re-ingest; absent parts collapse to this sentinel instead.
 NONE = "-"
 
+# Runs from before the 2026-10-18 rename carry the old candidate and strategy names; they
+# load under the current ones, so a figure reads old and new runs alike.
+RENAMED_CANDIDATES = {
+    "onpair_spiral": "simd_cut_onpair",
+    "onpair_spiral_debug": "simd_cut_onpair_debug",
+    "dict_onpair_spiral": "dict_simd_cut_onpair",
+    "fsst_prefilter": "simd_cut_fsst",
+    "fsst_prefilter_debug": "simd_cut_fsst_debug",
+    "dict_fsst_prefilter": "dict_simd_cut_fsst",
+}
+RENAMED_STRATEGIES = {
+    "pf_walk": "simd-cut",
+    "fsst-prefilter": "simd-cut",
+    "dict+pf_walk": "dict+simd-cut",
+    "dict+fsst-prefilter": "dict+simd-cut",
+}
+
 
 # ------------------------------------------------------------------ helpers
 
@@ -354,6 +371,9 @@ def load_run(con, run_dir: Path) -> str:
     builds, cells, measurements = {}, set(), []
     for line in results_bytes.decode().splitlines():
         row = json.loads(line)
+        row["candidate"] = RENAMED_CANDIDATES.get(row["candidate"], row["candidate"])
+        if "strategy" in row:
+            row["strategy"] = RENAMED_STRATEGIES.get(row["strategy"], row["strategy"])
         if row["kind"] == "build":
             builds[
                 (

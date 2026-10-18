@@ -143,19 +143,19 @@ fn real_candidates_pass_all_gates_at_every_chunk_size() {
 /// they declare, its decode path must pass everywhere, and its footprint must
 /// arrive as named components.
 #[test]
-fn onpair_spiral_gates_on_native_and_decode_strategies() {
+fn simd_cut_onpair_gates_on_native_and_decode_strategies() {
     let tmp = tempfile::tempdir().unwrap();
     let (ds_dir, suite_dir) = prepare_fixture(tmp.path());
     let spec_path =
-        write_spec(tmp.path(), &ds_dir, &suite_dir, &["onpair_spiral"], "[0, 64, 128]");
+        write_spec(tmp.path(), &ds_dir, &suite_dir, &["simd_cut_onpair"], "[0, 64, 128]");
     let loaded = LoadedSpec::load(&spec_path).unwrap();
 
     let out_path = tmp.path().join("rows.jsonl");
     let mut writer = Writer::create(&out_path).unwrap();
-    let summary = runner::run_worker(&loaded, "onpair_spiral", 0, 0, &mut writer, false).unwrap();
+    let summary = runner::run_worker(&loaded, "simd_cut_onpair", 0, 0, &mut writer, false).unwrap();
     writer.finish().unwrap();
-    assert_eq!(summary.gate_failures, 0, "onpair_spiral: gate failures");
-    assert_eq!(summary.errors, 0, "onpair_spiral: errors");
+    assert_eq!(summary.gate_failures, 0, "simd_cut_onpair: gate failures");
+    assert_eq!(summary.errors, 0, "simd_cut_onpair: errors");
 
     let rows = read_rows(&out_path);
     let queries: Vec<_> = rows.iter().filter(|r| r["kind"] == "query").collect();
@@ -163,15 +163,15 @@ fn onpair_spiral_gates_on_native_and_decode_strategies() {
     // The decode path covers every op, harness-timed at the decode joint.
     let decode: Vec<_> = queries.iter().filter(|r| r["strategy"] == "decode").collect();
     assert_eq!(decode.len(), 28 * 3 * 2);
-    assert!(decode.iter().all(|r| r["status"] == "ok"), "onpair_spiral: decode all gated ok");
+    assert!(decode.iter().all(|r| r["status"] == "ok"), "simd_cut_onpair: decode all gated ok");
     assert!(
         decode.iter().all(|r| r["prefilter"]["decode_ns"]["origin"] == "harness"),
-        "onpair_spiral: harness-timed decode split"
+        "simd_cut_onpair: harness-timed decode split"
     );
 
     // Compression axis: named components, exact total.
     let builds: Vec<_> = rows.iter().filter(|r| r["kind"] == "build").collect();
-    assert_eq!(builds.len(), 3, "onpair_spiral: build rows");
+    assert_eq!(builds.len(), 3, "simd_cut_onpair: build rows");
     for b in builds {
         let c = &b["footprint_components"];
         let sum: u64 = ["codes", "row_offsets", "dict_bytes", "dict_offsets", "prefilter"]

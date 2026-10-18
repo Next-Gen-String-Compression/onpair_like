@@ -428,7 +428,7 @@ def _(
 
 @app.cell
 def _(labels, meta, raw):
-    # `dict_onpair` is OnPair run over a dictionary rather than a second
+    # `dict_simd_cut_onpair` is OnPair run over a dictionary rather than a second
     # algorithm, so it belongs under the same heading as `onpair` instead of a
     # column away from it under "d".
     _by_label = meta.set_index("label")
@@ -1102,7 +1102,7 @@ def _(meta, mo, picked):
     _opts = {}
     for _n in sorted(picked):
         _m = meta[meta["label"] == _n]
-        if _m.empty or _m.iloc[0]["candidate"] != "onpair_spiral":
+        if _m.empty or _m.iloc[0]["candidate"] != "simd_cut_onpair":
             continue
         _cfg = _m.iloc[0]["config"] or "{}"
         _opts.setdefault(_cfg.strip("{}").replace('"', "").replace(":", " ") or "default", _cfg)

@@ -1,0 +1,15 @@
+# simd_cut_onpair with two switches for ablations, over its own copy of the onpair crate
+# (onpair/, our OnPair fork at df8eb10 plus the switches): "sorted" trains a dictionary in
+# byte order or leaves it in merge order, "uniform" plans with every token weighed
+# codes / tokens instead of its count. With both at their defaults it is simd_cut_onpair.
+[package]
+name = "lb-cand-simd-cut-onpair-debug"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lb-abi = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+onpair = { package = "onpair-debug", path = "onpair" }

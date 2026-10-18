@@ -104,7 +104,7 @@ endif()
 # skips bytes which leave the current state alone. 1 (interp-simd): a state
 # whose bitmap holds at most 16 bytes first runs the loop cppcodegen.cpp emits
 # for its -simd kernels (_mm_cmpestrm for 6-16 bytes, one _mm_cmpeq_epi8 per
-# byte below 6). 2 (interp-bits): every state runs fsst_prefilter's u8 bit
+# byte below 6). 2 (interp-bits): every state runs simd_cut_fsst's u8 bit
 # table (search/prefilter/scan/matcher/nibble.hpp), two 16-byte tables split by
 # high nibble and three shuffles per vector, 64 bytes per step on AVX-512BW
 # and 16 on NEON, then 16-byte steps. Either way the scalar loop resumes where

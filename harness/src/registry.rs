@@ -17,25 +17,25 @@ pub fn candidates() -> Vec<Candidate> {
     v.push(lb_cand_uncompressed::vtable());
     #[cfg(feature = "cand-uncompressed-memmem")]
     v.push(lb_cand_uncompressed_memmem::vtable());
-    #[cfg(feature = "cand-fsst-prefilter")]
+    #[cfg(feature = "cand-simd-cut-fsst")]
     {
-        v.push(lb_cand_fsst_prefilter::vtable());
-        v.push(lb_cand_fsst_prefilter::vtable_dict());
+        v.push(lb_cand_simd_cut_fsst::vtable());
+        v.push(lb_cand_simd_cut_fsst::vtable_dict());
     }
-    #[cfg(feature = "cand-dict-onpair")]
+    #[cfg(feature = "cand-dict-simd-cut-onpair")]
     {
-        v.push(lb_cand_dict_onpair::vtable_spiral());
+        v.push(lb_cand_dict_simd_cut_onpair::vtable_spiral());
     }
     #[cfg(feature = "cand-gate-canary")]
     v.push(lb_cand_gate_canary::vtable());
     #[cfg(feature = "cand-cpp-identity")]
     v.push(lb_cand_cpp_identity::vtable());
-    #[cfg(feature = "cand-onpair-spiral")]
-    v.push(lb_cand_onpair_spiral::vtable());
-    #[cfg(feature = "cand-onpair-spiral-debug")]
-    v.push(lb_cand_onpair_spiral_debug::vtable());
-    #[cfg(feature = "cand-fsst-prefilter-debug")]
-    v.push(lb_cand_fsst_prefilter_debug::vtable());
+    #[cfg(feature = "cand-simd-cut-onpair")]
+    v.push(lb_cand_simd_cut_onpair::vtable());
+    #[cfg(feature = "cand-simd-cut-onpair-debug")]
+    v.push(lb_cand_simd_cut_onpair_debug::vtable());
+    #[cfg(feature = "cand-simd-cut-fsst-debug")]
+    v.push(lb_cand_simd_cut_fsst_debug::vtable());
     #[cfg(feature = "cand-lz4")]
     v.push(lb_cand_lz4::vtable());
     #[cfg(feature = "cand-fsst")]

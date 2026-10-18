@@ -8,7 +8,7 @@
 //   - "interp-block": the same parser over 64-row blocks first, rows only in a
 //     block that matches (contains ops only). "interp-simd" and
 //     "interp-simd-block" add the -simd kernels' SSE4.2 skip to the
-//     interpreter, "interp-bits" and "interp-bits-block" fsst_prefilter's u8
+//     interpreter, "interp-bits" and "interp-bits-block" simd_cut_fsst's u8
 //     bit table (patch 3 of fsst_like_src_patches.cmake). "cpp-simd-block" and
 //     "llvm-simd-block" do the same with the compiled -simd kernels.
 //   - "cpp" / "cpp-simd" (registered only when a runtime clang++ exists; -simd
@@ -259,7 +259,7 @@ bool is_contains(const lb_query* query) {
 
 // "interp-block", "interp-simd(-block)", "interp-bits(-block)": the interpreter
 // blocked, with a SIMD skip (patch 3 in fsst_like_src_patches.cmake; `simd` is
-// its mode: 1 the -simd kernels' SSE4.2 compares, 2 fsst_prefilter's bit
+// its mode: 1 the -simd kernels' SSE4.2 compares, 2 simd_cut_fsst's bit
 // table), or both.
 int run_interp_variant(void* self, const lb_query* query, int simd, bool block,
                        uint64_t* out_bitmap_words, lb_run_stats* stats_or_null) {

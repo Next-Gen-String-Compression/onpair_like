@@ -34,14 +34,14 @@ GROUPS = [
     ]),
     ("Search compressed", [
         ("fsst_like_tum/interp", f"{cap(METHOD['automaton'])}, {SCHEME['fsst']}", COLOR["fsst-automaton"]),
-        ("fsst_prefilter/fsst-prefilter", f"{cap(METHOD['cut'])}, {SCHEME['fsst']}", COLOR["fsst-cut"]),
-        ("onpair_spiral/pf_walk@bits=16,prune=1.0", f"{cap(METHOD['cut'])}, {SCHEME['onpair']}", COLOR["onpair16-cut"]),
+        ("simd_cut_fsst/simd-cut", f"{cap(METHOD['cut'])}, {SCHEME['fsst']}", COLOR["fsst-cut"]),
+        ("simd_cut_onpair/simd-cut@bits=16,prune=1.0", f"{cap(METHOD['cut'])}, {SCHEME['onpair']}", COLOR["onpair16-cut"]),
     ]),
 ]
 SYSTEMS = [label for _, members in GROUPS for label, _, _ in members]
 # The system whose values go inside its bars, in white; every other value
 # follows its bar, in black.
-INSIDE = "onpair_spiral/pf_walk@bits=16,prune=1.0"
+INSIDE = "simd_cut_onpair/simd-cut@bits=16,prune=1.0"
 # The one column Figure 1 draws; Section 6 has all four.
 DATASET = "clickbench-url-1mi"
 # Each panel's GB/s axis as segments (from, to, ticks), each as wide as it is
@@ -147,7 +147,7 @@ def main():
     args = ap.parse_args()
     runs = pf.inputs("fig1")
     sel = ps.load(args.selection or runs["selection"])
-    drop = sel["label"].str.startswith("onpair_spiral/") | sel["label"].str.startswith("fsst_prefilter/")
+    drop = sel["label"].str.startswith("simd_cut_onpair/") | sel["label"].str.startswith("simd_cut_fsst/")
     d = pm.pd.concat([sel[~drop],
                       ps.load(args.lz4 or runs["lz4"]),
                       ps.load(args.uncompressed or runs["uncompressed"]),

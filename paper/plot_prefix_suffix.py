@@ -25,7 +25,7 @@ import plot_micro as pm
 # of the same name, whose label it is given here.
 AS_CONTAINS = {
     "fsst/decode+memmem": "fsst/decode+memmem-hay",
-    "onpair_spiral/decode+memmem@bits=16,prune=1.0": "onpair_spiral/decode+memmem-hay@bits=16,prune=1.0",
+    "simd_cut_onpair/decode+memmem@bits=16,prune=1.0": "simd_cut_onpair/decode+memmem-hay@bits=16,prune=1.0",
     "uncompressed/direct+memmem": "uncompressed/direct+memmem-hay",
 }
 

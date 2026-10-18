@@ -16,7 +16,7 @@
 # `llvm-simd` takes no selection: the harness runs it over every row and
 # intersects, the work of a system without pushdown.
 
-strategies = ["pf_walk", "fsst-prefilter", "interp", "llvm-simd", "decode", "row-hay"]
+strategies = ["simd-cut", "simd-cut", "interp", "llvm-simd", "decode", "row-hay"]
 
 [[selections]]
 kind = "all"
@@ -106,13 +106,13 @@ path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa
 [[suites]]
 path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/sa-lcp-v1-s42-n1-5205012fad43b02d"
 
-# pf_walk, and `decode`: OnPair as a codec, the chunk decoded and then searched.
+# simd-cut, and `decode`: OnPair as a codec, the chunk decoded and then searched.
 [[candidates]]
-name = "onpair_spiral"
+name = "simd_cut_onpair"
 configs = ['{"bits":12,"prune":1.0}', '{"bits":16,"prune":1.0}']
 
 [[candidates]]
-name = "fsst_prefilter"
+name = "simd_cut_fsst"
 
 [[candidates]]
 name = "fsst_like_tum"

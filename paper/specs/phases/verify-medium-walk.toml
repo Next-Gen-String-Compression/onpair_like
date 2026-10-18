@@ -4,7 +4,7 @@
 #
 #   paper/gen-phases.sh medium-walk [neon|avx512]
 
-strategies = ["pf_walk"]
+strategies = ["simd-cut"]
 
 [[datasets]]
 path = "../../../datasets/clickbench-url-1mi"
@@ -24,7 +24,7 @@ path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa
 path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/sa-lcp-v1-s42-n10-9adc88e9eb33e0eb"
 
 [[candidates]]
-name = "onpair_spiral"
+name = "simd_cut_onpair"
 configs = ['{"bits":12,"prune":1.0}']
 
 [measure]

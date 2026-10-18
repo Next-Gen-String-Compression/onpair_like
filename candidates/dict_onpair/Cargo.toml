@@ -1,9 +1,0 @@
-[package]
-name = "lb-cand-dict-onpair"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
-[dependencies]
-lb-abi = { workspace = true }
-lb-cand-onpair-spiral = { path = "../onpair_spiral" }

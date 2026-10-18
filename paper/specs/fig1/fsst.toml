@@ -1,11 +1,11 @@
-# Figure 1's FSST SIMD cut bars: fsst_prefilter, the per-row scan below one
+# Figure 1's FSST SIMD cut bars: simd_cut_fsst, the per-row scan below one
 # selected row per 57 codes and the full scan above, under the
 # pre-selections the figure draws (2^-7, 2^-3, all), on the same needles and
 # columns, NEON.
 #
 #   paper/gen-fig1.sh
 
-strategies = ["fsst-prefilter"]
+strategies = ["simd-cut"]
 
 [[selections]]
 kind = "all"
@@ -45,7 +45,7 @@ path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa
 path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/sa-lcp-v1-s42-n1-5205012fad43b02d"
 
 [[candidates]]
-name = "fsst_prefilter"
+name = "simd_cut_fsst"
 
 [measure]
 chunk_rows = [0]

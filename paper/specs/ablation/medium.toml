@@ -3,7 +3,7 @@
 # with the chunk's frequency counts (the default) or uniform frequencies. One run holds
 # every variant. paper/gen-ablation.sh; plot_ablation.py draws the ablation-sort and
 # ablation-freq figures.
-strategies = ["pf_walk", "fsst-prefilter"]
+strategies = ["simd-cut", "simd-cut"]
 
 [[datasets]]
 path = "../../../datasets/clickbench-url-1mi"
@@ -31,7 +31,7 @@ path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa
 path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/sa-lcp-v1-s42-n10-9adc88e9eb33e0eb"
 
 [[candidates]]
-name = "onpair_spiral_debug"
+name = "simd_cut_onpair_debug"
 configs = [
     '{"bits":12,"prune":1.0}',
     '{"bits":12,"prune":1.0,"sorted":false}',
@@ -42,7 +42,7 @@ configs = [
 ]
 
 [[candidates]]
-name = "fsst_prefilter_debug"
+name = "simd_cut_fsst_debug"
 configs = ['{}', '{"sorted":false}', '{"uniform":true}']
 
 [measure]

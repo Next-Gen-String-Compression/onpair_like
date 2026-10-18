@@ -1,11 +1,11 @@
-# The phase-shares run: onpair_spiral's three verifiers on the needles of
+# The phase-shares run: simd_cut_onpair's three verifiers on the needles of
 # micro/full.toml at its 512k row group. A spec of its own because
 # `strategies` filters every candidate and pf_memmem_superset and
-# pf_kmp_superset exist only on onpair_spiral.
+# pf_kmp_superset exist only on simd_cut_onpair.
 #
 #   paper/gen-phases.sh full [neon|avx512]
 
-strategies = ["pf_walk", "pf_memmem_superset", "pf_kmp_superset"]
+strategies = ["simd-cut", "pf_memmem_superset", "pf_kmp_superset"]
 
 [[datasets]]
 path = "../../../datasets/clickbench-url-1mi"
@@ -25,7 +25,7 @@ path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa
 path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/sa-lcp-v1-s42-n20-2935831fb5714505"
 
 [[candidates]]
-name = "onpair_spiral"
+name = "simd_cut_onpair"
 configs = ['{"bits":12,"prune":1.0}', '{"bits":16,"prune":1.0}']
 
 [measure]

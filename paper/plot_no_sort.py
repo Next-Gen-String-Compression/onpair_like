@@ -27,9 +27,9 @@ from config import COLOR, SCHEME
 # (label of the default config, scheme, colour, marker), the micro figures' colours
 # and markers.
 SYSTEMS = [
-    ("onpair_spiral_debug/pf_walk@bits=12,prune=1.0", SCHEME["onpair12"], COLOR["onpair12-cut"], "s"),
-    ("onpair_spiral_debug/pf_walk@bits=16,prune=1.0", SCHEME["onpair16"], COLOR["onpair16-cut"], "o"),
-    ("fsst_prefilter_debug/fsst-prefilter", SCHEME["fsst"], COLOR["fsst-cut"], "^"),
+    ("simd_cut_onpair_debug/simd-cut@bits=12,prune=1.0", SCHEME["onpair12"], COLOR["onpair12-cut"], "s"),
+    ("simd_cut_onpair_debug/simd-cut@bits=16,prune=1.0", SCHEME["onpair16"], COLOR["onpair16-cut"], "o"),
+    ("simd_cut_fsst_debug/simd-cut", SCHEME["fsst"], COLOR["fsst-cut"], "^"),
 ]
 # Per figure, the legend names of the default and the variant, and the config key the
 # variant adds to the label: the default solid and filled, the variant dashed and open.

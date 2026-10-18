@@ -88,7 +88,7 @@ INPUTS = {
         "bandwidth_line": True,
     },
     # ablation/: specs/ablation/<size>.toml, gen-ablation.sh. plot_no_sort.py's no-sort and
-    # uniform-freq figures: onpair_spiral_debug and fsst_prefilter_debug with the symbol
+    # uniform-freq figures: simd_cut_onpair_debug and simd_cut_fsst_debug with the symbol
     # table sorted or not and planned with counts or uniform frequencies. NEON only.
     "ablation": {"run": "ablation-medium-neon-2026-10-16"},
     # prefix-suffix/: specs/prefix-suffix/<size>.toml, gen-prefix-suffix.sh.
@@ -121,31 +121,31 @@ INPUTS = {
     "phases": {
         "OnPair12, ARM, NEON": {
             "run": "verify-1mi-medium-neon-2026-10-08",
-            "label": "onpair_spiral/pf_walk@bits=12,prune=1.0",
+            "label": "simd_cut_onpair/simd-cut@bits=12,prune=1.0",
             "split": "data/verify_split_1mi_medium_m4pro_2026-10-09.csv",
         },
         "OnPair16, ARM, NEON": {
             "run": "verify-1mi-medium-neon-2026-10-08",
-            "label": "onpair_spiral/pf_walk@bits=16,prune=1.0",
+            "label": "simd_cut_onpair/simd-cut@bits=16,prune=1.0",
             "split": "data/verify_split_1mi_medium_b16_m4pro_2026-10-09.csv",
         },
         "FSST, ARM, NEON": {
             "run": "micro-1mi-medium-neon-2026-10-08",
-            "label": "fsst_prefilter/fsst-prefilter",
+            "label": "simd_cut_fsst/simd-cut",
         },
         "OnPair12, x86, AVX-512": {
             "run": "verify-medium-avx512-2026-10-14b",
-            "label": "onpair_spiral/pf_walk@bits=12,prune=1.0",
+            "label": "simd_cut_onpair/simd-cut@bits=12,prune=1.0",
             "split": "data/verify_split_1mi_medium_c7a_avx512_2026-10-08.csv",
         },
         "OnPair16, x86, AVX-512": {
             "run": "verify-medium-avx512-2026-10-14b",
-            "label": "onpair_spiral/pf_walk@bits=16,prune=1.0",
+            "label": "simd_cut_onpair/simd-cut@bits=16,prune=1.0",
             "split": "data/verify_split_1mi_medium_b16_c7a_avx512_2026-10-08.csv",
         },
         "FSST, x86, AVX-512": {
             "run": "micro-medium-avx512-2026-10-14b",
-            "label": "fsst_prefilter/fsst-prefilter",
+            "label": "simd_cut_fsst/simd-cut",
         },
     },
     # kernel/: gen-kernel.sh, gen-kernel-fsst.sh. plot_matcher.py: sweeps pinned in paper/data.

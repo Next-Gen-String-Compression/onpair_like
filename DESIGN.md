@@ -1020,7 +1020,7 @@ self-reported diagnostics, never mixed into headline latency (§10).
 2. Latency vs needle length at fixed selectivity band — automaton build cost
    vs verify cost.
 3. **The heatmap**: selectivity × length grid colored by
-   `onpair_spiral/pf_walk / uncompressed/direct` latency ratio — "where OnPair
+   `simd_cut_onpair/simd-cut / uncompressed/direct` latency ratio — "where OnPair
    is lacking" as one figure.
 4. `contains_any` scaling in k, balanced vs skewed.
 5. Ratio-vs-latency Pareto per op at selectivity slices, across candidate

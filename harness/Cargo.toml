@@ -17,13 +17,13 @@ path = "src/lib.rs"
 default = [
     "cand-uncompressed",
     "cand-uncompressed-memmem",
-    "cand-fsst-prefilter",
-    "cand-dict-onpair",
+    "cand-simd-cut-fsst",
+    "cand-dict-simd-cut-onpair",
     "cand-gate-canary",
     "cand-cpp-identity",
-    "cand-onpair-spiral",
-    "cand-onpair-spiral-debug",
-    "cand-fsst-prefilter-debug",
+    "cand-simd-cut-onpair",
+    "cand-simd-cut-onpair-debug",
+    "cand-simd-cut-fsst-debug",
     "cand-lz4",
     "cand-fsst",
     "cand-fsst-like-tum",
@@ -35,13 +35,13 @@ default = [
 ]
 cand-uncompressed = ["dep:lb-cand-uncompressed"]
 cand-uncompressed-memmem = ["dep:lb-cand-uncompressed-memmem"]
-cand-fsst-prefilter = ["dep:lb-cand-fsst-prefilter"]
-cand-dict-onpair = ["dep:lb-cand-dict-onpair"]
+cand-simd-cut-fsst = ["dep:lb-cand-simd-cut-fsst"]
+cand-dict-simd-cut-onpair = ["dep:lb-cand-dict-simd-cut-onpair"]
 cand-gate-canary = ["dep:lb-cand-gate-canary"]
 cand-cpp-identity = ["dep:lb-cand-cpp-identity"]
-cand-onpair-spiral = ["dep:lb-cand-onpair-spiral"]
-cand-onpair-spiral-debug = ["dep:lb-cand-onpair-spiral-debug"]
-cand-fsst-prefilter-debug = ["dep:lb-cand-fsst-prefilter-debug"]
+cand-simd-cut-onpair = ["dep:lb-cand-simd-cut-onpair"]
+cand-simd-cut-onpair-debug = ["dep:lb-cand-simd-cut-onpair-debug"]
+cand-simd-cut-fsst-debug = ["dep:lb-cand-simd-cut-fsst-debug"]
 cand-lz4 = ["dep:lb-cand-lz4"]
 cand-fsst = ["dep:lb-cand-fsst"]
 cand-fsst-like-tum = ["dep:lb-cand-fsst-like-tum"]
@@ -55,13 +55,13 @@ scan-stringzilla = ["dep:lb-scan-stringzilla"]
 lb-abi = { workspace = true }
 lb-cand-uncompressed = { path = "../candidates/uncompressed", optional = true }
 lb-cand-uncompressed-memmem = { path = "../candidates/uncompressed_memmem", optional = true }
-lb-cand-fsst-prefilter = { path = "../candidates/fsst_prefilter", optional = true }
-lb-cand-dict-onpair = { path = "../candidates/dict_onpair", optional = true }
+lb-cand-simd-cut-fsst = { path = "../candidates/simd_cut_fsst", optional = true }
+lb-cand-dict-simd-cut-onpair = { path = "../candidates/dict_simd_cut_onpair", optional = true }
 lb-cand-gate-canary = { path = "../candidates/gate_canary", optional = true }
 lb-cand-cpp-identity = { path = "../candidates/cpp_identity", optional = true }
-lb-cand-onpair-spiral = { path = "../candidates/onpair_spiral", optional = true }
-lb-cand-onpair-spiral-debug = { path = "../candidates/onpair_spiral_debug", optional = true }
-lb-cand-fsst-prefilter-debug = { path = "../candidates/fsst_prefilter_debug", optional = true }
+lb-cand-simd-cut-onpair = { path = "../candidates/simd_cut_onpair", optional = true }
+lb-cand-simd-cut-onpair-debug = { path = "../candidates/simd_cut_onpair_debug", optional = true }
+lb-cand-simd-cut-fsst-debug = { path = "../candidates/simd_cut_fsst_debug", optional = true }
 lb-cand-lz4 = { path = "../candidates/lz4", optional = true }
 lb-cand-fsst = { path = "../candidates/fsst", optional = true }
 lb-cand-fsst-like-tum = { path = "../candidates/fsst_like_tum", optional = true }

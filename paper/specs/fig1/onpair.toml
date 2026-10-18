@@ -1,11 +1,11 @@
-# Figure 1's OnPair16 bars: onpair_spiral pf_walk at 16 bits, the per-row scan
+# Figure 1's OnPair16 bars: simd_cut_onpair simd-cut at 16 bits, the per-row scan
 # below one selected row per 57 codes and the full scan above, under the
 # pre-selections the figure draws (2^-7, 2^-3, all), on the same needles and
 # columns, NEON.
 #
 #   paper/gen-fig1.sh
 
-strategies = ["pf_walk"]
+strategies = ["simd-cut"]
 
 [[selections]]
 kind = "all"
@@ -45,7 +45,7 @@ path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa
 path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/sa-lcp-v1-s42-n1-5205012fad43b02d"
 
 [[candidates]]
-name = "onpair_spiral"
+name = "simd_cut_onpair"
 configs = ['{"bits":16,"prune":1.0}']
 
 [measure]

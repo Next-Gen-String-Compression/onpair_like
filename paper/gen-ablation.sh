@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
-# Runs the SIMD-cut ablations, specs/ablation/<size>.toml: onpair_spiral_debug (OnPair12,
-# OnPair16) and fsst_prefilter_debug with the symbol table sorted or not and planned with
+# Runs the SIMD-cut ablations, specs/ablation/<size>.toml: simd_cut_onpair_debug (OnPair12,
+# OnPair16) and simd_cut_fsst_debug with the symbol table sorted or not and planned with
 # the frequency counts or uniform frequencies, every variant in one run.
 #
 #   paper/gen-ablation.sh [fast|medium]     default: medium

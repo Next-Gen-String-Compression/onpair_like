@@ -45,7 +45,7 @@ struct FsstBuilt {
 // Train + batch-compress `view` into `out`. Returns true on success (with
 // out.enc alive); on failure writes a message into err_buf and returns false.
 // `after_train`, when given, runs on the trained encoder before compression
-// (fsst_prefilter renumbers the codes there with its fork's fsst_sort_codes).
+// (simd_cut_fsst renumbers the codes there with its fork's fsst_sort_codes).
 static bool Build(const lb_chunk_view* view, FsstBuilt& out, char* err_buf,
                   uint64_t err_cap, void (*after_train)(fsst_encoder_t*) = nullptr) {
   auto fail = [&](const char* msg) -> bool {

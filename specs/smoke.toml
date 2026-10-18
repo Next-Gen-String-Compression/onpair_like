@@ -19,7 +19,7 @@ name = "uncompressed"
 name = "cpp_identity"
 
 [[candidates]]
-name = "onpair_spiral"
+name = "simd_cut_onpair"
 # One non-default config so the config plumbing is exercised end-to-end.
 configs = ['{"bits": 12, "threshold": 0.3, "seed": 7}']
 

@@ -805,11 +805,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "lb-cand-dict-onpair"
+name = "lb-cand-dict-simd-cut-onpair"
 version = "0.1.0"
 dependencies = [
  "lb-abi",
- "lb-cand-onpair-spiral",
+ "lb-cand-simd-cut-onpair",
 ]
 
 [[package]]
@@ -822,22 +822,6 @@ dependencies = [
 
 [[package]]
 name = "lb-cand-fsst-like-tum"
-version = "0.1.0"
-dependencies = [
- "cmake",
- "lb-abi",
-]
-
-[[package]]
-name = "lb-cand-fsst-prefilter"
-version = "0.1.0"
-dependencies = [
- "cmake",
- "lb-abi",
-]
-
-[[package]]
-name = "lb-cand-fsst-prefilter-debug"
 version = "0.1.0"
 dependencies = [
  "cmake",
@@ -860,7 +844,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "lb-cand-onpair-spiral"
+name = "lb-cand-simd-cut-fsst"
+version = "0.1.0"
+dependencies = [
+ "cmake",
+ "lb-abi",
+]
+
+[[package]]
+name = "lb-cand-simd-cut-fsst-debug"
+version = "0.1.0"
+dependencies = [
+ "cmake",
+ "lb-abi",
+]
+
+[[package]]
+name = "lb-cand-simd-cut-onpair"
 version = "0.1.0"
 dependencies = [
  "lb-abi",
@@ -870,7 +870,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lb-cand-onpair-spiral-debug"
+name = "lb-cand-simd-cut-onpair-debug"
 version = "0.1.0"
 dependencies = [
  "lb-abi",
@@ -906,15 +906,15 @@ dependencies = [
  "humantime",
  "lb-abi",
  "lb-cand-cpp-identity",
- "lb-cand-dict-onpair",
+ "lb-cand-dict-simd-cut-onpair",
  "lb-cand-fsst",
  "lb-cand-fsst-like-tum",
- "lb-cand-fsst-prefilter",
- "lb-cand-fsst-prefilter-debug",
  "lb-cand-gate-canary",
  "lb-cand-lz4",
- "lb-cand-onpair-spiral",
- "lb-cand-onpair-spiral-debug",
+ "lb-cand-simd-cut-fsst",
+ "lb-cand-simd-cut-fsst-debug",
+ "lb-cand-simd-cut-onpair",
+ "lb-cand-simd-cut-onpair-debug",
  "lb-cand-uncompressed",
  "lb-cand-uncompressed-memmem",
  "lb-scan-classics",

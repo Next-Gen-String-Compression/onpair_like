@@ -133,8 +133,8 @@ def panel(ax, d):
 
 
 # The cut scans in symbol-table order: FSST's 255 symbols, OnPair's 2^12 and 2^16 tokens.
-CUT_SYSTEMS = ["fsst_prefilter/fsst-prefilter", "onpair_spiral/pf_walk@bits=12,prune=1.0",
-               "onpair_spiral/pf_walk@bits=16,prune=1.0"]
+CUT_SYSTEMS = ["simd_cut_fsst/simd-cut", "simd_cut_onpair/simd-cut@bits=12,prune=1.0",
+               "simd_cut_onpair/simd-cut@bits=16,prune=1.0"]
 
 
 def planning(run):

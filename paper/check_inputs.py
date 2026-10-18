@@ -38,12 +38,12 @@ DATE = r"\d{4}-\d{2}-\d{2}[a-z]?"
 # The series plot_micro.SYSTEMS draws, kept here rather than imported so the
 # check needs no matplotlib.
 MICRO_LABELS = [
-    "onpair_spiral/pf_walk@bits=12,prune=1.0",
-    "onpair_spiral/pf_walk@bits=16,prune=1.0",
+    "simd_cut_onpair/simd-cut@bits=12,prune=1.0",
+    "simd_cut_onpair/simd-cut@bits=16,prune=1.0",
     "fsst_like_tum/interp",
-    "fsst_prefilter/fsst-prefilter",
+    "simd_cut_fsst/simd-cut",
     "fsst/decode+memmem-hay",
-    "onpair_spiral/decode+memmem-hay@bits=16,prune=1.0",
+    "simd_cut_onpair/decode+memmem-hay@bits=16,prune=1.0",
     "uncompressed/direct+memmem-hay",
 ]
 

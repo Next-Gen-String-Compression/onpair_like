@@ -8,7 +8,7 @@
 #
 # gen-prefix-suffix.sh generates and blesses any missing suite first.
 
-strategies = ["pf_walk", "fsst-prefilter", "interp", "decode", "direct"]
+strategies = ["simd-cut", "simd-cut", "interp", "decode", "direct"]
 
 [[datasets]]
 path = "../../../datasets/clickbench-url-1mi"
@@ -34,9 +34,9 @@ path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/pr
 [[suites]]
 path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/prefix-suffix-v1-s42-n1-51aa39a0a3cc9b9c"
 
-# pf_walk, and `decode`: OnPair as a codec, the chunk decoded and then searched.
+# simd-cut, and `decode`: OnPair as a codec, the chunk decoded and then searched.
 [[candidates]]
-name = "onpair_spiral"
+name = "simd_cut_onpair"
 configs = ['{"bits":12,"prune":1.0}', '{"bits":16,"prune":1.0}']
 
 [[candidates]]
@@ -46,7 +46,7 @@ name = "fsst_like_tum"
 name = "fsst"
 
 [[candidates]]
-name = "fsst_prefilter"
+name = "simd_cut_fsst"
 
 # The raw view (`direct`), no codec at all.
 [[candidates]]

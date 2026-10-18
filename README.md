@@ -99,14 +99,14 @@ Candidates:
 
 | candidate | what it measures |
 |---|---|
-| `onpair_spiral` | OnPair: the SIMD cut scan in the compressed domain (`pf_walk`), and decompress then search |
-| `dict_onpair` | `onpair_spiral` over a chunk's distinct values |
-| `fsst_prefilter` | the same cut scan over FSST codes |
+| `simd_cut_onpair` | OnPair: the SIMD cut scan in the compressed domain (`simd-cut`), and decompress then search |
+| `dict_simd_cut_onpair` | `simd_cut_onpair` over a chunk's distinct values |
+| `simd_cut_fsst` | the same cut scan over FSST codes |
 | `fsst` | FSST, decompress then search |
 | `fsst_like_tum` | FSST-LIKE matching (DaMoN'26): interpreted and LLVM-compiled automata on FSST codes |
 | `lz4` | LZ4, decompress then search |
 | `uncompressed`, `uncompressed_memmem` | plain strings: a scanner over the whole column, or memmem per row and over the payload |
-| `onpair_spiral_debug`, `fsst_prefilter_debug` | the ablation switches (sorted symbol table, uniform frequencies) |
+| `simd_cut_onpair_debug`, `simd_cut_fsst_debug` | the ablation switches (sorted symbol table, uniform frequencies) |
 | `gate_canary`, `cpp_identity` | harness tests: a wrong candidate the gate must catch, and a C++ identity codec |
 
 ## Third-party code
@@ -128,7 +128,7 @@ The SIMD cut itself lives in two of these folders, once per encoding, with the s
 | planning: alignment graph, minimum cut, probe cover | `third_party/onpair/src/search/substring/prefilter/` (`graph.rs`, `mincut.rs`, `cover.rs`, `plan.rs`) | `third_party/fsst/search/prefilter/` (`graph.hpp`, `mincut.hpp`, `cover.hpp`, `plan.hpp`) |
 | scan: SIMD matchers, resolver, alignment walk, kernel choice | `.../prefilter/scan/` (`matcher/`, `resolver/`, `walk.rs`, `policy/`) | `.../prefilter/scan/` (`matcher/`, `resolver/`, `walk/`, `policy/`) |
 | kernel sweeps behind the matcher figure | `.../prefilter/scan/bench/` | `.../prefilter/scan/bench/` |
-| benchmark candidate | `candidates/onpair_spiral` | `candidates/fsst_prefilter` |
+| benchmark candidate | `candidates/simd_cut_onpair` | `candidates/simd_cut_fsst` |
 
 The matchers have NEON, AVX2 and AVX-512 versions; which are compiled follows the target CPU
 (`-C target-cpu=native` for Rust, `-march=native` for C++). In the end-to-end

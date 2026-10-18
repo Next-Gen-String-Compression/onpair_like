@@ -4,7 +4,7 @@
 #
 #   paper/gen-rows.sh
 
-strategies = ["pf_walk", "decode", "interp", "fsst-prefilter", "direct"]
+strategies = ["simd-cut", "decode", "interp", "simd-cut", "direct"]
 
 [[datasets]]
 path = "../../../datasets/clickbench-url-1mi"
@@ -31,9 +31,9 @@ path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa
 [[suites]]
 path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/sa-lcp-v1-s42-n1-5205012fad43b02d"
 
-# pf_walk, and `decode`: OnPair as a codec, the chunk decoded and then searched.
+# simd-cut, and `decode`: OnPair as a codec, the chunk decoded and then searched.
 [[candidates]]
-name = "onpair_spiral"
+name = "simd_cut_onpair"
 configs = ['{"bits":12,"prune":1.0}', '{"bits":16,"prune":1.0}']
 
 [[candidates]]
@@ -43,7 +43,7 @@ name = "fsst_like_tum"
 name = "fsst"
 
 [[candidates]]
-name = "fsst_prefilter"
+name = "simd_cut_fsst"
 
 # memmem-hay over the raw view (`direct`), no codec at all.
 [[candidates]]

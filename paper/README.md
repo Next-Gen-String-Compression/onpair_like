@@ -14,7 +14,7 @@ one `gen-<block>.sh` that runs them, and one section of `INPUTS` in `config.py`.
 | `phases` | `specs/phases/verify-<size>.toml` | NEON, AVX-512 | 512k | `gen-phases.sh <size> [neon\|avx512]` -> `verify-<size>-<arch>-<date>` | `phase-shares` |
 | `kernel` | - | NEON, AVX2, AVX-512 | - | `gen-kernel.sh`, `gen-kernel-fsst.sh` -> `data/matcher_*.csv` | `kernel-matcher` |
 | `plan-cut` | a micro spec | - | 512k | `gen-plan-cut.sh <size>` -> `results/plan-log/micro-<size>-<date>/` | `plan-cut`, `kernel-choice` |
-| `ablation` | `specs/ablation/{fast,medium}.toml` | NEON | 512k | `gen-ablation.sh <size>` -> `ablation-<size>-neon-<date>`; the `onpair_spiral_debug` and `fsst_prefilter_debug` candidates with `"sorted": false` or `"uniform": true` | `no-sort`, `uniform-freq` |
+| `ablation` | `specs/ablation/{fast,medium}.toml` | NEON | 512k | `gen-ablation.sh <size>` -> `ablation-<size>-neon-<date>`; the `simd_cut_onpair_debug` and `simd_cut_fsst_debug` candidates with `"sorted": false` or `"uniform": true` | `no-sort`, `uniform-freq` |
 | `e2e` | - | NEON | engine default | `e2e/run.py` -> `results/e2e/<run>` | `e2e-job-duckdb` (also `e2e-*-speedup`, `e2e-queries`, `e2e-scans`, not in the paper) |
 | `e2e-micro` | `specs/micro/<size>.toml`'s suites | NEON | engine default | `e2e/micro.py [--spec <size>]` -> `results/e2e/e2e-micro-<size>-neon-<date>` | `e2e-micro-datasets`, `e2e-micro-pooled` |
 
@@ -106,8 +106,8 @@ The instruction counts in the section's table are read off the kernels in
 `plot_phase_shares.py` draws one panel per entry under `"phases"` in
 `config.py`: a series by its harness label, the run it is read from and,
 where one exists, its split CSV. Six panels: OnPair12, OnPair16 and the FSST
-port (`fsst_prefilter`) on NEON and on AVX-512. OnPair comes from a
-`verify-*` run, `onpair_spiral`'s `pf_walk` strategy, the minimum cut
+port (`simd_cut_fsst`) on NEON and on AVX-512. OnPair comes from a
+`verify-*` run, `simd_cut_onpair`'s `simd-cut` strategy, the minimum cut
 walked and rows exact; the FSST port and OnPair16 on AVX-512 come from the
 `micro-*` run of the same revision, which carries the same instrumented
 phases. The verify cost is one timed pass in the candidate's instrumented
@@ -138,7 +138,7 @@ fifth of the fused scan rather than partitioning it exactly. The bench is
 onpair's, so the FSST port has no split.
 
 `paper/specs/micro/full.toml` runs our prefilter (12 and 16 bits, pruned)
-against `onpair_spiral/decode+memmem-hay` (16 bits), `fsst/decode+memmem-hay`,
+against `simd_cut_onpair/decode+memmem-hay` (16 bits), `fsst/decode+memmem-hay`,
 `uncompressed/direct+memmem-hay` and `fsst_like_tum/interp` at 512k-row
 row groups, on four columns of 1,048,576 rows each: ClickBench URLs, Amazon book
 titles, DBpedia abstracts and IMDb `char_name.name`, the last with nearly

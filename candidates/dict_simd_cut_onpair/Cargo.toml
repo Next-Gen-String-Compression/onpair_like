@@ -1,0 +1,9 @@
+[package]
+name = "lb-cand-dict-simd-cut-onpair"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lb-abi = { workspace = true }
+lb-cand-simd-cut-onpair = { path = "../simd_cut_onpair" }
