@@ -2,9 +2,7 @@
 
 [![Crates.io Version](https://img.shields.io/crates/v/onpair)](https://crates.io/crates/onpair)
 [![docs.rs](https://img.shields.io/docsrs/onpair)](https://docs.rs/onpair)
-[![CI](https://img.shields.io/github/actions/workflow/status/spiraldb/onpair/ci.yml?branch=develop)](https://github.com/spiraldb/onpair/actions/workflows/ci.yml)
 [![License](https://img.shields.io/crates/l/onpair)](LICENSE)
-[![MSRV](https://img.shields.io/crates/msrv/onpair)](https://github.com/spiraldb/onpair/blob/develop/rust-toolchain.toml)
 
 OnPair is a Rust codec for compressing string columns while keeping every
 row independently accessible. It populates a dictionary of up to 2^16 patterns

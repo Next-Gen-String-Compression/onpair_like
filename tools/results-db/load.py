@@ -31,9 +31,6 @@ NONE = "-"
 # Runs from before the 2026-10-18 rename carry the old candidate and strategy names; they
 # load under the current ones, so a figure reads old and new runs alike.
 RENAMED_CANDIDATES = {
-    "onpair_spiral": "simd_cut_onpair",
-    "onpair_spiral_debug": "simd_cut_onpair_debug",
-    "dict_onpair_spiral": "dict_simd_cut_onpair",
     "fsst_prefilter": "simd_cut_fsst",
     "fsst_prefilter_debug": "simd_cut_fsst_debug",
     "dict_fsst_prefilter": "dict_simd_cut_fsst",

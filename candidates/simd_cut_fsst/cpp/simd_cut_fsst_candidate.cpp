@@ -314,13 +314,13 @@ const char* const kCpuFeatures = "avx2";
 
 const lb_strategy kPlainStrats[] = {{"simd-cut", kPlainOps, LB_STRATEGY_TAKES_SELECTION}};
 const lb_candidate kPlainVtable = {
-    LB_ABI_VERSION, "simd_cut_fsst", "0.4.0+4e213e1-dirty", kCpuFeatures,
+    LB_ABI_VERSION, "simd_cut_fsst", "0.4.0", kCpuFeatures,
     kPlainStrats, 1, build_plain, lb::adapter_footprint, lb::adapter_run,
     nullptr, nullptr, lb::adapter_destroy};
 
 const lb_strategy kDictStrats[] = {{"dict+simd-cut", kOps}};
 const lb_candidate kDictVtable = {
-    LB_ABI_VERSION, "dict_simd_cut_fsst", "0.4.0+4e213e1-dirty", kCpuFeatures,
+    LB_ABI_VERSION, "dict_simd_cut_fsst", "0.4.0", kCpuFeatures,
     kDictStrats, 1, build_dict, lb::adapter_footprint, lb::adapter_run,
     nullptr, nullptr, lb::adapter_destroy};
 

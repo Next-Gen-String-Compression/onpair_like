@@ -1,4 +1,4 @@
-# SpiralDB's OnPair (github.com/spiraldb/onpair) as a query-axis candidate,
+# OnPair's Rust implementation (third_party/onpair) as a query-axis candidate,
 # exercising its `feat/search-prefilter` branch: a SIMD substring prefilter
 # with two pluggable verify paths. Pinned to a rev (the branch is pre-release
 # and moves); bump the rev to track it.

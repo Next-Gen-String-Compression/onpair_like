@@ -12,7 +12,7 @@ import random
 
 rng = random.Random(20260707)
 
-hosts = ["google.com", "yandex.ru", "example.org", "jetbrains.com", "spiraldb.dev"]
+hosts = ["google.com", "yandex.ru", "example.org", "jetbrains.com", "example.net"]
 paths = ["", "index.html", "search", "a/b/c.html", "img.png", "q.php"]
 params = ["", "?q=rust", "?id=42&x=1", "?utm=abab", "#frag"]
 

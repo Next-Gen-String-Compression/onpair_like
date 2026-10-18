@@ -1,4 +1,4 @@
-//! SpiralDB's OnPair (github.com/spiraldb/onpair) as a query-axis candidate,
+//! OnPair's Rust implementation (third_party/onpair) as a query-axis candidate,
 //! wrapping its `feat/search-prefilter` branch (pinned in Cargo.toml). Its
 //! `decode` and `decode_selected` make it the OnPair codec of the harness's
 //! decompress-and-search baseline as well.
@@ -610,7 +610,7 @@ unsafe extern "C" fn decode_selected(
 static VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
     name: c"simd_cut_onpair".as_ptr(),
-    version: c"0.1.0+82cc11f".as_ptr(),
+    version: c"0.1.0".as_ptr(),
     // The prefilter uses baseline NEON on aarch64 and dispatches between
     // SSE2/AVX2/AVX-512 on x86_64; it has no scalar fallback.
     cpu_features: core::ptr::null(),

@@ -247,18 +247,18 @@ unsafe extern "C" fn build_simd_cut_onpair(
 // (no prefilter) is not exposed either; the dictionary already collapses the
 // row domain, so an unprefiltered scan over the unique values is a different
 // question from the one this wrapper asks.
-static SPIRAL_STRATS: [LbStrategy; 1] = [LbStrategy {
+static STRATS: [LbStrategy; 1] = [LbStrategy {
     name: c"dict+simd-cut".as_ptr(),
     supported_ops: op_bit(LB_CONTAINS),
         flags: 0,
     }];
 
-static SPIRAL_VTABLE: LbCandidate = LbCandidate {
+static VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
     name: c"dict_simd_cut_onpair".as_ptr(),
     version: c"0.1.0".as_ptr(),
     cpu_features: core::ptr::null(),
-    strategies: SPIRAL_STRATS.as_ptr(),
+    strategies: STRATS.as_ptr(),
     strategy_count: 1,
     build: Some(build_simd_cut_onpair),
     footprint: Some(footprint),
@@ -269,6 +269,6 @@ static SPIRAL_VTABLE: LbCandidate = LbCandidate {
     decode_selected: None,
 };
 
-pub fn vtable_spiral() -> &'static LbCandidate {
-    &SPIRAL_VTABLE
+pub fn vtable() -> &'static LbCandidate {
+    &VTABLE
 }

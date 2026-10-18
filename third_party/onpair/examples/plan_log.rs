@@ -142,7 +142,7 @@ fn main() {
         dataset.expect("--dataset"),
         out.expect("--out"),
     );
-    // The onpair_spiral candidate's config: threshold 0.15 and seed 42.
+    // The simd_cut_onpair candidate's config: threshold 0.15 and seed 42.
     let config = Config {
         max_dict_bits: MaxDictBits::new(bits).expect("--bits in [9, 16]"),
         threshold: Threshold::new(0.15).unwrap(),

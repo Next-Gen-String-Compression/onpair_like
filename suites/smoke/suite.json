@@ -4,11 +4,11 @@
   "description": "Curated phase-1 suite over the mini fixture dataset: all five ops plus the SEMANTICS.md edge cases.",
   "dataset": {
     "id": "mini",
-    "checksum": "xxh3:fd10cb1408b8396f"
+    "checksum": "xxh3:de6ca3a446a082c2"
   },
   "provenance": {
     "curated_by": "phase-1 vertical slice"
   },
   "truth_algo": "bitmap-xxh3-v1",
-  "blessed_at": "2026-08-14T10:39:55Z"
+  "blessed_at": "2026-10-18T06:11:47Z"
 }

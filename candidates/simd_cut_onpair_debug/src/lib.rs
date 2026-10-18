@@ -620,7 +620,7 @@ unsafe extern "C" fn decode(
 static VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
     name: c"simd_cut_onpair_debug".as_ptr(),
-    version: c"0.1.0+82cc11f".as_ptr(),
+    version: c"0.1.0".as_ptr(),
     // The prefilter uses baseline NEON on aarch64 and dispatches between
     // SSE2/AVX2/AVX-512 on x86_64; it has no scalar fallback.
     cpu_features: core::ptr::null(),

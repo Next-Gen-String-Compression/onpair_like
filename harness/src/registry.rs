@@ -24,7 +24,7 @@ pub fn candidates() -> Vec<Candidate> {
     }
     #[cfg(feature = "cand-dict-simd-cut-onpair")]
     {
-        v.push(lb_cand_dict_simd_cut_onpair::vtable_spiral());
+        v.push(lb_cand_dict_simd_cut_onpair::vtable());
     }
     #[cfg(feature = "cand-gate-canary")]
     v.push(lb_cand_gate_canary::vtable());
