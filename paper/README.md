@@ -10,10 +10,11 @@ one `gen-<block>.sh` that runs them, and one section of `INPUTS` in `config.py`.
 | --- | --- | --- | --- | --- | --- |
 | `micro` | `specs/micro/{fast,medium,full}.toml` | NEON, AVX-512 | 512k | `gen-micro.sh <size> [neon\|avx512]` -> `micro-<size>-<arch>-<date>` | `micro-arch`, `micro-datasets`, `micro-matrix`, `false-positives` |
 | `prefix-suffix` | `specs/prefix-suffix/{fast,medium,full}.toml` | NEON | 512k | `gen-prefix-suffix.sh <size>` -> `prefix-suffix-<size>-neon-<date>`, generating missing suites first | `micro-prefix-suffix` |
-| `rows` | `specs/rows/{rowgroup,rowgroup-llvm,selection}.toml` | AVX-512 | whole, 512k .. 2k (LLVM to 32k); selection: whole, 2^-9 .. 2^-1 | `gen-rows.sh` -> `{rowgroup,rowgroup-llvm,selection}-fast-avx512-<date>` | `micro-rows` |
+| `rows` | `specs/rows/{rowgroup,rowgroup-llvm,selection}.toml`, `rowgroup-neon.toml` | AVX-512; `rowgroup-neon` on NEON | whole, 512k .. 2k (LLVM to 32k); selection: whole, 2^-9 .. 2^-1 | `gen-rows.sh` -> `{rowgroup,rowgroup-llvm,selection}-fast-avx512-<date>` on x86, `rowgroup-fast-neon-<date>` on arm64 | `micro-rows` |
 | `phases` | `specs/phases/verify-<size>.toml` | NEON, AVX-512 | 512k | `gen-phases.sh <size> [neon\|avx512]` -> `verify-<size>-<arch>-<date>` | `phase-shares` |
 | `kernel` | - | NEON, AVX2, AVX-512 | - | `gen-kernel.sh`, `gen-kernel-fsst.sh` -> `data/matcher_*.csv` | `kernel-matcher` |
 | `plan-cut` | a micro spec | - | 512k | `gen-plan-cut.sh <size>` -> `results/plan-log/micro-<size>-<date>/` | `plan-cut`, `kernel-choice` |
+| `ablation` | `specs/ablation/{fast,medium}.toml` | NEON | 512k | `gen-ablation.sh <size>` -> `ablation-<size>-neon-<date>`; the `onpair_spiral_debug` and `fsst_prefilter_debug` candidates with `"sorted": false` or `"uniform": true` | `no-sort`, `uniform-freq` |
 | `e2e` | - | NEON | engine default | `e2e/run.py` -> `results/e2e/<run>` | `e2e-job-duckdb` (also `e2e-*-speedup`, `e2e-queries`, `e2e-scans`, not in the paper) |
 | `e2e-micro` | `specs/micro/<size>.toml`'s suites | NEON | engine default | `e2e/micro.py [--spec <size>]` -> `results/e2e/e2e-micro-<size>-neon-<date>` | `e2e-micro-datasets`, `e2e-micro-pooled` |
 

@@ -3,7 +3,7 @@
 # dependencies = ["matplotlib==3.10.6", "pandas>=2"]
 # ///
 """Stage one: GB/s of every matcher against |C| cut codes and against |R| code
-ranges, one column of panels per instruction set.
+ranges, NEON and AVX-512 side by side in one column of the paper.
 
     uv run paper/plot_matcher.py [--data CSV ...] [--out DIR]
 
@@ -31,8 +31,8 @@ import pandas as pd
 import paperfig as pf
 
 HERE = Path(__file__).resolve().parent
-ISAS = ["NEON", "AVX2", "AVX-512"]
-FILE = {"NEON": "neon", "AVX2": "avx2", "AVX-512": "avx512"}
+ISAS = ["NEON", "AVX-512"]
+FILE = {"NEON": "neon", "AVX-512": "avx512"}
 KERNELS = {"eq_or": "compare", "nibble_n_8k": r"nibble\_8k", "nibble": "bit-table", "range": "range",
            "table": "byte table"}
 # The bit-table takes the byte table's colour: it is the same lookup over the
@@ -51,20 +51,17 @@ MODEL = {
     "onpair16": {
         "NEON": {"eq_or": (0.0043, 0.0141, 0.0215), "nibble_n_8k": (0.0218, 0.0322, 0.0221),
                  "range": (0.0035, 0.0, 0.0213), "table": (0.189, 0.0, 0.0)},
-        "AVX2": {"eq_or": (0.0136, 0.0105, 0.0239), "nibble_n_8k": (0.0594, 0.0310, 0.0225),
-                 "range": (0.0084, 0.0, 0.0225), "table": (0.201, 0.0, 0.0)},
         "AVX-512": {"eq_or": (0.0079, 0.0113, 0.0127), "nibble_n_8k": (0.0270, 0.0141, 0.0119),
                     "range": (0.0085, 0.0, 0.0112), "table": (0.204, 0.0, 0.0)},
     },
     "fsst": {
         "NEON": {"eq_or": (0.0041, 0.0070, 0.0119), "nibble_n_8k": (0.0243, 0.0, 0.0115),
                  "nibble": (0.0386, 0.0, 0.0), "range": (0.0032, 0.0, 0.0111)},
-        "AVX2": {"eq_or": (0.0124, 0.0052, 0.0104), "range": (0.0065, 0.0, 0.0104)},
         "AVX-512": {"eq_or": (0.0086, 0.0041, 0.0078), "nibble_n_8k": (0.0157, 0.0, 0.0075),
                     "range": (0.0050, 0.0, 0.0075)},
     },
 }
-MAX_BATCHES = {"onpair16": {"NEON": 3, "AVX2": 2, "AVX-512": 3}, "fsst": {"NEON": 1, "AVX2": 1, "AVX-512": 1}}
+MAX_BATCHES = {"onpair16": {"NEON": 3, "AVX-512": 3}, "fsst": {"NEON": 1, "AVX-512": 1}}
 
 # The two encodings a panel carries, with the name a legend entry opens with
 # and the line style that separates them.
@@ -200,6 +197,42 @@ def ranges_panel(ax, isa, measured):
     log_axis(ax, [1, 2, 4, 8, 16, 32])
 
 
+def save_table_legend(axes, columns, name, out_dir=None):
+    """The legend as a table: kernels across, a header row of their names, then
+    a u8 row and a u16 row of line samples. `columns` is `[(title, {tag: label})]`,
+    a label found in `axes`."""
+    found = {}
+    for ax in axes:
+        for handle, label in zip(*ax.get_legend_handles_labels()):
+            found.setdefault(label, handle)
+    pf.style()
+    row_h, sample, gap = 0.13, 0.25, 0.12
+    fig = pf.plt.figure(figsize=(pf.COLUMN_IN, 3 * row_h))
+    inches = fig.dpi_scale_trans
+    rows = [tag for _e, tag, _s in reversed(ENCODINGS)]
+    y = {"kernel:": 2.5 * row_h, rows[0]: 1.5 * row_h, rows[1]: 0.5 * row_h}
+
+    def text(x, yy, s):
+        t = fig.text(x, yy, s, transform=inches, ha="left", va="center", fontsize=pf.SMALL_PT)
+        fig.canvas.draw()
+        return t.get_window_extent().transformed(inches.inverted()).width
+
+    x = max(text(0, y[k], k) for k in y) + gap
+    for title, entries in columns:
+        width = max(text(x, y["kernel:"], title), sample)
+        for tag in rows:
+            line = pf.mpl.lines.Line2D([x, x + sample], [y[tag], y[tag]])
+            line.update_from(found[entries[tag]])
+            line.set_transform(inches)
+            line.set_clip_on(False)
+            fig.add_artist(line)
+        x += width + gap
+    if x - gap > pf.COLUMN_IN:
+        raise SystemExit(f"{name}/legend: {x - gap:.2f}in wide, {pf.COLUMN_IN:.2f}in fit")
+    pf.save(fig, f"{name}/legend", out_dir, bbox_inches=pf.mpl.transforms.Bbox([[0, 0], [x - gap, 3 * row_h]]))
+    pf.plt.close(fig)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", nargs="+", default=[HERE / p for p in pf.inputs("kernel")["matcher"]])
@@ -207,7 +240,7 @@ def main():
     args = ap.parse_args()
     figure = "kernel-matcher"
 
-    df = pd.concat(pd.read_csv(path) for path in args.data)
+    df = pd.concat((pd.read_csv(path) for path in args.data), ignore_index=True)
     # onpair's 2026-09-10 scan refactor renamed the batched nibble kernel
     # `nibble_n_8k` -> `nibble_n8k`; older CSVs in data/ carry the old spelling.
     df = df.assign(matcher=df["matcher"].replace({"nibble_n8k": "nibble_n_8k"}))
@@ -221,36 +254,39 @@ def main():
     top = max(130.0, df["gbs"].max() * 1.15)
     ticks = [t for t in TICKS + [200, 500] if t <= top]
 
-    # The legend pools the codes row before the ranges row: labelling the line
-    # on the ranges row alone puts it last.
+    # The read line is named on the codes row, beside the line, not in the legend.
     def finish(ax, isa, xlabel, kind):
         ax.set_xlabel(xlabel)
         ax.set_ylabel("GB/s")
         if pf.inputs("kernel")["bandwidth_line"]:
-            label = "read bandwidth, 1 MiB" if kind == "ranges" else None
-            pf.bandwidth_line(ax, pf.read_bandwidth(isa, SWEEP_KIB), label)
+            gbs = pf.read_bandwidth(isa, SWEEP_KIB)
+            pf.bandwidth_line(ax, gbs)
+            if kind == "codes":
+                ax.annotate("read bandwidth of 1 MiB", (1, gbs), xycoords=("axes fraction", "data"), xytext=(-2, -1.5),
+                            textcoords="offset points", ha="right", va="top", fontsize=pf.SMALL_PT - 1.5)
 
-    # One row of panels sweeps |C| over the three instruction sets, one sweeps
-    # |R|, as `codes-<isa>` and `ranges-<isa>`, with one legend strip under
-    # both rows pooled from a panel of each.
+    # One row of panels sweeps |C|, one sweeps |R|, as `codes-<isa>` and
+    # `ranges-<isa>`, under one legend pooled from a panel of each.
+    pf.clear_figure(figure, args.out)
     legend_from = []
     for kind, draw, xlabel in (("codes", tokens_panel, r"$|C|$ cut codes"),
                                ("ranges", ranges_panel, r"$|R|$ code ranges")):
         panels = []
         for isa in ISAS:
-            fig, ax = pf.panel(height=0.8 * 1.55)
+            fig, ax = pf.panel(width=0.5 * pf.COLUMN_IN, height=0.8 * 1.55)
             draw(ax, isa, measured[isa])
             finish(ax, isa, xlabel, kind)
             panels.append((fig, ax))
         pf.y_axis([ax for _, ax in panels], [ticks[0], top], ticks, "{:g}")
+        for _fig, ax in panels[1:]:
+            ax.set_yticklabels([])
         legend_from.append(panels[0][1])
         pf.save_row(panels, figure, [f"{kind}-{FILE[isa]}" for isa in ISAS],
-                    pf.PANEL_3UP, args.out)
-    groups = [(KERNELS[k], [(f"{tag}, {KERNELS[k]}", tag) for _e, tag, _s in ENCODINGS])
-              for k in ("eq_or", "nibble_n_8k", "range")]
-    groups.insert(2, ("table", [("u16, byte table", "u16 byte"), ("u8, bit-table", "u8 bit")]))
-    groups.append(("bandwidth", [("read bandwidth, 1 MiB", "read, 1 MiB")]))
-    pf.save_grouped_legend(legend_from, groups, figure, args.out)
+                    0.5 * pf.COLUMN_IN, args.out, unit=pf.COLUMN_IN)
+    columns = [(KERNELS[k], {tag: f"{tag}, {KERNELS[k]}" for _e, tag, _s in ENCODINGS})
+               for k in ("eq_or", "nibble_n_8k", "range")]
+    columns.insert(2, ("table", {"u16": "u16, byte table", "u8": "u8, bit-table"}))
+    save_table_legend(legend_from, columns, figure, args.out)
 
 
 if __name__ == "__main__":

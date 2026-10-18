@@ -32,7 +32,7 @@ import numpy as np
 import pandas as pd
 
 import paperfig as pf
-from config import SCHEME
+from config import COLOR, SCHEME
 from plot_micro import (MATRIX_CMAP, draw_matrix, matrix_legend, matrix_pivot,
                         selectivity_x)
 
@@ -96,15 +96,15 @@ def matrix_panels(d, out):
         if panels:
             ax.set_yticklabels([])
         panels.append((fig, ax))
-    pf.save_row(panels, "plan-cut", MATRIX_ALGORITHMS, pf.PANEL_4UP, out)
+    pf.save_row(panels, "plan-cut", MATRIX_ALGORITHMS, pf.PANEL_4UP, out, gap=0)
     matrix_legend(norm, MATRIX_CMAP, out, "plan-cut", "number of codes",
                   label_above=True)
     return grids
 
 
 # Colours as the systems in plot_micro.SYSTEMS.
-SIZE_ALGORITHMS = [("fsst", SCHEME["fsst"], "#CC79A7"), ("onpair12", SCHEME["onpair12"], "#56B4E9"),
-                   ("onpair16", SCHEME["onpair16"], "#0072B2")]
+SIZE_ALGORITHMS = [("fsst", SCHEME["fsst"], COLOR["fsst-cut"]), ("onpair12", SCHEME["onpair12"], COLOR["onpair12-cut"]),
+                   ("onpair16", SCHEME["onpair16"], COLOR["onpair16-cut"])]
 
 
 def sizes_panel(d, out):

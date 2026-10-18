@@ -1,6 +1,6 @@
-# Row group sizes on the 2^20-row roster, AVX-512 only: the whole column and
+# Row group sizes on the 2^20-row roster, on AVX-512: the whole column and
 # 512k down to 2k rows in steps of 4, with the needles of micro/fast.toml.
-# The left panel of the row group / pre-selection figure.
+# The AVX-512 panel of the row group figure; rowgroup-neon.toml is the NEON one.
 #
 #   paper/gen-rows.sh
 

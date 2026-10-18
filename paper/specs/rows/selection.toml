@@ -1,8 +1,10 @@
 # The micro-benchmark under a pre-selection, AVX-512 only: an upstream
-# predicate has admitted a uniform share of the rows and every system answers
-# only for those. The needles of micro/fast.toml, the whole column as one row
-# group, shares 2^-9 .. 2^-1 (2k .. 512k of the 2^20 rows, the row group sizes
-# of rows/rowgroup.toml) plus `all`. The right panel of the row group /
+# predicate has admitted a share of the rows and every system answers only for
+# those. Each share two ways: uniform rows, and runs of 1..16 rows (harness
+# `runs`: one run per period, length uniform in the range). The
+# needles of micro/fast.toml, the whole column as one row group, shares
+# 2^-9 .. 2^-1 (2k .. 512k of the 2^20 rows, the row group sizes of
+# rows/rowgroup.toml) plus `all`. The right panel of the row group /
 # pre-selection figure.
 #
 #   paper/gen-rows.sh
@@ -25,7 +27,21 @@ fraction = 0.001953125
 seed = 7
 
 [[selections]]
+kind = "runs"
+run_rows_min = 1
+run_rows_max = 16
+fraction = 0.001953125
+seed = 7
+
+[[selections]]
 kind = "uniform"
+fraction = 0.0078125
+seed = 7
+
+[[selections]]
+kind = "runs"
+run_rows_min = 1
+run_rows_max = 16
 fraction = 0.0078125
 seed = 7
 
@@ -35,12 +51,33 @@ fraction = 0.03125
 seed = 7
 
 [[selections]]
+kind = "runs"
+run_rows_min = 1
+run_rows_max = 16
+fraction = 0.03125
+seed = 7
+
+[[selections]]
 kind = "uniform"
 fraction = 0.125
 seed = 7
 
 [[selections]]
+kind = "runs"
+run_rows_min = 1
+run_rows_max = 16
+fraction = 0.125
+seed = 7
+
+[[selections]]
 kind = "uniform"
+fraction = 0.5
+seed = 7
+
+[[selections]]
+kind = "runs"
+run_rows_min = 1
+run_rows_max = 16
 fraction = 0.5
 seed = 7
 

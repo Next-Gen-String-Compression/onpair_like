@@ -17,7 +17,7 @@ Writes `fig1.pdf`, one column wide, the rows labelled on the left of the first p
 import argparse
 
 import paperfig as pf
-from config import METHOD, SCHEME
+from config import COLOR, METHOD, SCHEME
 import plot_micro as pm
 import plot_selection as ps
 
@@ -28,17 +28,20 @@ def cap(text):
 # (group, [(label, row label, colour)]) top to bottom, method before scheme.
 GROUPS = [
     ("Search raw strings", [
-        ("uncompressed_memmem/row-hay", SCHEME["uncompressed"], "#4D4D4D"),
-        ("lz4/decode+memmem-hay", f"Decompress, {SCHEME['lz4']}", "#7A7A7A"),
-        ("fsst/decode+memmem-hay", f"Decompress, {SCHEME['fsst']}", "#B87F00"),
+        ("uncompressed_memmem/row-hay", SCHEME["uncompressed"], COLOR["uncompressed"]),
+        ("lz4/decode+memmem-hay", f"Decompress, {SCHEME['lz4']}", COLOR["lz4-decode"]),
+        ("fsst/decode+memmem-hay", f"Decompress, {SCHEME['fsst']}", COLOR["fsst-decode"]),
     ]),
     ("Search compressed", [
-        ("fsst_like_tum/interp", f"{cap(METHOD['automaton'])}, {SCHEME['fsst']}", "#007A59"),
-        ("fsst_prefilter/fsst-prefilter", f"{cap(METHOD['cut'])}, {SCHEME['fsst']}", "#A65586"),
-        ("onpair_spiral/pf_walk@bits=16,prune=1.0", f"{cap(METHOD['cut'])}, {SCHEME['onpair16']}", "#005A8C"),
+        ("fsst_like_tum/interp", f"{cap(METHOD['automaton'])}, {SCHEME['fsst']}", COLOR["fsst-automaton"]),
+        ("fsst_prefilter/fsst-prefilter", f"{cap(METHOD['cut'])}, {SCHEME['fsst']}", COLOR["fsst-cut"]),
+        ("onpair_spiral/pf_walk@bits=16,prune=1.0", f"{cap(METHOD['cut'])}, {SCHEME['onpair']}", COLOR["onpair16-cut"]),
     ]),
 ]
 SYSTEMS = [label for _, members in GROUPS for label, _, _ in members]
+# The system whose values go inside its bars, in white; every other value
+# follows its bar, in black.
+INSIDE = "onpair_spiral/pf_walk@bits=16,prune=1.0"
 # The one column Figure 1 draws; Section 6 has all four.
 DATASET = "clickbench-url-1mi"
 # Each panel's GB/s axis as segments (from, to, ticks), each as wide as it is
@@ -73,7 +76,6 @@ def draw(d):
     fig, axes = pf.plt.subplots(1, len(segments), figsize=(pf.COLUMN_IN, 1.75), sharey=True,
                                 gridspec_kw={"width_ratios": [to - lo for lo, to, _ in segments]},
                                 constrained_layout=True)
-    labels = []
     remaining = iter(axes)
     for (share, title), panel in zip(SHARES, PANELS):
         at = d[d["share"] == share].groupby("label")["gbps"].median()
@@ -87,10 +89,12 @@ def draw(d):
                 ax.barh(yy, min(m, to) - lo, BAR, left=lo, color=color)
                 # The value where the bar ends: here, unless it goes on in the next segment.
                 if m < later:
-                    labels.append((ax, ax.annotate(f"{m:.1f}" if m >= 0.1 else "$<$0.1", (min(m, to), yy),
-                                                   xytext=(-1.5, 0), textcoords="offset points", ha="right",
-                                                   va="center", color="white", fontsize=pf.SMALL_PT, zorder=4),
-                                   lo, yy))
+                    inside = label == INSIDE
+                    ax.annotate(f"{m:.1f}" if m >= 0.1 else "$<$0.1", (min(m, to), yy),
+                                xytext=(-1.5 if inside else 1.5, 0), textcoords="offset points",
+                                ha="right" if inside else "left", va="center",
+                                color="white" if inside else "black", fontsize=pf.SMALL_PT, zorder=4,
+                                annotation_clip=False)
             ax.set_xlim(lo, to)
             # No tick at a segment's end, where its label would meet the next one's.
             ax.set_xticks(ticks)
@@ -129,13 +133,6 @@ def draw(d):
     if over > 0:
         for t, sub in texts:
             t.set_position((-width - over + (INDENT if sub else 0), 0))
-    # A value goes inside its bar's end, white, where it fits; else after the bar, black.
-    fig.canvas.draw()
-    for ax, text, lo, yy in labels:
-        if text.get_window_extent().x0 < ax.transData.transform((lo, yy))[0]:
-            text.set_ha("left")
-            text.set_position((1.5, 0))
-            text.set_color("black")
     return fig
 
 

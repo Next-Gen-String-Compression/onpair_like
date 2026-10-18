@@ -13,14 +13,13 @@ over every column pooled (`phase-shares`).
 One column-wide panel per entry under "phases" in paper/config.py: a
 series by its harness label (OnPair12, OnPair16 or the FSST port), the run
 it is read from and, where the split bench measured one, the CSV that
-divides its scan. The paper shows OnPair12 on NEON and says the others look
+divides its scan. The paper shows OnPair16 on NEON and says the others look
 the same; the rest are drawn for the assets only.
 
-Two rows on one selectivity axis. Top: the query's time per million rows of
-its column in black, and each phase's in its band's colour, on a log axis, so
-that a stage losing share is not read as getting cheaper. Bottom: stacked
-bands, each a phase's share of the query's time: the per-query prep, the
-minimum cut scan and the alignment walk that verifies the hits. All are
+One panel: each phase's time per row of the column, in ns, against needle
+selectivity on a log axis: the per-query prep, the minimum cut scan and the
+alignment walk that verifies the hits; the query's total in black under
+config.PHASE_TOTAL_LINE. All are
 the candidate's instrumented phases, each the fastest of five warm passes, so
 the whole is their sum and not the timed query: for OnPair12 1.02x below it
 on the M4 Pro, 1.10x in the median on the EPYC, where a cold query over a
@@ -57,13 +56,14 @@ INPUTS = pf.inputs("phases")
 ROW_GROUP = 524288
 
 COLOR = {
-    "prep": "#CC79A7",
+    "prep": "#262626",
     "matcher": "#D55E00",
     "resolver": "#009E73",
     "scan": "#D55E00",
     "walk": "#0072B2",
 }
-LABEL = {"prep": "planning", "walk": "verify", "scan": "matcher + resolver"}
+LABEL = {"prep": "compute cut", "matcher": "scan cut", "resolver": "resolve row", "walk": "verify hit",
+         "scan": "scan cut + resolve row"}
 SPLIT_STAGES = ["prep", "matcher", "resolver", "walk"]
 FUSED_STAGES = ["prep", "scan", "walk"]
 
@@ -121,23 +121,36 @@ def share_panel(d, stages):
     ms["total"] = ms.sum(axis=1)
     print(pd.concat([bins, ms.add_prefix("ms_")], axis=1).round(3).to_string())
     pf.style()
-    fig, (top, ax) = plt.subplots(2, 1, sharex=True, figsize=(pf.COLUMN_IN, 1.6),
-                                  height_ratios=[2, 1], constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(pf.COLUMN_IN, 1.15), constrained_layout=True)
     x = ms.index.to_numpy()
-    for key in stages:
-        top.plot(x, ms[key].to_numpy(), color=COLOR[key], linewidth=1.2)
-    top.plot(x, ms["total"].to_numpy(), color="black", marker="o")
-    pf.y_axis(top, [0.005, 50], figure=FIGURE)
-    top.set_ylabel("ms/$10^6$ rows")
-    ax.stackplot(bins.index.to_numpy(), *[bins[key].to_numpy() for key in stages],
-                 colors=[COLOR[key] for key in stages],
-                 labels=[LABEL.get(key, key) for key in stages], linewidth=0)
+    linear = pf.config.LINEAR_Y and FIGURE not in pf.config.LOG_FIGURES
+    if pf.config.PHASE_STACKED and linear:
+        # Top to bottom planning, matcher, resolver, verify, the legend in the
+        # same order; stackplot stacks from the bottom.
+        order = stages[::-1]
+        ax.stackplot(x, *[ms[key].to_numpy() for key in order], colors=[COLOR[key] for key in order],
+                     linewidth=0)
+        for key in stages:
+            ax.fill_between([], [], color=COLOR[key], linewidth=0, label=LABEL.get(key, key))
+    else:
+        for key in stages:
+            ax.plot(x, ms[key].to_numpy(), color=COLOR[key], linewidth=1.2,
+                    label=LABEL.get(key, key))
+    if pf.config.PHASE_TOTAL_LINE:
+        ax.plot(x, ms["total"].to_numpy(), color="black", marker="o")
+    pf.y_axis(ax, [0.005, 50], figure=FIGURE)
+    if linear:
+        # A gridline per ns/row, unlabelled; the labels stay at the major ticks.
+        ax.yaxis.set_minor_locator(pf.mpl.ticker.MultipleLocator(1))
+        ax.tick_params(axis="y", which="minor", length=0)
+        ax.grid(axis="y", which="minor", color=pf.mpl.rcParams["grid.color"],
+                linewidth=pf.mpl.rcParams["grid.linewidth"])
+    ax.set_ylabel("ns/row")
     pf.selectivity_axis(ax)
-    ax.set_ylim(0, 1)
-    ax.set_yticks([0, 0.5, 1])
-    ax.set_ylabel("share of time")
-    ax.grid(False)
-    fig.align_ylabels([top, ax])
+    # Column wide, so every bracket gets its label.
+    brackets = [0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1]
+    pf.share_ticks(ax, brackets, brackets)
+    pf.align_column_x(fig, [ax])
     return fig, ax
 
 
@@ -158,14 +171,6 @@ def main():
         (split_axes if split else fused_axes).append(panels[-1][1])
     pf.clear_figure(FIGURE, args.out)
     for (fig, ax), stem in zip(panels, stems):
-        # The legend strip centres on the plot area, not the panel with its y
-        # label, by an \hspace of the ink left of the axes less the ink right.
-        fig.canvas.draw()
-        inv = fig.dpi_scale_trans.inverted()
-        box = ax.get_window_extent().transformed(inv)
-        ink = fig.get_tightbbox()
-        offset = ((box.x0 - ink.x0) - (ink.x1 - box.x1)) / pf.COLUMN_IN
-        print(f"{FIGURE}/{stem}: legend \\hspace{{{offset:.4f}\\columnwidth}}")
         pf.save_panel(fig, FIGURE, stem, args.out)
     pf.save_legend(split_axes, FIGURE, ncol=len(SPLIT_STAGES), out_dir=args.out,
                    width=pf.COLUMN_IN)

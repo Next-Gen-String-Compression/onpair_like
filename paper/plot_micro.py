@@ -53,27 +53,27 @@ FIGURE_MACHINE = "ARM, NEON"
 # columns of two, and matplotlib fills a column at a time, so the pairs here
 # are the pairs on the page.
 SYSTEMS = [
-    ("onpair_spiral/pf_walk@bits=12,prune=1.0", name("onpair12", "cut"), "#56B4E9", "s"),
-    ("onpair_spiral/pf_walk@bits=16,prune=1.0", name("onpair16", "cut"), "#0072B2", "o"),
+    ("onpair_spiral/pf_walk@bits=12,prune=1.0", name("onpair12", "cut"), config.COLOR["onpair12-cut"], "s"),
+    ("onpair_spiral/pf_walk@bits=16,prune=1.0", name("onpair16", "cut"), config.COLOR["onpair16-cut"], "o"),
     # The same planner and walk over an FSST symbol table.
-    ("fsst_prefilter/fsst-prefilter", name("fsst", "cut"), "#CC79A7", "^"),
-    ("fsst_like_tum/interp", name("fsst", "automaton"), "#009E73", "D"),
+    ("fsst_prefilter/fsst-prefilter", name("fsst", "cut"), config.COLOR["fsst-cut"], "^"),
+    ("fsst_like_tum/interp", name("fsst", "automaton"), config.COLOR["fsst-automaton"], "D"),
     # The same automaton compiled by LLVM per row group, x86 only; the compile
     # is in the query time.
-    ("fsst_like_tum/llvm-simd", name("fsst", "compiled"), "#004D38", "d"),
-    ("fsst/decode+memmem-hay", name("fsst", "decode"), "#E69F00", "v"),
-    ("onpair/decode+memmem-hay", name("onpair16", "decode"), "#D55E00", "^"),
-    ("uncompressed/direct+memmem-hay", name("uncompressed", "memmem"), "#666666", "x"),
+    ("fsst_like_tum/llvm-simd", name("fsst", "compiled"), config.COLOR["fsst-compiled"], "d"),
+    ("fsst/decode+memmem-hay", name("fsst", "decode"), config.COLOR["fsst-decode"], "v"),
+    ("onpair/decode+memmem-hay", name("onpair16", "decode"), config.COLOR["onpair-decode"], "^"),
+    ("uncompressed/direct+memmem-hay", name("uncompressed", "memmem"), config.COLOR["uncompressed"], "x"),
 ]
 LEGEND_COLS = 4
 # The legend of micro-datasets and micro-arch: one titled block per method,
 # its schemes side by side under it.
 LEGEND_GROUPS = [
-    ("SIMD-cut", [(name("onpair12", "cut"), "OnPair12"), (name("onpair16", "cut"), "OnPair16"),
+    ("SIMD-cut", [(name("onpair12", "cut"), config.SCHEME["onpair12"]), (name("onpair16", "cut"), config.SCHEME["onpair16"]),
                   (name("fsst", "cut"), "FSST")]),
     ("Automaton (FSST)", [(name("fsst", "automaton"), "interpreted"),
                           (name("fsst", "compiled"), "compiled")]),
-    (r"Decompress \& search", [(name("onpair16", "decode"), "OnPair16"),
+    (r"Decompress \& search", [(name("onpair16", "decode"), config.SCHEME["onpair16"]),
                                (name("fsst", "decode"), "FSST")]),
     ("Search", [(name("uncompressed", "memmem"), "Uncompressed"),
                 ("Memory bandwidth", "Memory bandwidth")]),
@@ -122,8 +122,13 @@ GBS_LIM = [0.1, 300.0]
 
 
 def gbs_axis(axes, lim=GBS_LIM, figure=None):
-    """One panel, or a row of panels that share the axis."""
-    pf.y_axis(axes, lim, [0.01, 0.1, 1, 10, 100, 1000], "{:g}", figure=figure)
+    """One panel, or a row of panels that share the axis. The first n panels
+    of a figure in config.Y_TOP share its fixed top instead."""
+    axes = [axes] if isinstance(axes, pf.mpl.axes.Axes) else list(axes)
+    n, top = config.Y_TOP.get(figure, (0, None))
+    for group, t in ((axes[:n], top), (axes[n:], None)):
+        if group:
+            pf.y_axis(group, lim, [0.01, 0.1, 1, 10, 100, 1000], "{:g}", figure=figure, top=t)
 
 
 def chunk_label(n):
@@ -264,9 +269,9 @@ def datasets_of(loaded):
 
 
 def dataset_width(n):
-    """A panel is drawn at the width it prints at; four to a row is 0.23 of
-    the text width, three 0.32, two 0.49."""
-    return {2: pf.PANEL_2UP, 4: pf.PANEL_4UP}.get(n, pf.PANEL_3UP)
+    """A panel is drawn at the width it prints at; four to a row fill the
+    text width edge to edge, the gap between them save_row's, three 0.32, two 0.49."""
+    return {2: pf.PANEL_2UP, 4: pf.TEXT_IN / 4}.get(n, pf.PANEL_3UP)
 
 
 # One panel per system, drawn on one colour scale so the cells compare across
@@ -283,7 +288,7 @@ MATRIX_SYSTEMS = [("fsst_like_tum/interp", "fsst-automaton"),
 # Rows are decades of selectivity under a zero-match row; columns are the
 # needle panel's buckets.
 MATRIX_SEL_EDGES = [1e-5, 1e-4, 1e-3, 1e-2, 1e-1]
-MATRIX_SEL_LABELS = ["0 rows", r"$<$0.001\%", r"0.001--0.01\%", r"0.01--0.1\%",
+MATRIX_SEL_LABELS = [r"0\%", r"$<$0.001\%", r"0.001--0.01\%", r"0.01--0.1\%",
                      r"0.1--1\%", r"1--10\%", r"10--100\%"]
 MATRIX_EMPTY = ("#EDEBE6", "white")
 MATRIX_DATASETS = ("clickbench-url-1mi",)
@@ -418,7 +423,7 @@ def matrix_panel(loaded, out):
         if panels:
             ax.set_yticklabels([])
         panels.append((fig, ax))
-    pf.save_row(panels, "micro-matrix", [name for name, _ in grids], 0.891 * pf.PANEL_4UP, out)
+    pf.save_row(panels, "micro-matrix", [name for name, _ in grids], 0.891 * pf.PANEL_4UP, out, gap=0)
     matrix_legend(norm, MATRIX_CMAP, out)
 
 
@@ -475,7 +480,7 @@ def dataset_panels(loaded, out):
         fig, ax = pf.panel(width=width)
         facet_panel(ax, df[df["dataset"] == dataset])
         panels.append((fig, ax))
-    gbs_axis([ax for _, ax in panels])
+    gbs_axis([ax for _, ax in panels], figure="micro-datasets")
     if pf.inputs("micro")["bandwidth_line"]:
         for _, ax in panels:
             memory_line(ax, FIGURE_MACHINE, "Memory bandwidth")
@@ -488,15 +493,15 @@ def dataset_panels(loaded, out):
 
 def machine_panels(loaded, out):
     """`micro-arch/<set>`: one instruction set per panel, every system, pooled
-    over the columns, two panels in one column of the page. Beside them
-    `micro-rows/rowgroup` and `selection`, fewer rows per symbol table, from
-    a smaller row group or from a pre-selection of the whole column, from the
-    [rowgroup] and [selection] runs. The two figures share `micro-arch/legend`,
-    a text-wide strip."""
+    over the columns, two panels in one column of the page, no legend.
+    `micro-rows/<panel>`: fewer rows per symbol table on AVX-512, from a
+    smaller row group ([rowgroup]) or from a pre-selection of the whole column
+    ([selection]) in runs of 1-16 rows or uniform rows, three panels with
+    `micro-rows/legend`; plot_no_sort.py's panel completes the row."""
     import plot_selection as ps
 
     pf.clear_figure("micro-arch", out)
-    width = 0.48 * pf.COLUMN_IN
+    width = 0.5 * pf.COLUMN_IN
     panels, machines = [], []
     for machine, df in loaded:
         if df is None or machine not in ARCH_MACHINES:
@@ -508,27 +513,46 @@ def machine_panels(loaded, out):
     if not panels:
         return
     gbs_axis([ax for _, ax in panels], figure="micro-arch")
+    # One shared range, so only the first panel is numbered.
+    for _, ax in panels[1:]:
+        ax.set_yticklabels([])
     # No legend entry: the caption names the line.
     if pf.inputs("micro")["bandwidth_line"]:
         for (_, ax), machine in zip(panels, machines):
             memory_line(ax, machine)
     pf.save_row(panels, "micro-arch", [pf.slug(m) for m in machines], width, out, unit=pf.COLUMN_IN)
-    pf.save_grouped_legend(panels[-1][1], LEGEND_GROUPS, "micro-arch", out)
 
-    rowgroup = pf.panel(width=width)
+    # The row group pair, NEON then AVX-512 as in micro-arch, one column wide;
+    # the compiled automaton is x86 only.
     rows = pf.inputs("rows")
-    rg = pd.concat([load(rows["rowgroup"]["run"]), load(rows["rowgroup-llvm"]["run"])])
-    rg = rg.assign(chunk=rg["chunk_rows"].where(rg["chunk_rows"] > 0, rg["num_rows"]))
-    trend_panel(rowgroup[1], rg, "chunk", band=False)
-    rows_axis(rowgroup[1], "rows per row group")
-    selection = pf.panel(width=width)
-    ps.panel(selection[1], ps.load_selection())
-    gbs_axis([rowgroup[1], selection[1]], ROWS_GBS_LIM, "micro-rows")
-    for _fig, ax in (rowgroup, selection):
+    groups = []
+    for runs in ([rows["rowgroup-neon"]["run"]], [rows["rowgroup"]["run"], rows["rowgroup-llvm"]["run"]]):
+        rg = pd.concat([load(run) for run in runs], ignore_index=True)
+        rg = rg.assign(chunk=rg["chunk_rows"].where(rg["chunk_rows"] > 0, rg["num_rows"]))
+        p = pf.panel(width=pf.COLUMN_IN / 2)
+        trend_panel(p[1], rg, "chunk", band=False)
+        rows_axis(p[1], "rows per row group")
+        groups.append(p)
+    # The selection pair fills one column beside micro-arch.
+    sel = ps.load_selection()
+    pair_width = pf.COLUMN_IN / len(ps.SHAPES)
+    panels = []
+    for shape in ps.SHAPES:
+        p = pf.panel(width=pair_width)
+        ps.panel(p[1], sel[(sel["shape"] == shape) | (sel["selection"] == "all")])
+        panels.append(p)
+    gbs_axis([ax for _, ax in groups], ROWS_GBS_LIM, "micro-trends")
+    gbs_axis([ax for _, ax in panels], ROWS_GBS_LIM, "micro-rows")
+    for _, ax in groups + panels:
         ax.set_ylabel("uncompressed GB/s")
+    # Each pair shares one range, so only its first panel is numbered.
+    for _, ax in groups[1:] + panels[1:]:
+        ax.set_yticklabels([])
     pf.clear_figure("micro-rows", out)
-    pf.save_row([rowgroup, selection], "micro-rows", ["rowgroup", "selection"], width, out,
+    pf.save_row(groups, "micro-rows", ["rowgroup-neon", "rowgroup-avx512"], pf.COLUMN_IN / 2, out,
                 unit=pf.COLUMN_IN)
+    pf.save_row(panels, "micro-rows", ps.SHAPES, pair_width, out, unit=pf.COLUMN_IN)
+    pf.save_grouped_legend(groups[1][1], LEGEND_GROUPS, "micro-rows", out)
 
 
 # The systems with a filter whose false positives `false-positives` draws.
@@ -561,8 +585,7 @@ def fp_panel(loaded, out):
         xs.extend(m["selectivity"])
     ax.axhline(1, color="#999999", linewidth=0.8, zorder=0)
     ax.set_xscale("log")
-    ax.set_xticks([1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1])
-    ax.set_xticklabels(["$10^{-6}$", "", "$10^{-4}$", "", "$10^{-2}$", "", "1"])
+    pf.share_ticks(ax, [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1], [1e-6, 1e-4, 1e-2, 1])
     ax.xaxis.set_minor_locator(pf.mpl.ticker.NullLocator())
     # Just enough room that the end markers are not cut by the axes.
     ax.set_xlim(min(xs) / 1.25, max(xs) * 1.25)

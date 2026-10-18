@@ -20,7 +20,10 @@ prints them, hold a LIKE (DuckDB rewrites one into contains, prefix, suffix or
 ~~), its operator time in the query's fastest run, CPU time over all threads.
 Each `clickbench.pdf` and `job.pdf`, and the runtime figures `legend.pdf`.
 `e2e-job-duckdb/` is the DuckDB pair on JOB alone, `queries.pdf` and
-`scans.pdf`, each a horizontal box on its own linear axis. A LIKE a system evaluates above the scan rather
+`scans.pdf`, each a horizontal box on its own linear axis. Every figure is drawn
+twice: DuckDB's pair as run, and again from the pair with compressed equality on
+in both arms (e2e/run.py's duckdb-eq and duckdb-contains-eq), named with -eq,
+when the run has it. A LIKE a system evaluates above the scan rather
 than in it is not counted, so the two systems' scans can differ; a system and
 its baseline share their plans.
 """
@@ -34,19 +37,22 @@ import numpy as np
 import pandas as pd
 
 import paperfig as pf
-from config import ENGINE, METHOD, SCHEME
+from config import COLOR, ENGINE, METHOD, SCHEME
 
 ROOT = Path(__file__).resolve().parent.parent
+# Named and coloured like the micro series they stand for, config.COLOR.
 SYSTEMS = [
-    ("duckdb", f"{ENGINE['duckdb']}, {SCHEME['fsst']}", "#E69F00"),
-    ("duckdb-contains", f"{ENGINE['duckdb']}, {SCHEME['fsst']} {METHOD['cut']}", "#CC79A7"),
-    ("vortex", ENGINE["vortex-release"], "#999999"),
-    ("vortex-onpair", f"{ENGINE['vortex']}, {SCHEME['onpair']} {METHOD['cut']}", "#0072B2"),
+    ("duckdb", f"{ENGINE['duckdb']}, {SCHEME['fsst']} {METHOD['decode']}", COLOR["fsst-decode"]),
+    ("duckdb-contains", f"{ENGINE['duckdb']}, {SCHEME['fsst']} {METHOD['cut']}", COLOR["fsst-cut"]),
+    ("vortex", f"{ENGINE['vortex']}, {METHOD['decode']}", COLOR["onpair-decode"]),
+    ("vortex-onpair", f"{ENGINE['vortex']}, {SCHEME['onpair']} {METHOD['cut']}", COLOR["onpair16-cut"]),
 ]
 # baseline, cut scan, label, colour
-PAIRS = [("duckdb", "duckdb-contains", ENGINE["duckdb"], "#CC79A7"),
-         ("vortex", "vortex-onpair", ENGINE["vortex"], "#0072B2")]
+PAIRS = [("duckdb", "duckdb-contains", ENGINE["duckdb"], COLOR["fsst-cut"]),
+         ("vortex", "vortex-onpair", ENGINE["vortex"], COLOR["onpair16-cut"])]
 WORKLOADS = [("clickbench", "ClickBench"), ("job", "JOB")]
+# figure name suffix, the arms that stand in for duckdb and duckdb-contains
+BASELINES = [("", {}), ("-eq", {"duckdb-eq": "duckdb", "duckdb-contains-eq": "duckdb-contains"})]
 # The speedup figures drop items whose baseline takes less than this.
 MIN_S = 1e-3
 SPEEDUP_TICKS = [m * 10.0 ** e for e in range(-2, 4) for m in (1, 2, 5)]
@@ -65,7 +71,7 @@ def load(run):
     q = pd.read_csv(path / "queries.csv")
     s = pd.read_csv(path / "scans.csv", keep_default_na=False)
     q["seconds"] = q["latency_s"].fillna(q["time_s"])
-    best = q.loc[q.groupby(["system", "workload", "query"])["seconds"].idxmin()]
+    best = pf.fastest(q, ["system", "workload", "query"], "seconds")
     s = s.merge(best[["system", "workload", "query", "run"]])
     like = [bool(re.search(LIKE[system.split("-")[0]], f)) for system, f in zip(s["system"], s["filters"])]
     s = s[like].assign(item=lambda x: x["query"] + "/" + x["scan"].astype(str))
@@ -131,23 +137,23 @@ def panel(d, workload, title, ylabel, speedup):
     return fig, ax
 
 
-def job_duckdb(data, out):
-    """`e2e-job-duckdb/{queries,scans}`: DuckDB with FSST over DuckDB with the
+def job_duckdb(data, suffix, out):
+    """`e2e-job-duckdb<suffix>/{queries,scans}`: DuckDB with FSST over DuckDB with the
     FSST cut scan on JOB, the queries and the LIKE scans each one horizontal
     box on its own linear axis, outliers as points."""
     base, cand, _, color = PAIRS[0]
-    pf.clear_figure("e2e-job-duckdb", out)
+    pf.clear_figure("e2e-job-duckdb" + suffix, out)
     panels = []
     for source, label in (("e2e-queries", "query"), ("e2e-scans", "scan")):
         d = data[source]
         g = d[d["workload"] == "job"].pivot_table(index="item", columns="system", values="seconds")
         r = (g[base] / g[cand])[g[base] >= MIN_S].dropna()
-        print(f"e2e-job-duckdb {label}: n {len(r)}, median {r.median():.2f}x, "
+        print(f"e2e-job-duckdb{suffix} {label}: n {len(r)}, median {r.median():.2f}x, "
               f"geomean {np.exp(np.log(r).mean()):.2f}x, slower {int((r < 1).sum())}, "
               f"min {r.min():.2f}x, max {r.max():.2f}x")
         fig, ax = pf.panel(width=pf.COLUMN_IN, height=0.8)
         ax.axvline(1, color="#BBBBBB", linewidth=0.6, zorder=0)
-        ax.boxplot([r], vert=False, widths=0.35, patch_artist=True, showfliers=True,
+        ax.boxplot([r], vert=False, widths=0.2, patch_artist=True, showfliers=True,
                    boxprops={"facecolor": color, "edgecolor": "black", "linewidth": 0.6},
                    medianprops={"color": "black", "linewidth": 0.8},
                    whiskerprops={"linewidth": 0.6}, capprops={"linewidth": 0.6},
@@ -169,23 +175,20 @@ def job_duckdb(data, out):
         ax.set_xticks([1] + [t for t in nice if lo <= t <= hi and abs(t - 1) > 0.1 * (hi - lo)])
         ax.xaxis.set_major_formatter(pf.mpl.ticker.FuncFormatter(lambda v, _: f"{v:g}$\\times$"))
         ax.grid(axis="y", visible=False)
-        ax.set_xlabel(f"{label} speedup (n = {len(r)})")
+        # The subcaption carries what the x label would: "<label> speedup (n = ...)".
+        print(f"e2e-job-duckdb{suffix} {label}: subcaption {label.capitalize()} speedup (n = {len(r)})")
         panels.append((fig, ax))
     # Stacked in the paper; save_row gives the two the same axes width.
-    pf.save_row(panels, "e2e-job-duckdb", ["queries", "scans"], pf.COLUMN_IN, out, unit=pf.COLUMN_IN)
+    pf.save_row(panels, "e2e-job-duckdb" + suffix, ["queries", "scans"], pf.COLUMN_IN, out, unit=pf.COLUMN_IN,
+                gap=0)
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--run", default=None)
-    ap.add_argument("--out", default=None)
-    args = ap.parse_args()
-    data = load(args.run or pf.inputs("e2e")["run"])
+def draw(data, suffix, out):
     for name, source, ylabel, speedup in FIGURES:
         d = data[source]
         if not speedup:
-            summary(source, d)
-        pf.clear_figure(name, args.out)
+            summary(source + suffix, d)
+        pf.clear_figure(name + suffix, out)
         titles = [f"{t}, {d.loc[d['workload'] == w, 'item'].nunique()} queries" if source == "e2e-queries" and not speedup else t
                   for w, t in WORKLOADS]
         panels = [panel(d, w, t, ylabel, speedup) for (w, _), t in zip(WORKLOADS, titles)]
@@ -200,10 +203,27 @@ def main():
             lims = [ax.get_ylim() for ax in axes]
             for ax in axes:
                 ax.set_ylim(min(lo for lo, _ in lims), max(hi for _, hi in lims))
-        pf.save_row(panels, name, [w for w, _ in WORKLOADS], 0.5 * pf.COLUMN_IN, args.out, unit=pf.COLUMN_IN)
+        pf.save_row(panels, name + suffix, [w for w, _ in WORKLOADS], 0.5 * pf.COLUMN_IN, out, unit=pf.COLUMN_IN)
         if not speedup:
-            pf.save_legend(panels[-1][1], name, 4, args.out)
-    job_duckdb(data, args.out)
+            pf.save_legend(panels[-1][1], name + suffix, 4, out)
+    job_duckdb(data, suffix, out)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--run", default=None)
+    ap.add_argument("--out", default=None)
+    args = ap.parse_args()
+    data = load(args.run or pf.inputs("e2e")["run"])
+    stand_ins = {s for _, arms in BASELINES for s in arms}
+    for suffix, arms in BASELINES:
+        if not set(arms) <= set(data["e2e-queries"]["system"]):
+            print(f"no {', '.join(arms)} in the run: skipping the {suffix} figures")
+            continue
+        # the stand-ins under the names of the arms they replace, every other stand-in dropped
+        variant = {k: d[~d["system"].isin(stand_ins - set(arms)) & ~d["system"].isin(arms.values())]
+                   .replace({"system": arms}) for k, d in data.items()}
+        draw(variant, suffix, args.out)
 
 
 if __name__ == "__main__":

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Runs every ClickBench and JOB query on the four systems of the end-to-end
+"""Runs every ClickBench and JOB query on the six systems of the end-to-end
 benchmark, best of `runs`, and keeps the plan of the fastest run.
 
     duckdb            the fork, FSST vectors on, compressed contains off
     duckdb-contains   the fork, FSST vectors on, compressed contains on
+    duckdb-eq, duckdb-contains-eq   the same two with compressed equality on
     vortex            duckdb-vortex with vortex-duckdb 0.86.1
     vortex-onpair     duckdb-vortex with the OnPair revision
 
@@ -58,6 +59,13 @@ SYSTEMS = {
     "vortex": ("duckdb-vortex-0.86.1", [], "0861"),
     "vortex-onpair": ("duckdb-vortex-onpair", [], "onpair"),
 }
+# The DuckDB pair again with compressed equality on in both arms; e2e/micro.py runs SYSTEMS only.
+DUCKDB_EQ = ["SET enable_fsst_vectors=true;", "SET enable_fsst_eq=true;"]
+ARMS = {
+    **SYSTEMS,
+    "duckdb-eq": ("duckdb", DUCKDB_EQ + ["SET enable_fsst_contains=false;"], None),
+    "duckdb-contains-eq": ("duckdb", DUCKDB_EQ + ["SET enable_fsst_contains=true;"], None),
+}
 WORKLOADS = {
     "clickbench": (sorted((QUERIES / "clickbench/queries").glob("q[0-9]*.sql")), "ch.contains.duckdb"),
     "job": (sorted((QUERIES / "imdb_plan_cost/queries").glob("*.sql")), "imdb.pf.duckdb"),
@@ -71,7 +79,7 @@ def views(workload, tag):
 
 
 def run_shell(system, workload, runs, threads, out):
-    binary, settings, tag = SYSTEMS[system]
+    binary, settings, tag = ARMS[system]
     files, db = WORKLOADS[workload]
     lines = [f"SET threads={threads};", "PRAGMA disable_progress_bar;", *settings,
              *(views(workload, tag) if tag else []), ".mode csv"]
@@ -137,7 +145,7 @@ def main():
 
     rows, scan_rows, missing = [], [], []
     for workload in WORKLOADS:
-        for system in SYSTEMS:
+        for system in ARMS:
             start = datetime.datetime.now()
             plans = out / "plans" / system / workload
             plans.mkdir(parents=True, exist_ok=True)
@@ -168,13 +176,13 @@ def main():
     # A result that differs from the DuckDB baseline's, compared as sorted lines:
     # ties under a LIMIT and float formatting differ between versions too.
     mismatches = [f"{system}/{workload}/{f.stem}"
-                  for workload, (files, _) in WORKLOADS.items() for f in files for system in list(SYSTEMS)[1:]
+                  for workload, (files, _) in WORKLOADS.items() for f in files for system in list(ARMS)[1:]
                   if not same_result(out / "results" / "duckdb" / workload / f"{f.stem}.csv",
                                      out / "results" / system / workload / f"{f.stem}.csv")]
     pins = dict(re.findall(r"^(\w+)=(\S+)", (ROOT / "pins.env").read_text(), re.M))
     versions = {b: subprocess.run([str(BIN / b), "-noheader", "-list", "-c", "SELECT version()"],
                                   capture_output=True, text=True).stdout.strip()
-                for b in sorted({s[0] for s in SYSTEMS.values()})}
+                for b in sorted({s[0] for s in ARMS.values()})}
     used = [db for _, db in WORKLOADS.values()] + [f"{w}.{tag}.vortex" for w in ("hits", "imdb")
                                                     for _, _, tag in SYSTEMS.values() if tag]
     data = {name: sum(f.stat().st_size for f in ([p] if p.is_file() else p.iterdir()))
@@ -184,7 +192,7 @@ def main():
                                       text=True).stdout.strip(),
                 "threads": args.threads, "runs": args.runs, "pins": pins, "versions": versions,
                 "data_dir": str(DATA), "data_bytes": data,
-                "settings": {s: v[1] for s, v in SYSTEMS.items()}, "segment_cache_mb": SEGMENT_CACHE_MB,
+                "settings": {s: v[1] for s, v in ARMS.items()}, "segment_cache_mb": SEGMENT_CACHE_MB,
                 "missing": missing, "mismatches": mismatches}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"wrote {out}: {len(rows)} runs, {len(missing)} queries without a plan, "

@@ -9,8 +9,9 @@ Reads the columns e2e/data.sh writes into $E2E_DATA (micro.duckdb and
 micro.{0861,onpair}.vortex) and the suites paper/specs/micro/<spec>.toml
 names. A needle is left out when it is not valid UTF-8, which a VARCHAR
 literal cannot hold, or holds `%`, `_` or a backslash: vortex-duckdb turns
-contains(x, n) into LIKE '%n%' without escaping n. Every count is checked
-against the suite's truth. One shell per system and column; each needle's
+contains(x, n) into LIKE '%n%' without escaping n. The URL column also runs
+ClickBench q20's needle `google` as query `q20`. Every count is checked
+against the suite's truth, q20's against DuckDB's contains on the parquet. One shell per system and column; each needle's
 first run is untimed and gives the count, each of the `runs` after it writes
 its profile. Writes results/e2e/<name>/:
 
@@ -38,6 +39,8 @@ from pathlib import Path
 from run import BIN, DATA, E2E, ROOT, SEGMENT_CACHE_MB, SYSTEMS, parse
 
 SPECS = ROOT / "paper" / "specs" / "micro"
+# ClickBench q20, SELECT COUNT(*) FROM hits WHERE URL LIKE '%google%', as one more needle of the URL column
+Q20 = ("clickbench-url-1mi", "google")
 
 
 def table(dataset):
@@ -64,6 +67,15 @@ def needles(spec):
                 skipped.append((q["id"], "% _ or \\"))
                 continue
             out.setdefault(dataset, []).append({**q, "needle": text})
+    dataset, needle = Q20
+    if dataset in out:
+        source = ROOT / "datasets" / "raw" / dataset / "column.parquet"
+        count = int(subprocess.run([str(BIN / "duckdb"), "-noheader", "-list", "-c",
+                                    f"SELECT count(*) FROM '{source}' WHERE contains(data, '{needle}')"],
+                                   capture_output=True, text=True, check=True).stdout)
+        rows = json.loads((ROOT / "datasets" / dataset / "manifest.json").read_text())["num_rows"]
+        out[dataset].append({"id": f"{dataset}.q20", "needle": needle, "truth": {"count": count},
+                             "derived": {"selectivity": count / rows}})
     return out, skipped
 
 

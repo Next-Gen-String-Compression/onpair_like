@@ -45,20 +45,33 @@ SYSTEMS = [
 ]
 
 
+def draw(seed, k):
+    return (xxhash.xxh3_64_intdigest(k.to_bytes(8, "little"), seed) >> 11) / float(1 << 53)
+
+
 def selected_bytes(dataset, selections):
-    """{selection: (rows, bytes)} of the `uniform` selections: row r is selected
-    when xxh3(r, seed) >> 11 over 2^53 falls below the fraction."""
+    """{selection: (rows, bytes)}. `uniform`: row r is selected when
+    xxh3(r, seed) >> 11 over 2^53 falls below the fraction. `runs`: one run per
+    period, its length and offset drawn from draws 2k and 2k + 1."""
     col = ipc.open_file(pm.HERE.parent / "datasets" / dataset / "data.arrow").read_all().column(0)
     lens = pc.binary_length(col).to_numpy(zero_copy_only=False)
+    n = len(lens)
     draws, out = {}, {}
     for name in selections:
-        f, seed = re.fullmatch(r"uniform-f([0-9.e-]+)-s(\d+)", name).groups()
-        seed = int(seed)
-        if seed not in draws:
-            draws[seed] = np.fromiter(
-                ((xxhash.xxh3_64_intdigest(r.to_bytes(8, "little"), seed) >> 11) / float(1 << 53)
-                 for r in range(len(lens))), float, len(lens))
-        mask = draws[seed] < float(f)
+        mask = np.zeros(n, bool)
+        if g := re.fullmatch(r"uniform-f([0-9.e-]+)-s(\d+)", name):
+            f, seed = float(g[1]), int(g[2])
+            if seed not in draws:
+                draws[seed] = np.fromiter((draw(seed, r) for r in range(n)), float, n)
+            mask = draws[seed] < f
+        else:
+            lo, hi, f, seed = re.fullmatch(r"runs-(\d+)-(\d+)-f([0-9.e-]+)-s(\d+)", name).groups()
+            lo, hi, f, seed = int(lo), int(hi), float(f), int(seed)
+            period = max(round((lo + hi) / 2 / f), hi)
+            for k in range(-(-n // period)):
+                length = min(lo + int(draw(seed, 2 * k) * (hi - lo + 1)), hi)
+                start = k * period + min(int(draw(seed, 2 * k + 1) * (period - length + 1)), period - length)
+                mask[start:start + length] = True
         out[name] = (int(mask.sum()), int(lens[mask].sum()))
     return out, int(lens.sum())
 
@@ -83,20 +96,22 @@ def load(run):
             if not (d.loc[at, "selection_rows"] == rows).all():
                 raise SystemExit(f"{dataset} {name}: {rows} rows rebuilt, the run has another count")
             d.loc[at, "gbps"] *= nbytes / payload
-    # Each share is drawn at its nominal fraction.
-    nominal = d["selection"].str.extract(r"uniform-f([0-9.e-]+)-s")[0].astype(float)
-    d = pm.pd.concat([d.assign(share=nominal), every], ignore_index=True)
+    # Each share is drawn at its nominal fraction; `shape` is uniform or runs-<min>-<max>.
+    nominal = d["selection"].str.extract(r"-f([0-9.e-]+)-s")[0].astype(float)
+    shape = d["selection"].str.extract(r"^(uniform|runs-\d+-\d+)")[0]
+    d = pm.pd.concat([d.assign(share=nominal, shape=shape), every], ignore_index=True)
     # Rows selected per row group; a chunk of 0 is the whole column.
     group = d["chunk_rows"].where(d["chunk_rows"] > 0, d["num_rows"])
     return d.assign(rows=d["share"] * group)
 
 
+# The selection shapes micro-rows draws, most clustered first.
+SHAPES = ["runs-1-16", "uniform"]
+
+
 def load_selection():
-    """The pinned selection run, uncompressed memmem from its own run."""
-    runs = pf.inputs("rows")["selection"]
-    d = load(runs["run"])
-    d = d[~d["label"].str.startswith("uncompressed_memmem/")]
-    return pm.pd.concat([d, load(runs["uncompressed"])], ignore_index=True)
+    """The pinned selection run."""
+    return load(pf.inputs("rows")["selection"]["run"])
 
 
 def panel(ax, d):
@@ -110,7 +125,7 @@ def panel(ax, d):
     # The share of the row group selected, as dotted lines at each decade,
     # labelled on the 100 GB/s line in the tick labels' size.
     group = (d["rows"] / d["share"]).iloc[0]
-    for share, text in [(1e-2, r"1\%"), (1e-1, r"10\%")]:
+    for share, text in [(1e-2, r"1\%"), (1e-1, r"10\%"), (1, r"100\%")]:
         ax.axvline(share * group, color="#999999", linestyle=":", linewidth=0.8, zorder=0)
         ax.text(share * group, 100, text, ha="center", va="center_baseline",
                 fontsize=pf.mpl.rcParams["ytick.labelsize"], color="#555555",
@@ -195,8 +210,7 @@ def share_axis(ax):
     pf.selectivity_axis(ax, label="rows pre-selected")
     # No rows selected answers nothing, so the axis starts at the 10^-5 bracket
     # rather than at the zero bracket the other figures keep.
-    ax.set_xticks([1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1])
-    ax.set_xticklabels(["", "$10^{-4}$", "", "$10^{-2}$", "", "1"])
+    pf.share_ticks(ax, [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1], [1e-4, 1e-2, 1])
     ax.set_xlim(0.87e-5, 1.3)
 
 
@@ -207,6 +221,8 @@ def main():
     args = ap.parse_args()
     run = args.run or pf.inputs("rows")["selection"]["run"]
     df = load(args.run) if args.run else load_selection()
+    # The per-column panels are uniform; micro-rows draws the other shapes.
+    df = df[(df["shape"] == "uniform") | (df["selection"] == "all")]
     if df.empty:
         raise SystemExit(f"no rows for {run}")
     med = df.groupby(["dataset", "label", "share"])["gbps"].median()

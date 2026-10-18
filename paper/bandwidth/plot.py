@@ -81,7 +81,7 @@ def main():
     files = sorted((HERE / "results").glob("*.csv"))
     if not files:
         raise SystemExit("no results/*.csv — run run.sh first")
-    df = pd.concat(pd.read_csv(f) for f in files)
+    df = pd.concat((pd.read_csv(f) for f in files), ignore_index=True)
     data = {m: g for m, g in df.groupby("machine")}
 
     fig, ax = pf.panel(pf.COLUMN_IN, height=1.9)
