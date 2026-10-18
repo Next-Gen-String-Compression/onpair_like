@@ -121,6 +121,22 @@ fetching it:
 | `duckdb/` | DuckDB with the compressed-domain `contains` on FSST, without its `data/` and `test/` |
 | `vortex-0.86.1/`, `vortex-onpair/` | Vortex 0.86.1 and Vortex with OnPair strings, each with a per-file segment cache |
 
+The SIMD cut itself lives in two of these folders, once per encoding, with the same structure:
+
+| part | OnPair (Rust) | FSST (C++) |
+|---|---|---|
+| planning: alignment graph, minimum cut, probe cover | `third_party/onpair/src/search/substring/prefilter/` (`graph.rs`, `mincut.rs`, `cover.rs`, `plan.rs`) | `third_party/fsst/search/prefilter/` (`graph.hpp`, `mincut.hpp`, `cover.hpp`, `plan.hpp`) |
+| scan: SIMD matchers, resolver, alignment walk, kernel choice | `.../prefilter/scan/` (`matcher/`, `resolver/`, `walk.rs`, `policy/`) | `.../prefilter/scan/` (`matcher/`, `resolver/`, `walk/`, `policy/`) |
+| kernel sweeps behind the matcher figure | `.../prefilter/scan/bench/` | `.../prefilter/scan/bench/` |
+| benchmark candidate | `candidates/onpair_spiral` | `candidates/fsst_prefilter` |
+
+The matchers have NEON, AVX2 and AVX-512 versions; which are compiled follows the target CPU
+(`-C target-cpu=native` for Rust, `-march=native` for C++). In the end-to-end
+systems, DuckDB evaluates `contains` on FSST strings with the FSST prefilter
+(`third_party/duckdb/src/planner/filter/fsst_contains.cpp`, `src/common/vector/fsst_ops.cpp`
+and the rule in `src/optimizer/rule/like_optimizations.cpp`), and Vortex stores strings as OnPair
+in `third_party/vortex-onpair/encodings/onpair`.
+
 Unmodified dependencies are fetched at the revisions in [pins.env](pins.env): upstream FSST,
 FSST-LIKE and fmt (by CMake), duckdb-vortex (by `e2e/build.sh`) and the crates.io packages.
 Each folder keeps its upstream licence.
