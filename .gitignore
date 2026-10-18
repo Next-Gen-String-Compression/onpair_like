@@ -29,3 +29,4 @@ paper/out/
 /third_party/fsst/search/prefilter/scan/bench/output/
 /third_party/onpair/target*/
 /third_party/onpair/bench/
+__pycache__/
