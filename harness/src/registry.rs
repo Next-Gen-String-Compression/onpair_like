@@ -17,6 +17,8 @@ pub fn candidates() -> Vec<Candidate> {
     v.push(lb_cand_uncompressed::vtable());
     #[cfg(feature = "cand-uncompressed-memmem")]
     v.push(lb_cand_uncompressed_memmem::vtable());
+    #[cfg(feature = "cand-uncompressed-vectorscan")]
+    v.push(lb_cand_uncompressed_vectorscan::vtable());
     #[cfg(feature = "cand-uncompressed-prefilter")]
     v.push(lb_cand_uncompressed_prefilter::vtable());
     #[cfg(feature = "cand-dict-uncompressed-prefilter")]
@@ -57,6 +59,12 @@ pub fn candidates() -> Vec<Candidate> {
     // the local checkout, so a spec can put the two side by side.
     #[cfg(feature = "cand-onpair-spiral-pinned")]
     v.push(lb_cand_onpair_spiral_pinned::vtable());
+    #[cfg(feature = "cand-onpair-spiral-debug")]
+    v.push(lb_cand_onpair_spiral_debug::vtable());
+    #[cfg(feature = "cand-onpair-spiral-packed12")]
+    v.push(lb_cand_onpair_spiral_packed12::vtable());
+    #[cfg(feature = "cand-fsst-prefilter-debug")]
+    v.push(lb_cand_fsst_prefilter_debug::vtable());
     // And against the `codex/prefilter-scan-refactor` branch, a third line.
     #[cfg(feature = "cand-onpair-spiral-refactor")]
     v.push(lb_cand_onpair_spiral_refactor::vtable());

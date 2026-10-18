@@ -447,7 +447,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -506,6 +506,15 @@ dependencies = [
  "libc",
  "num_cpus",
  "winapi",
+]
+
+[[package]]
+name = "crc32fast"
+version = "1.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01a7799fd6b852db0e61728dde9a204c423b44d689dbd432522543614b490e78"
+dependencies = [
+ "cfg-if",
 ]
 
 [[package]]
@@ -589,6 +598,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
 
 [[package]]
+name = "filetime"
+version = "0.2.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c287a33c7f0a620c38e641e7f60827713987b3c0f26e8ddc9462cc69cf75759"
+dependencies = [
+ "cfg-if",
+ "libc",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -610,6 +629,7 @@ version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
+ "crc32fast",
  "miniz_oxide",
  "zlib-rs",
 ]
@@ -619,6 +639,33 @@ name = "foldhash"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+
+[[package]]
+name = "foreign-types"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d737d9aa519fb7b749cbc3b962edcf310a8dd1f4b67c91c4f83975dbdd17d965"
+dependencies = [
+ "foreign-types-macros",
+ "foreign-types-shared",
+]
+
+[[package]]
+name = "foreign-types-macros"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea5190182e6915eb873ddbc16e23b711b6eb1f9c00a0d0a3a91b5f6228475225"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
+]
+
+[[package]]
+name = "foreign-types-shared"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 
 [[package]]
 name = "fsst-rs"
@@ -880,6 +927,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "lb-cand-fsst-prefilter-debug"
+version = "0.1.0"
+dependencies = [
+ "cmake",
+ "lb-abi",
+]
+
+[[package]]
 name = "lb-cand-fsst-rs"
 version = "0.1.0"
 dependencies = [
@@ -932,6 +987,26 @@ dependencies = [
 
 [[package]]
 name = "lb-cand-onpair-spiral"
+version = "0.1.0"
+dependencies = [
+ "lb-abi",
+ "onpair 0.2.1",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "lb-cand-onpair-spiral-debug"
+version = "0.1.0"
+dependencies = [
+ "lb-abi",
+ "onpair-debug",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "lb-cand-onpair-spiral-packed12"
 version = "0.1.0"
 dependencies = [
  "lb-abi",
@@ -994,6 +1069,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "lb-cand-uncompressed-vectorscan"
+version = "0.1.0"
+dependencies = [
+ "lb-abi",
+ "vectorscan-rs",
+]
+
+[[package]]
 name = "lb-cand-zstd"
 version = "0.1.0"
 dependencies = [
@@ -1022,18 +1105,22 @@ dependencies = [
  "lb-cand-fsst-like-tum",
  "lb-cand-fsst-like-utn",
  "lb-cand-fsst-prefilter",
+ "lb-cand-fsst-prefilter-debug",
  "lb-cand-gate-canary",
  "lb-cand-llm-token-prefilter",
  "lb-cand-llm-token-tum",
  "lb-cand-lz4",
  "lb-cand-onpair",
  "lb-cand-onpair-spiral",
+ "lb-cand-onpair-spiral-debug",
+ "lb-cand-onpair-spiral-packed12",
  "lb-cand-onpair-spiral-pinned",
  "lb-cand-onpair-spiral-refactor",
  "lb-cand-onpair-spiral-substring",
  "lb-cand-uncompressed",
  "lb-cand-uncompressed-memmem",
  "lb-cand-uncompressed-prefilter",
+ "lb-cand-uncompressed-vectorscan",
  "lb-cand-zstd",
  "lb-scan-classics",
  "lb-scan-composed",
@@ -1350,6 +1437,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "onpair-debug"
+version = "0.2.1"
+dependencies = [
+ "hashbrown 0.16.1",
+ "memchr",
+ "rand",
+]
+
+[[package]]
 name = "parquet"
 version = "59.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1595,7 +1691,7 @@ checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -1677,6 +1773,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "syn"
+version = "3.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
+name = "tar"
+version = "0.4.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6221d9a6003c78398e3b239969f352578258df48c8eb051caadae0015bc840"
+dependencies = [
+ "filetime",
+ "libc",
+ "xattr",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1687,6 +1805,26 @@ dependencies = [
  "once_cell",
  "rustix",
  "windows-sys",
+]
+
+[[package]]
+name = "thiserror"
+version = "1.0.69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
+dependencies = [
+ "thiserror-impl",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "1.0.69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -1756,6 +1894,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
+name = "vectorscan-rs"
+version = "0.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "657b43a26c41ea3e5b0de95240a518a011561d204b83f8ea213fddf2cc224fb0"
+dependencies = [
+ "bitflags",
+ "foreign-types",
+ "libc",
+ "thiserror",
+ "vectorscan-rs-sys",
+]
+
+[[package]]
+name = "vectorscan-rs-sys"
+version = "0.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "195d07e20b78923c2e8542f95a9bfd31d0cacf19f9134181c292b84055c5c7c1"
+dependencies = [
+ "cmake",
+ "flate2",
+ "tar",
+]
+
+[[package]]
 name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1808,7 +1970,7 @@ dependencies = [
  "bumpalo",
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
  "wasm-bindgen-shared",
 ]
 
@@ -1864,7 +2026,7 @@ checksum = "053e2e040ab57b9dc951b72c264860db7eb3b0200ba345b4e4c3b14f67855ddf"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -1875,7 +2037,7 @@ checksum = "3f316c4a2570ba26bbec722032c4099d8c8bc095efccdc15688708623367e358"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -1924,6 +2086,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
+name = "xattr"
+version = "1.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32e45ad4206f6d2479085147f02bc2ef834ac85886624a23575ae137c8aa8156"
+dependencies = [
+ "libc",
+ "rustix",
+]
+
+[[package]]
 name = "xxhash-rust"
 version = "0.8.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1946,7 +2118,7 @@ checksum = "4714fd92cf900833d49538023a9b3915155210801d1c1169eba513b2addefd71"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.118",
 ]
 
 [[package]]

@@ -91,9 +91,6 @@ struct RawConfig {
     /// Post-training prune factor; absent keeps every token training found.
     #[serde(default)]
     prune: Option<f64>,
-    /// Drop tokens the training sample matched fewer than this many times.
-    #[serde(default)]
-    min_hits: Option<u32>,
 }
 
 fn default_bits() -> u8 {
@@ -123,7 +120,6 @@ fn parse_config(json: &str) -> Result<Config, String> {
         threshold,
         seed: Some(raw.seed),
         prune,
-        min_hits: raw.min_hits,
     })
 }
 

@@ -1,0 +1,16 @@
+# fsst_prefilter with two switches for ablations, over its own copy of the gropaul/fsst
+# fork (fsst/, bdaab1d plus the switches): "sorted" keeps or skips fsst_sort_codes,
+# "uniform" plans with every code weighed codes / 256 instead of its count.
+[package]
+name = "lb-cand-fsst-prefilter-debug"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+links = "lb_fsst_prefilter_debug"
+
+[dependencies]
+lb-abi = { workspace = true }
+
+[build-dependencies]
+cmake = { workspace = true }

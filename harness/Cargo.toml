@@ -17,6 +17,7 @@ path = "src/lib.rs"
 default = [
     "cand-uncompressed",
     "cand-uncompressed-memmem",
+    "cand-uncompressed-vectorscan",
     "cand-uncompressed-prefilter",
     "cand-dict-uncompressed-prefilter",
     "cand-dict-fsst-like-tum",
@@ -28,6 +29,9 @@ default = [
     "cand-onpair",
     "cand-onpair-spiral",
     "cand-onpair-spiral-pinned",
+    "cand-onpair-spiral-debug",
+    "cand-onpair-spiral-packed12",
+    "cand-fsst-prefilter-debug",
     "cand-onpair-spiral-refactor",
     "cand-onpair-spiral-substring",
     "cand-lz4",
@@ -48,6 +52,7 @@ default = [
 ]
 cand-uncompressed = ["dep:lb-cand-uncompressed"]
 cand-uncompressed-memmem = ["dep:lb-cand-uncompressed-memmem"]
+cand-uncompressed-vectorscan = ["dep:lb-cand-uncompressed-vectorscan"]
 cand-uncompressed-prefilter = ["dep:lb-cand-uncompressed-prefilter"]
 cand-dict-uncompressed-prefilter = ["dep:lb-cand-dict-uncompressed-prefilter"]
 cand-dict-fsst-like-tum = ["dep:lb-cand-dict-fsst-like-tum"]
@@ -59,6 +64,9 @@ cand-cpp-identity = ["dep:lb-cand-cpp-identity"]
 cand-onpair = ["dep:lb-cand-onpair"]
 cand-onpair-spiral = ["dep:lb-cand-onpair-spiral"]
 cand-onpair-spiral-pinned = ["dep:lb-cand-onpair-spiral-pinned"]
+cand-onpair-spiral-debug = ["dep:lb-cand-onpair-spiral-debug"]
+cand-onpair-spiral-packed12 = ["dep:lb-cand-onpair-spiral-packed12"]
+cand-fsst-prefilter-debug = ["dep:lb-cand-fsst-prefilter-debug"]
 cand-onpair-spiral-refactor = ["dep:lb-cand-onpair-spiral-refactor"]
 cand-onpair-spiral-substring = ["dep:lb-cand-onpair-spiral-substring"]
 cand-lz4 = ["dep:lb-cand-lz4"]
@@ -81,6 +89,7 @@ scan-stringzilla = ["dep:lb-scan-stringzilla"]
 lb-abi = { workspace = true }
 lb-cand-uncompressed = { path = "../candidates/uncompressed", optional = true }
 lb-cand-uncompressed-memmem = { path = "../candidates/uncompressed_memmem", optional = true }
+lb-cand-uncompressed-vectorscan = { path = "../candidates/uncompressed_vectorscan", optional = true }
 lb-cand-uncompressed-prefilter = { path = "../candidates/uncompressed_prefilter", optional = true }
 lb-cand-dict-uncompressed-prefilter = { path = "../candidates/dict_uncompressed_prefilter", optional = true }
 lb-cand-dict-fsst-like-tum = { path = "../candidates/dict_fsst_like_tum", optional = true }
@@ -92,6 +101,9 @@ lb-cand-cpp-identity = { path = "../candidates/cpp_identity", optional = true }
 lb-cand-onpair = { path = "../candidates/onpair", optional = true }
 lb-cand-onpair-spiral = { path = "../candidates/onpair_spiral", optional = true }
 lb-cand-onpair-spiral-pinned = { path = "../candidates/onpair_spiral_pinned", optional = true }
+lb-cand-onpair-spiral-debug = { path = "../candidates/onpair_spiral_debug", optional = true }
+lb-cand-onpair-spiral-packed12 = { path = "../candidates/onpair_spiral_packed12", optional = true }
+lb-cand-fsst-prefilter-debug = { path = "../candidates/fsst_prefilter_debug", optional = true }
 lb-cand-onpair-spiral-refactor = { path = "../candidates/onpair_spiral_refactor", optional = true }
 lb-cand-onpair-spiral-substring = { path = "../candidates/onpair_spiral_substring", optional = true }
 lb-cand-lz4 = { path = "../candidates/lz4", optional = true }
