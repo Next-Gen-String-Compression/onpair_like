@@ -42,6 +42,30 @@ static void the_planned_matcher_takes_its_cover() {
             }
 }
 
+#if defined(__AVX512BW__)
+// The ladder the fitted rows give on AVX-512 at u8 width.
+static void the_model_puts_the_boundaries_where_the_sweep_says() {
+    CHECK(select_matcher({1, 0}) == Match::EqOr);
+    CHECK(select_matcher({2, 0}) == Match::EqOr);
+    CHECK(select_matcher({3, 0}) == Match::NibbleN8K);
+    CHECK(select_matcher({8, 0}) == Match::NibbleN8K);
+    CHECK(select_matcher({9, 0}) == Match::Nibble);
+    CHECK(select_matcher({64, 0}) == Match::Nibble);
+    CHECK(select_matcher({0, 1}) == Match::Range);
+    CHECK(select_matcher({0, 2}) == Match::Nibble);
+    CHECK(select_matcher({1, 8}) == Match::EqOr);
+    CHECK(select_matcher({1, 9}) == Match::Nibble);
+    CHECK(select_matcher({8, 1}) == Match::Nibble);
+}
+
+// No movemask to skip, so never.
+static void the_skip_is_taken_only_on_a_sparse_mask() {
+    CHECK(!select(probe(1, 0), {0, 1 << 20}).skip);
+    CHECK(!select(probe(1, 0), {10, 1 << 20}).skip);
+    CHECK(!select(probe(1, 0), {240, 1 << 20}).skip);
+    CHECK(!select(probe(1, 0), {1 << 19, 1 << 20}).skip);
+}
+#else
 // The ladder the fitted rows give on NEON at u8 width.
 static void the_model_puts_the_boundaries_where_the_sweep_says() {
     CHECK(select_matcher({1, 0}) == Match::EqOr);
@@ -69,6 +93,7 @@ static void the_skip_is_taken_only_on_a_sparse_mask() {
     CHECK(select(probe(1, 0), {240, 1 << 20}).skip);
     CHECK(!select(probe(1, 0), {250, 1 << 20}).skip);
 }
+#endif
 
 static void scan_cost_is_monotone_in_probes_and_coverage() {
     const size_t codes = 1 << 22;

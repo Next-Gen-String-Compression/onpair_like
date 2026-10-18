@@ -50,18 +50,26 @@ inline bool takes(Match m, Shape s) {
     return false;
 }
 
-// ns per code; k tokens, r ranges, p pairs. Fitted on aarch64 Apple M4 Pro
-// neon, novel_mask_2026-09-15_16-09-02.csv. The x86 kernel sets are not
-// fitted: these rows stand in until prefilter_matcher_sweep --refit runs there.
+// ns per code; k tokens, r ranges, p pairs. AVX-512 fitted on x86_64 Xeon
+// Platinum 8375C avx512bw, novel_mask_2026-10-18_05-37-11.csv; everything else
+// on aarch64 Apple M4 Pro neon, novel_mask_2026-09-15_16-09-02.csv. AVX2 is not
+// fitted and takes the NEON rows.
 inline double ns_per_code(Match m, Shape s) {
     const double k = static_cast<double>(s.tokens);
     const double r = static_cast<double>(s.ranges);
     const double p = static_cast<double>(s.pairs);
     switch (m) {
+#if defined(__AVX512BW__)
+        case Match::EqOr: return 0.00741 + 0.00911 * k + 0.00142 * r + 0.01480 * p;
+        case Match::NibbleN8K: return 0.02597 + 0.00881 * r;
+        case Match::Nibble: return 0.02892;
+        case Match::Range: return 0.01425 + 0.00761 * r;
+#else
         case Match::EqOr: return 0.00330 + 0.00721 * k + 0.01131 * r + 0.01674 * p;
         case Match::NibbleN8K: return 0.02449 + 0.01230 * r;
         case Match::Nibble: return 0.03860;
         case Match::Range: return 0.00350 + 0.01078 * r;
+#endif
     }
     return INFINITY;
 }
