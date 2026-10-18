@@ -62,7 +62,7 @@ SYSTEMS = [
     # is in the query time.
     ("fsst_like_tum/llvm-simd", name("fsst", "compiled"), config.COLOR["fsst-compiled"], "d"),
     ("fsst/decode+memmem-hay", name("fsst", "decode"), config.COLOR["fsst-decode"], "v"),
-    ("onpair/decode+memmem-hay", name("onpair16", "decode"), config.COLOR["onpair-decode"], "^"),
+    ("onpair_spiral/decode+memmem-hay@bits=16,prune=1.0", name("onpair16", "decode"), config.COLOR["onpair-decode"], "^"),
     ("uncompressed/direct+memmem-hay", name("uncompressed", "memmem"), config.COLOR["uncompressed"], "x"),
 ]
 LEGEND_COLS = 4
@@ -82,7 +82,7 @@ LEGEND_GROUPS = [
 # quartile band or per-query points: the level the compressed-domain series is
 # read against. row-hay is uncompressed memmem under a pre-selection.
 BASELINES = {
-    "onpair/decode+memmem-hay": (0, (1, 1.2)),
+    "onpair_spiral/decode+memmem-hay@bits=16,prune=1.0": (0, (1, 1.2)),
     "fsst/decode+memmem-hay": (0, (3, 1, 1, 1)),
     "uncompressed/direct+memmem-hay": (0, (4, 1.5)),
     "uncompressed_memmem/row-hay": (0, (4, 1.5)),
@@ -281,7 +281,7 @@ def dataset_width(n):
 # Slowest average cell first, as the paper orders them: the first panel
 # carries the row labels. FSST's minimum cut scan is drawn but not in the paper.
 MATRIX_SYSTEMS = [("fsst_like_tum/interp", "fsst-automaton"),
-                  ("onpair/decode+memmem-hay", "onpair-decode"),
+                  ("onpair_spiral/decode+memmem-hay@bits=16,prune=1.0", "onpair-decode"),
                   ("uncompressed/direct+memmem-hay", "uncompressed"),
                   ("onpair_spiral/pf_walk@bits=16,prune=1.0", "onpair16-cut"),
                   ("fsst_prefilter/fsst-prefilter", "fsst-cut")]

@@ -139,62 +139,42 @@ fn real_candidates_pass_all_gates_at_every_chunk_size() {
     }
 }
 
-/// OnPair, the first real compressed candidate: its "compressed" strategy
-/// (token automata over the compressed stream) must pass every gate on the
-/// ops it declares, its decode path must pass everywhere, and its
-/// footprint must arrive as named store/dictionary components.
+/// OnPair: its compressed-domain strategies must pass every gate on the ops
+/// they declare, its decode path must pass everywhere, and its footprint must
+/// arrive as named components.
 #[test]
-fn onpair_gates_on_compressed_and_decode_strategies() {
+fn onpair_spiral_gates_on_native_and_decode_strategies() {
     let tmp = tempfile::tempdir().unwrap();
     let (ds_dir, suite_dir) = prepare_fixture(tmp.path());
-    let spec_path = write_spec(tmp.path(), &ds_dir, &suite_dir, &["onpair"], "[0, 64, 128]");
+    let spec_path =
+        write_spec(tmp.path(), &ds_dir, &suite_dir, &["onpair_spiral"], "[0, 64, 128]");
     let loaded = LoadedSpec::load(&spec_path).unwrap();
 
     let out_path = tmp.path().join("rows.jsonl");
     let mut writer = Writer::create(&out_path).unwrap();
-    let summary = runner::run_worker(&loaded, "onpair", 0, 0, &mut writer, false).unwrap();
+    let summary = runner::run_worker(&loaded, "onpair_spiral", 0, 0, &mut writer, false).unwrap();
     writer.finish().unwrap();
-    assert_eq!(summary.gate_failures, 0, "onpair: gate failures");
-    assert_eq!(summary.errors, 0, "onpair: errors");
+    assert_eq!(summary.gate_failures, 0, "onpair_spiral: gate failures");
+    assert_eq!(summary.errors, 0, "onpair_spiral: errors");
 
     let rows = read_rows(&out_path);
     let queries: Vec<_> = rows.iter().filter(|r| r["kind"] == "query").collect();
-    // 28 queries × 3 chunk sizes × ("compressed" + decode × 2 scanners).
-    assert_eq!(queries.len(), 28 * 3 * 3, "onpair: cell count");
-
-    // The compressed strategy answers prefix/contains/contains_any (17 of
-    // the 28 smoke queries) and honestly reports suffix/multi_contains
-    // (the remaining 11) as unsupported.
-    let compressed: Vec<_> =
-        queries.iter().filter(|r| r["strategy"] == "compressed").collect();
-    assert_eq!(compressed.len(), 28 * 3);
-    let ok = compressed.iter().filter(|r| r["status"] == "ok").count();
-    let unsupported =
-        compressed.iter().filter(|r| r["status"] == "unsupported").count();
-    assert_eq!((ok, unsupported), (17 * 3, 11 * 3), "onpair: compressed op split");
-    assert!(
-        compressed
-            .iter()
-            .filter(|r| r["status"] == "unsupported")
-            .all(|r| r["op"] == "suffix" || r["op"] == "multi_contains"),
-        "onpair: only suffix/multi_contains may be unsupported"
-    );
 
     // The decode path covers every op, harness-timed at the decode joint.
     let decode: Vec<_> = queries.iter().filter(|r| r["strategy"] == "decode").collect();
     assert_eq!(decode.len(), 28 * 3 * 2);
-    assert!(decode.iter().all(|r| r["status"] == "ok"), "onpair: decode all gated ok");
+    assert!(decode.iter().all(|r| r["status"] == "ok"), "onpair_spiral: decode all gated ok");
     assert!(
         decode.iter().all(|r| r["prefilter"]["decode_ns"]["origin"] == "harness"),
-        "onpair: harness-timed decode split"
+        "onpair_spiral: harness-timed decode split"
     );
 
     // Compression axis: named components, exact total.
     let builds: Vec<_> = rows.iter().filter(|r| r["kind"] == "build").collect();
-    assert_eq!(builds.len(), 3, "onpair: build rows");
+    assert_eq!(builds.len(), 3, "onpair_spiral: build rows");
     for b in builds {
         let c = &b["footprint_components"];
-        let sum: u64 = ["token_stream", "boundaries", "dict_bytes", "dict_offsets"]
+        let sum: u64 = ["codes", "row_offsets", "dict_bytes", "dict_offsets", "prefilter"]
             .iter()
             .map(|k| c[*k].as_u64().unwrap_or_else(|| panic!("missing component {k}")))
             .sum();

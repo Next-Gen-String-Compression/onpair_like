@@ -1,14 +1,13 @@
 //! Generic Rust dictionary front-end (the Rust peer of the C++ DictMatcher in
-//! candidates/common/matcher/dict_matcher.hpp), plus the two candidates it
-//! produces: `dict_onpair` and `dict_onpair_spiral`.
+//! candidates/common/matcher/dict_matcher.hpp), plus the candidate it
+//! produces: `dict_onpair_spiral`.
 //!
 //! `DictWrapper` deduplicates a chunk into its unique row values + one code per
 //! row, builds an *inner* candidate over the UNIQUE values, and at query time
 //! runs the inner once per unique value into a small unique-bitmap, then
 //! scatters that verdict to the row bitmap through the codes. The inner is any
-//! registered candidate reached through its C-ABI vtable — here the Rust
-//! `onpair` (compressed-domain token automaton) and `onpair_spiral` (pf_walk)
-//! candidates — so `dict_<inner>` composes with no language barrier.
+//! registered candidate reached through its C-ABI vtable — here
+//! `onpair_spiral` (pf_walk) — so `dict_<inner>` composes with no language barrier.
 //!
 //! Encoded domain: a `LIKE '%x%'` predicate is evaluated n_unique times, not
 //! n_rows times. Footprint = the inner's footprint over the unique dictionary +
@@ -222,45 +221,6 @@ unsafe extern "C" fn destroy(this: *mut c_void) {
     let h = Box::from_raw(this as *mut Handle);
     // Destroy the inner BEFORE `h` (and its blob/offsets) is freed.
     (h.inner_vt.destroy.unwrap())(h.inner_handle);
-}
-
-// ------------------------------------------------------------- dict_onpair
-
-unsafe extern "C" fn build_onpair(
-    view: *const LbChunkView,
-    config: *const c_char,
-    err_buf: *mut c_char,
-    err_cap: u64,
-) -> *mut c_void {
-    dict_build(lb_cand_onpair::vtable(), &["compressed"], view, config, err_buf, err_cap)
-}
-
-
-
-static ONPAIR_STRATS: [LbStrategy; 1] = [LbStrategy {
-    name: c"dict+compressed".as_ptr(),
-    supported_ops: op_bit(LB_CONTAINS),
-        flags: 0,
-    }];
-
-static ONPAIR_VTABLE: LbCandidate = LbCandidate {
-    abi_version: LB_ABI_VERSION,
-    name: c"dict_onpair".as_ptr(),
-    version: c"0.1.0".as_ptr(),
-    cpu_features: core::ptr::null(),
-    strategies: ONPAIR_STRATS.as_ptr(),
-    strategy_count: 1,
-    build: Some(build_onpair),
-    footprint: Some(footprint),
-    run: Some(run),
-    view: None,
-    decode: None,
-    destroy: Some(destroy),
-    decode_selected: None,
-};
-
-pub fn vtable() -> &'static LbCandidate {
-    &ONPAIR_VTABLE
 }
 
 // -------------------------------------------------------- dict_onpair_spiral

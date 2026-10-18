@@ -1,8 +1,7 @@
 //! SpiralDB's OnPair (github.com/spiraldb/onpair) as a query-axis candidate,
-//! wrapping its `feat/search-prefilter` branch (pinned in Cargo.toml). This is
-//! the Rust library; the sibling `onpair` candidate links the C++ onpair_cpp
-//! and matches via compressed-domain automata. They are distinct storage
-//! schemes and distinct roster lines.
+//! wrapping its `feat/search-prefilter` branch (pinned in Cargo.toml). Its
+//! `decode` and `decode_selected` make it the OnPair codec of the harness's
+//! decompress-and-search baseline as well.
 //!
 //! One build (train + encode) exposed through four `run()` strategies, all
 //! answering `LB_CONTAINS`, and `pf_walk` also `LB_PREFIX` and `LB_SUFFIX`
@@ -24,10 +23,7 @@
 //!     compressed domain by a token-KMP `ContainsTable` instead. Its table
 //!     caps patterns at 255 bytes.
 //!   - `kmp`       — `ColumnView::rows_containing`: the token-KMP automaton over
-//!     EVERY row, no prefilter. The un-prefiltered baseline — structurally the
-//!     direct analog of the C++ `onpair` candidate's `compressed` path for
-//!     contains, so the two are a head-to-head across the two libraries. Same
-//!     255-byte cap.
+//!     EVERY row, no prefilter. The un-prefiltered baseline. Same 255-byte cap.
 //!
 //! `pf_walk` and `kmp` are the library's own convenience recipes, called
 //! verbatim so the benchmark measures exactly what OnPair ships (buffer sizing
@@ -73,9 +69,7 @@ use onpair::{
 
 // ------------------------------------------------------------------ config
 
-// Flat config, mirroring the `onpair` candidate's accepted keys minus
-// `fixed_threshold` (the Rust crate's public `Config` exposes only the dynamic
-// threshold). `deny_unknown_fields` turns a typo'd key into a build error
+// Flat config. `deny_unknown_fields` turns a typo'd key into a build error
 // rather than a silently-ignored default. `seed` defaults to 42 (NOT the
 // library's non-deterministic default): a build must be reproducible from its
 // recorded config.
@@ -246,7 +240,7 @@ unsafe extern "C" fn footprint(
 ) -> u32 {
     let h = &*(this as *const Handle);
     let dict = &h.col.dict;
-    // Mirrors the `onpair` candidate's split. Codes are stored one u16 per token
+    // Codes are stored one u16 per token
     // (this port does not bit-pack the resident stream); the dictionary is a
     // byte blob plus u32 offsets; the frequency index is the prefilter's
     // per-token frequency prefix sums — the substring prefilter's resident cost, named so
@@ -589,6 +583,30 @@ unsafe extern "C" fn decode(
     0
 }
 
+/// `decode` over the selected rows only, one `decode_into` per row.
+unsafe extern "C" fn decode_selected(
+    this: *mut c_void,
+    rows: *const u32,
+    count: u64,
+    bytes_out: *mut u8,
+    bytes_cap: u64,
+    offsets_out: *mut u64,
+) -> i32 {
+    let h = &*(this as *const Handle);
+    let view = h.col.view();
+    let rows = core::slice::from_raw_parts(rows, count as usize);
+    let out = core::slice::from_raw_parts_mut(bytes_out.cast::<MaybeUninit<u8>>(), bytes_cap as usize);
+    let offsets = core::slice::from_raw_parts_mut(offsets_out, rows.len() + 1);
+    offsets[0] = 0;
+    let mut at = 0;
+    for (k, &r) in rows.iter().enumerate() {
+        // SAFETY: bytes_cap is the selected rows' bytes plus LB_DECODE_PAD >= DECODE_PADDING.
+        at += decode_into(view.row_codes(r as usize), view.dict, &mut out[at..]);
+        offsets[k + 1] = at as u64;
+    }
+    0
+}
+
 static VTABLE: LbCandidate = LbCandidate {
     abi_version: LB_ABI_VERSION,
     name: c"onpair_spiral".as_ptr(),
@@ -604,7 +622,7 @@ static VTABLE: LbCandidate = LbCandidate {
     view: None,
     decode: Some(decode),
     destroy: Some(destroy),
-    decode_selected: None,
+    decode_selected: Some(decode_selected),
 };
 
 pub fn vtable() -> &'static LbCandidate {

@@ -106,6 +106,7 @@ path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa
 [[suites]]
 path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/sa-lcp-v1-s42-n1-5205012fad43b02d"
 
+# pf_walk, and `decode`: OnPair as a codec, the chunk decoded and then searched.
 [[candidates]]
 name = "onpair_spiral"
 configs = ['{"bits":12,"prune":1.0}', '{"bits":16,"prune":1.0}']
@@ -115,11 +116,6 @@ name = "fsst_prefilter"
 
 [[candidates]]
 name = "fsst_like_tum"
-
-# Decompress + memmem: decode() or decode_selected() into the harness
-# buffer, then one memmem-hay pass over it.
-[[candidates]]
-name = "onpair"
 
 [[candidates]]
 name = "fsst"

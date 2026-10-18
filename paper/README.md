@@ -154,7 +154,7 @@ fifth of the fused scan rather than partitioning it exactly. The bench is
 onpair's, so the FSST port has no split.
 
 `paper/specs/micro/full.toml` runs our prefilter (12 and 16 bits, pruned)
-against `onpair/decode+memmem-hay`, `fsst/decode+memmem-hay`,
+against `onpair_spiral/decode+memmem-hay` (16 bits), `fsst/decode+memmem-hay`,
 `uncompressed/direct+memmem-hay` and `fsst_like_tum/interp` at 512k-row
 row groups, on four columns of 1,048,576 rows each: ClickBench URLs, Amazon book
 titles, DBpedia abstracts and IMDb `char_name.name`, the last with nearly

@@ -37,7 +37,6 @@ pub fn candidates() -> Vec<Candidate> {
     }
     #[cfg(feature = "cand-dict-onpair")]
     {
-        v.push(lb_cand_dict_onpair::vtable());
         v.push(lb_cand_dict_onpair::vtable_spiral());
         #[cfg(feature = "cand-fsst-rs")]
         v.push(lb_cand_dict_onpair::vtable_fsst_rs());
@@ -46,13 +45,6 @@ pub fn candidates() -> Vec<Candidate> {
     v.push(lb_cand_gate_canary::vtable());
     #[cfg(feature = "cand-cpp-identity")]
     v.push(lb_cand_cpp_identity::vtable());
-    #[cfg(feature = "cand-onpair")]
-    {
-        v.push(lb_cand_onpair::vtable());
-        // OnPair as a plain codec (decompress-then-eval), a decode-only peer of
-        // lz4/zstd/fsst — distinct from the compressed-domain `onpair` candidate.
-        v.push(lb_cand_onpair::vtable_decode());
-    }
     #[cfg(feature = "cand-onpair-spiral")]
     v.push(lb_cand_onpair_spiral::vtable());
     // The same candidate built against the pinned upstream revision rather than
@@ -61,8 +53,6 @@ pub fn candidates() -> Vec<Candidate> {
     v.push(lb_cand_onpair_spiral_pinned::vtable());
     #[cfg(feature = "cand-onpair-spiral-debug")]
     v.push(lb_cand_onpair_spiral_debug::vtable());
-    #[cfg(feature = "cand-onpair-spiral-packed12")]
-    v.push(lb_cand_onpair_spiral_packed12::vtable());
     #[cfg(feature = "cand-fsst-prefilter-debug")]
     v.push(lb_cand_fsst_prefilter_debug::vtable());
     // And against the `codex/prefilter-scan-refactor` branch, a third line.

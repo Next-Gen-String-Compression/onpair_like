@@ -43,7 +43,7 @@ MICRO_LABELS = [
     "fsst_like_tum/interp",
     "fsst_prefilter/fsst-prefilter",
     "fsst/decode+memmem-hay",
-    "onpair/decode+memmem-hay",
+    "onpair_spiral/decode+memmem-hay@bits=16,prune=1.0",
     "uncompressed/direct+memmem-hay",
 ]
 

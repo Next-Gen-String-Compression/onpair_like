@@ -26,11 +26,9 @@ default = [
     "cand-dict-onpair",
     "cand-gate-canary",
     "cand-cpp-identity",
-    "cand-onpair",
     "cand-onpair-spiral",
     "cand-onpair-spiral-pinned",
     "cand-onpair-spiral-debug",
-    "cand-onpair-spiral-packed12",
     "cand-fsst-prefilter-debug",
     "cand-onpair-spiral-refactor",
     "cand-onpair-spiral-substring",
@@ -61,11 +59,9 @@ cand-fsst-prefilter = ["dep:lb-cand-fsst-prefilter"]
 cand-dict-onpair = ["dep:lb-cand-dict-onpair"]
 cand-gate-canary = ["dep:lb-cand-gate-canary"]
 cand-cpp-identity = ["dep:lb-cand-cpp-identity"]
-cand-onpair = ["dep:lb-cand-onpair"]
 cand-onpair-spiral = ["dep:lb-cand-onpair-spiral"]
 cand-onpair-spiral-pinned = ["dep:lb-cand-onpair-spiral-pinned"]
 cand-onpair-spiral-debug = ["dep:lb-cand-onpair-spiral-debug"]
-cand-onpair-spiral-packed12 = ["dep:lb-cand-onpair-spiral-packed12"]
 cand-fsst-prefilter-debug = ["dep:lb-cand-fsst-prefilter-debug"]
 cand-onpair-spiral-refactor = ["dep:lb-cand-onpair-spiral-refactor"]
 cand-onpair-spiral-substring = ["dep:lb-cand-onpair-spiral-substring"]
@@ -98,11 +94,9 @@ lb-cand-fsst-prefilter = { path = "../candidates/fsst_prefilter", optional = tru
 lb-cand-dict-onpair = { path = "../candidates/dict_onpair", optional = true }
 lb-cand-gate-canary = { path = "../candidates/gate_canary", optional = true }
 lb-cand-cpp-identity = { path = "../candidates/cpp_identity", optional = true }
-lb-cand-onpair = { path = "../candidates/onpair", optional = true }
 lb-cand-onpair-spiral = { path = "../candidates/onpair_spiral", optional = true }
 lb-cand-onpair-spiral-pinned = { path = "../candidates/onpair_spiral_pinned", optional = true }
 lb-cand-onpair-spiral-debug = { path = "../candidates/onpair_spiral_debug", optional = true }
-lb-cand-onpair-spiral-packed12 = { path = "../candidates/onpair_spiral_packed12", optional = true }
 lb-cand-fsst-prefilter-debug = { path = "../candidates/fsst_prefilter_debug", optional = true }
 lb-cand-onpair-spiral-refactor = { path = "../candidates/onpair_spiral_refactor", optional = true }
 lb-cand-onpair-spiral-substring = { path = "../candidates/onpair_spiral_substring", optional = true }

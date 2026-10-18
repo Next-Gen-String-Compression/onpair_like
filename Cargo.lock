@@ -874,7 +874,6 @@ version = "0.1.0"
 dependencies = [
  "lb-abi",
  "lb-cand-fsst-rs",
- "lb-cand-onpair",
  "lb-cand-onpair-spiral",
 ]
 
@@ -978,14 +977,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lb-cand-onpair"
-version = "0.1.0"
-dependencies = [
- "cmake",
- "lb-abi",
-]
-
-[[package]]
 name = "lb-cand-onpair-spiral"
 version = "0.1.0"
 dependencies = [
@@ -1001,16 +992,6 @@ version = "0.1.0"
 dependencies = [
  "lb-abi",
  "onpair-debug",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "lb-cand-onpair-spiral-packed12"
-version = "0.1.0"
-dependencies = [
- "lb-abi",
- "onpair 0.2.1",
  "serde",
  "serde_json",
 ]
@@ -1110,10 +1091,8 @@ dependencies = [
  "lb-cand-llm-token-prefilter",
  "lb-cand-llm-token-tum",
  "lb-cand-lz4",
- "lb-cand-onpair",
  "lb-cand-onpair-spiral",
  "lb-cand-onpair-spiral-debug",
- "lb-cand-onpair-spiral-packed12",
  "lb-cand-onpair-spiral-pinned",
  "lb-cand-onpair-spiral-refactor",
  "lb-cand-onpair-spiral-substring",

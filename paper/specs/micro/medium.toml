@@ -35,6 +35,7 @@ path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/sa
 [[suites]]
 path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/sa-lcp-v1-s42-n10-9adc88e9eb33e0eb"
 
+# pf_walk, and `decode`: OnPair as a codec, the chunk decoded and then searched.
 [[candidates]]
 name = "onpair_spiral"
 configs = ['{"bits":12,"prune":1.0}', '{"bits":16,"prune":1.0}']
@@ -43,10 +44,6 @@ configs = ['{"bits":12,"prune":1.0}', '{"bits":16,"prune":1.0}']
 [[candidates]]
 name = "dict_onpair_spiral"
 configs = ['{"bits":12,"prune":1.0}', '{"bits":16,"prune":1.0}']
-
-# OnPair as a codec: decode the chunk, then one memmem-hay pass over it.
-[[candidates]]
-name = "onpair"
 
 [[candidates]]
 name = "fsst_like_tum"

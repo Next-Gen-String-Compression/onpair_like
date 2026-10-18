@@ -34,13 +34,10 @@ path = "../../../experiments/matcher_selection/generated/dbpedia-abstract-1mi/pr
 [[suites]]
 path = "../../../experiments/matcher_selection/generated/imdb-charname-1mi/prefix-suffix-v1-s42-n10-4b724f829da64c04"
 
+# pf_walk, and `decode`: OnPair as a codec, the chunk decoded and then searched.
 [[candidates]]
 name = "onpair_spiral"
 configs = ['{"bits":12,"prune":1.0}', '{"bits":16,"prune":1.0}']
-
-# OnPair as a codec: decode the chunk, then compare each row.
-[[candidates]]
-name = "onpair"
 
 [[candidates]]
 name = "fsst_like_tum"
