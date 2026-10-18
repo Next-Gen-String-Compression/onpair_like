@@ -4,7 +4,7 @@
 # file derived from it is missing, so pointing E2E_DATA at a directory that
 # already holds them skips every step.
 #
-#   E2E_DATA=/Users/paul e2e/data.sh
+#   E2E_DATA=/data e2e/data.sh
 #
 #   raw/hits/hits_<i>.parquet  ClickBench, the 100 athena_partitioned files
 #   raw/job/job_<t>.parquet    IMDb (JOB), duckdb-data v1.0

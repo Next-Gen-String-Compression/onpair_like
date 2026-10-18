@@ -12,7 +12,7 @@
 #     bit-identical benchmark inputs, whatever the raw transport did.
 #   - Extraction rules mirror the OnPair compression paper's benchmark
 #     (github.com/gargiulofrancesco/compression_benchmark,
-#     tools/datasets/*.py) so both papers evaluate the same row streams:
+#     tools/datasets/*.py), so the row streams match it:
 #     original file order, no shuffling, same field/strip/skip rules.
 #
 # The paper's 2^20-row roster: one row count for every column, so a needle
