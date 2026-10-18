@@ -1,0 +1,33 @@
+name: Nightly Benchmarks
+
+concurrency:
+  # The group causes runs to queue instead of running in parallel.
+  group: nightly-bench
+  # This queues manual triggers to run after scheduled benchmarks complete.
+  cancel-in-progress: false
+
+on:
+  schedule:
+    - cron: "0 0 * * *"  # daily
+  workflow_dispatch: { }
+
+permissions:
+  id-token: write  # enables AWS-GitHub OIDC
+  actions: read
+  contents: write
+
+jobs:
+  sql:
+    uses: ./.github/workflows/sql-bench-matrix.yml
+    secrets: inherit
+    with:
+      mode: "develop"
+      machine_type: ${{ matrix.machine_type.instance_name }}
+      matrix_preset: "nightly"
+    strategy:
+      # A single run not should kill the others
+      fail-fast: false
+      matrix:
+        machine_type:
+          - id: arm64
+            instance_name: c8gd.metal-24xl

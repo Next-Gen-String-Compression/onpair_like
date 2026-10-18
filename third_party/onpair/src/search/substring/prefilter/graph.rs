@@ -123,14 +123,32 @@ impl Edge {
         self.frequency
     }
 
-    /// What the probe puts in a cover, as `(points, ranges)` before adjacent
-    /// ones merge.
+    /// What the probe puts in a cover, as `(points, ranges)`: a set's codes
+    /// merged into runs as [`ProbeCover::from_runs`] would, each code at most
+    /// one past the one before. Runs across edges are not merged.
     pub(super) fn shape(&self) -> (u32, u32) {
         match &self.probe {
             ProbeSet::SetTooBig => (0, 0),
             ProbeSet::Point(_) => (1, 0),
             ProbeSet::Range(_) => (0, 1),
-            ProbeSet::Set(ids) => (ids.len() as u32, 0),
+            ProbeSet::Set(ids) => {
+                debug_assert!(ids.is_sorted(), "set codes come out of the sweep ascending");
+                let (mut points, mut ranges) = (0, 0);
+                let mut at = 0;
+                while at < ids.len() {
+                    let mut end = at + 1;
+                    while end < ids.len() && ids[end] <= ids[end - 1] + 1 {
+                        end += 1;
+                    }
+                    if ids[end - 1] == ids[at] {
+                        points += 1;
+                    } else {
+                        ranges += 1;
+                    }
+                    at = end;
+                }
+                (points, ranges)
+            }
         }
     }
 

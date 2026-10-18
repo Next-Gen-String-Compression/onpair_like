@@ -21,25 +21,20 @@ use super::cover::ProbeCover;
 use super::graph::{AlignmentGraph, Anchor, Edge, build_alignment_graph};
 use super::mincut::min_cut;
 use super::scan::Walk;
-use super::scan::{Region, VERIFY_NS_PER_HIT, scan_ns};
+use super::scan::{VERIFY_NS_PER_HIT, scan_ns};
 use crate::core::dictionary::CompactDictionaryView;
 use crate::search::index::TokenFrequencyIndexView;
 
 /// Compile a sound probe cover for `pattern` over `dict`, cheapest by the
-/// scan cost model over a stream of `row_count` rows: the alignment graph,
-/// the cut chosen on it as edge ids, and the analysis that cut becomes.
+/// scan cost model over the indexed stream: the alignment graph, the cut
+/// chosen on it as edge ids, and the analysis that cut becomes.
 pub(super) fn plan(
     dict: CompactDictionaryView<'_>,
     pattern: &[u8],
     frequencies: TokenFrequencyIndexView<'_>,
-    row_count: usize,
 ) -> (AlignmentGraph, Vec<u32>, PrefilterAnalysis) {
     let graph = build_alignment_graph(dict, pattern, Some(frequencies), Anchor::Anywhere);
-    let region = Region {
-        code_count: frequencies.total_frequency() as usize,
-        row_count,
-    };
-    let (cover, covered, scan_ns, cut) = cheapest_cover(&graph, frequencies, region);
+    let (cover, covered, scan_ns, cut) = cheapest_cover(&graph, frequencies);
     let analysis = PrefilterAnalysis {
         probe_cover: cover,
         covered_frequency: covered,
@@ -51,17 +46,17 @@ pub(super) fn plan(
     (graph, cut, analysis)
 }
 
-/// The cheaper by [`scan_ns`] of the two cuts, with what it covers, what it
-/// costs and the ids of its edges. The second weighs an edge in picoseconds:
-/// a verification per covered code, and each token and range at the compare
-/// kernel's slope over every code of the stream.
+/// The cheaper by [`scan_ns`] of the two cuts over the indexed stream, with
+/// what it covers, what it costs and the ids of its edges. The second weighs
+/// an edge in picoseconds: a verification per covered code, and each token
+/// and range at the compare kernel's slope over every code of the stream.
 pub(super) fn cheapest_cover(
     graph: &AlignmentGraph,
     frequencies: TokenFrequencyIndexView<'_>,
-    region: Region,
 ) -> (ProbeCover, u32, f64, Vec<u32>) {
     let ps = |ns: f64| (ns * 1000.0).round() as u64;
-    let codes = region.code_count as f64;
+    let code_count = frequencies.total_frequency() as usize;
+    let codes = code_count as f64;
     #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
     let (token, range) = {
         use super::scan::{Match, Shape, ns_per_code};
@@ -79,7 +74,7 @@ pub(super) fn cheapest_cover(
         let edges: Vec<&Edge> = cut.iter().map(|&at| &graph.edges[at as usize]).collect();
         let cover = ProbeCover::from_edge_cut(&edges);
         let covered = cover_frequency(&cover, frequencies);
-        let ns = scan_ns(&cover, covered, region);
+        let ns = scan_ns(&cover, covered, code_count);
         (cover, covered, ns, cut.to_vec())
     };
     let selective = price(&min_cut(&graph.edges, graph.nodes, |e| {

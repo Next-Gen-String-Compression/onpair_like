@@ -1,0 +1,34 @@
+name: "System Info"
+description: "Print CPU, memory, and disk information for benchmark runners"
+
+runs:
+  using: "composite"
+  steps:
+    - name: CPU, Memory & Disk Info
+      shell: bash
+      run: |
+        echo "=== CPU Model ==="
+        lscpu
+        echo "=== /proc/cpuinfo summary ==="
+        # x86 exposes "model name"; aarch64 has no such line (lscpu above covers it), and
+        # `shell: bash` runs with `set -e`, so a missing match must not fail the step.
+        grep -m1 "model name" /proc/cpuinfo || true
+        nproc
+        echo "=== CPU Flags ==="
+        # x86 exposes "flags"; aarch64 exposes "Features".
+        grep -m1 -E "^(flags|Features)" /proc/cpuinfo || true
+
+        echo "=== Memory ==="
+        free -h
+        echo "=== /proc/meminfo ==="
+        cat /proc/meminfo
+
+        echo "=== Block Devices ==="
+        lsblk
+        echo "=== Disk Usage ==="
+        df -hT
+        echo "=== Mounts ==="
+        mount | grep -E "^/dev"
+        echo "=== NVMe Devices ==="
+        ls -la /dev/nvme* 2>/dev/null || echo "No NVMe"
+        sudo nvme list 2>/dev/null || true

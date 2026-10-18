@@ -13,7 +13,7 @@ unless marked `old:`. Sections 3 and 9 hold what FSST adds that neither Rust
 version handles.
 
 ```
-needle bytes ──► graph ──► min cut (two λ) ──► cover ──► scan ──► rows
+needle bytes ──► graph ──► two min cuts ──► cover ──► scan ──► rows
                   │                                          ▲
                   └──────────────── walk ────────────────────┘  (exact check per hit)
 ```
@@ -47,15 +47,15 @@ memmem.
 | --- | --- | --- |
 | `mod.rs` | `analyze_prefilter`, `prefilter_candidates` (exact), `prefilter_superset`, `PrefilterAnalysis`, empty-pattern handling | port; no pattern length limit, the walk's node ids are u32 |
 | `graph.rs` | alignment DAG builder, candidate sweep, greedy parse, `ProbeCover::from_edge_cut` | port with FSST changes (§4, §9) |
-| `mincut.rs` | Dinic max-flow and cut extraction; unchanged since old | port as is |
-| `plan.rs` | λ cuts, `cheapest_cover`, `cover_frequency` | port |
+| `mincut.rs` | Dinic max-flow and cut extraction, one `min_cut` per cut | port as is |
+| `plan.rs` | the two cuts, `cheapest_cover`, `cover_frequency`, `plan` shared with the trace | port |
 | `cover.rs` | `ProbeCover::from_runs` | port |
 | `scan/mod.rs` | `BLOCK`, block driver, `Check`, `Facts` construction, `both_stages`, `Isa` | port |
-| `scan/policy/mod.rs` | matcher and resolver selection, fitted cost rows, `scan_ns` | port; u8 rows from old |
+| `scan/policy/mod.rs` | matcher selection, skip threshold, fitted cost rows, `scan_ns` | port; u8 rows from old |
 | `scan/matcher/{eq_or,range,nibble_n8,shared}.rs` | u16 kernels on NEON, AVX2, AVX-512 | port the u8 counterparts from old; `table.rs` is not ported (§6.3) |
 | `old: scan/novel/matcher/nibble.rs` | universal 16×16 bitmap for u8 codes | port; FSST keeps it |
 | `old: scan/novel/matcher/{eq_or,range,nibble_n_8}.rs` | the same kernels with `u8` impls | port the u8 impls |
-| `scan/resolver/{shared,linear_seek,gallop_seek}.rs` | cursor loop and the two seeks, generic over the offset width | port |
+| `scan/resolver/mod.rs` | `GallopSeek`, the one resolver, generic over the offset width | port |
 | `scan/walk.rs` | `Walk`, non-branching forward and backward | port with FSST changes (§7, §9) |
 | `scan/dispatch.rs` | plan to template instantiation | port |
 | `scan/README.md`, `old: scan/novel/README.md` | rates, model derivation, instruction counts | reference; the old one has the u8 tables |
@@ -98,7 +98,7 @@ untouched. `fsst_export` sets bit 1 of header byte 8 and writes the symbols
 in the internal order; `fsst_import` sorts them into rank order when the bit
 is set, so `fsst_decoder_t::symbol[c]` is sorted by `c` and no separate
 table travels with the data. The planner asserts `Dictionary::sorted()`; a
-`Range` edge is one `CodeRange` and one λ term.
+`Range` edge is one `CodeRange` and one range in the cut weight.
 
 **Stream and rows.** `fsst_compress` writes strings back to back into
 `output` with `strOut[i]` pointing at each; `row_offsets[i] = strOut[i] -
@@ -215,52 +215,60 @@ blocked by either, so the cut picks the cheaper and every cut stays a
 sound cover. Escape, Range and Set edges are copied as they are. A pair's
 frequency is the independence estimate `count[a]·count[b]/total`
 (first decision 2026-09-15), replaced the same day by the exact count
-`Frequency::pairs[a·256+b]` after the estimate misled the cut; its λ weight
-is 2. The cover gets `pairs`, the bit
+`Frequency::pairs[a·256+b]` after the estimate misled the cut; the balanced
+cut weighs it at eq_or's fitted pair slope (§5). The cover gets `pairs`, the bit
 lands on the first code, only `eq_or` compares pairs (`eq(v, a) & eq(v+1,
 b)` with a lagged load, the driver keeps one code past every block
 readable), and the walk is unchanged since the hit is a greedy step. The
 stream's last code pairs with padding; `both_stages` resets that bit to
 the plain membership test.
 
-## 5. Min cut and the λ cuts (`mincut.rs`, `plan.rs`)
+## 5. Min cut and the two cuts (`mincut.rs`, `plan.rs`)
 
-**Min cut.** Dinic on `n + 1` nodes with CSR adjacency. A cuttable edge's
-capacity is its weight; `SetTooBig` gets `sum(finite weights) + 1`. Max flow
-must stay below that (assert: otherwise a path has no probe). The cut is
-every cuttable edge with `level[from] >= 0 && level[to] < 0` after the last
-BFS. The solver is built once per graph and refilled per λ.
+**Min cut.** Dinic on `n + 1` nodes with CSR adjacency, built per cut. A
+cuttable edge's capacity is its weight; `SetTooBig` gets `sum(finite
+weights) + 1`. Max flow must stay below that (assert: otherwise a path has
+no probe). The cut is every cuttable edge with `level[from] >= 0 &&
+level[to] < 0` after the last BFS. Building the CSR costs about one solve,
+so rebuilding it for the second cut adds 1% of plan time at 64 bytes and 4
+to 6% at 4 KB (onpair, 2026-10-18).
 
-**Two cuts.** The old ladder over λ = 0, 1, 4, 16, … is gone. Under the
-linear part of `scan_ns` a cut costs `codes · per_point · points + hits ·
-WALK_NS_PER_HIT`, so weighting at `λ = per_point · codes / WALK_NS_PER_HIT`
-(`policy::cost_lambda`) makes the min cut the model's optimum directly. The
-narrowest cut is priced too, since the kernel choice bends the model past
-two points.
+**Two cuts.** A minimum cut is linear in its edge weights and the scan's
+cost is not: a kernel takes eight codes for the price of one, and a range
+costs the nibble table nothing. So two cuts stand in for it, one per end:
 
 ```
-weight_λ(e) = frequency(e) + λ · (points(e) + 2 · ranges(e) + 2 · pairs(e))
-              # Point (1,0), Range (0,1), Set(ids) (len,0), SetTooBig (0,0), Pair (0,0,1)
-ceiling = total_frequency
-narrowest = cut(weight_{ceiling+1}); price(narrowest)
-c = cut(weight_{min(cost_lambda, ceiling)}); if c != narrowest: price(c)
-best = argmin scan_ns over priced cuts
+selective(e) = frequency(e)
+balanced(e)  = VERIFY_NS_PER_HIT · frequency(e)
+             + codes · (t · points(e) + q · ranges(e) + pq · pairs(e))     # picoseconds
+               t, q, pq = eq_or's slopes per point, range and pair, read off ns_per_code
+best = argmin scan_ns over the covers of both cuts
 ```
+
+The selective cut wins for covers wide enough that a code costs the kernel
+nothing; the balanced one for covers narrow enough that eq_or pays for
+every code. A cover between the two, where nibble_n8 wins, can be missed. On
+onpair's 239 drawn needles this loses 0.2% geomean against the full λ
+ladder it replaced, worst 1.34x, by the model.
 
 `price(cut)`: `cover = from_edge_cut(cut)`, `covered = Σ frequency over
-points and ranges`, `ns = scan_ns(cover, covered, region)` with `Region {
-code_count = total_frequency, row_count }`. `scan_ns` now lives in
-`scan/policy/mod.rs`, §6.5.
+points and ranges`, `ns = scan_ns(cover, covered, total_frequency)`. The row
+count no longer enters the cost model; `analyze` keeps the parameter and
+ignores it. A Set edge weighs the runs its codes merge to, as points and
+ranges, in both implementations. `scan_ns` lives in `scan/policy/mod.rs`,
+§6.5.
 
 **Outputs (`mod.rs`).** `PrefilterAnalysis { cover, covered_frequency,
-total_frequency, scan_ns, walk, matches_all }`. The empty pattern sets
-`matches_all` and both execute functions append every row without a scan.
-The C++ walk's node ids are u32, so there is no pattern length limit.
-`prefilter_candidates` runs the walk on every hit;
+total_frequency, scan_ns, walk, matches_all }`. `plan` returns the analysis
+together with the graph and the chosen cut, and `trace_prefilter` labels
+those, so the trace and the analysis come from one planning path. The empty
+pattern sets `matches_all` and both execute functions append every row
+without a scan. The C++ walk's node ids are u32, so there is no pattern
+length limit. `prefilter_candidates` runs the walk on every hit;
 `prefilter_superset` runs the same plan with `Check::Superset`. An empty
 cover on a non-empty pattern appends nothing. `prefilter_is_likely_profitable`
-(comparisons ≤ 16 and candidate row fraction < 0.10) is the older heuristic;
-`scan_ns` is the number to compare against a decode fallback.
+is gone from onpair; `scan_ns` is the number to compare against a decode
+fallback.
 
 ## 6. Scan (`scan/`)
 
@@ -269,8 +277,8 @@ cover on a non-empty pattern appends nothing. `prefilter_is_likely_profitable`
 ```
 BLOCK = 4096 codes = 64 mask words;  Block = [Code; BLOCK];  Mask = [u64; 64]
 
-both_stages<M, R>(cover, codes, row_offsets, check, out):
-    matcher = M::new(cover); resolver = R::new(row_offsets); bits = zero
+both_stages<M>(cover, codes, row_offsets, check, out):
+    matcher = M::new(cover); resolver = GallopSeek::new(row_offsets); bits = zero
     for (block, at, valid) in blocks(codes):
         if matcher.check(block, &mut bits):        # false promises an all-zero mask
             clear_from(bits, valid)
@@ -286,7 +294,7 @@ clear_from(bits, valid): if valid < BLOCK: bits[valid/64] &= (1 << valid%64) - 1
 
 No lookahead any more, since every probe is one code long. `facts(input,
 covered, total)` returns `None` when the cover is empty or there are no
-rows, and otherwise `Facts { expected_hits, code_count, row_count }` with
+rows, and otherwise `Facts { expected_hits, code_count }` with
 `expected_hits = covered · code_count / total` (exact when the region is
 the indexed stream, 0 when `total == 0`).
 
@@ -338,82 +346,67 @@ At u8 width `nibble_n8` runs one batch only (the bitmap is cheaper than a
 second). `range` on AVX2 uses `min_epu8(x, width) == x` for the unsigned
 compare.
 
-### 6.4 Stage two resolvers (`scan/resolver/`)
+### 6.4 Stage two resolver (`scan/resolver/`)
 
 ```
-Cursor { row = 0, row_end = 0, resolved_code = 0 }
+GallopSeek { row = 0, row_end = 0, resolved_code = 0 }
 
-rows(bits, first_code, check, out, find):
+rows(bits, first_code, check, out):
     at = max(resolved_code - first_code, 0)
     while hit = next_set(bits, at):
         code = first_code + hit
         if code >= row_end:
-            row = find(row_offsets, row, code); row_end = row_offsets[row + 1]
+            row = gallop(row, code); row_end = row_offsets[row + 1]
         if check.passes(code, row_offsets[row], row_end):
             out.push(row); resolved_code = row_end; at = row_end - first_code
         else:
             at = hit + 1
 
-linear: while row_offsets[row + 1] <= code: row += 1
-gallop: step = 1; while from + step < len && row_offsets[from + step] <= code: step *= 2
-        lo = from + step/2; hi = min(from + step, len)
-        row = lo + partition_point(row_offsets[lo + 1 .. hi], <= code)
+gallop(from, code): step = 1; while from + step < len && row_offsets[from + step] <= code: step *= 2
+                    lo = from + step/2; hi = min(from + step, len)
+                    return lo + partition_point(row_offsets[lo + 1 .. hi], <= code)
 ```
 
-`Check` is `Superset` or `Walk { walk, dict, codes }`. A row goes out on its
-first passing hit; its other hits are never read. The row layer must cover
-every code.
+The linear seek and the choice between the two are gone. `Check` is
+`Superset` or `Walk { walk, dict, codes }`. A row goes out on its first
+passing hit; its other hits are never read. The row layer must cover every
+code.
 
 ### 6.5 Policy and cost model (`scan/policy/mod.rs`)
 
-Plan = `(matcher, resolver, skip)`.
+Plan = `(matcher, skip)`.
 
 - **matcher** = argmin `ns_per_code` over kernels that take the shape.
   `takes`: eq_or needs K > 0; range needs K = 0, R > 0; nibble_n8 needs
   K > 0 and `ceil(K/8) ≤ MAX_BATCHES` (3 on NEON and AVX-512, 2 on AVX2 at
   u16, 1 at u8); nibble takes everything, which is the role the u16 `table`
   had.
-- **skip** = `skip_ns(d) < 0`, `d = expected_hits / code_count`,
-  `skip_ns(d) = (reduction - pack · exp(-128 · d)) / 128`, `(0.75, 1.01)`
-  on NEON and AVX2, `(0.35, 0.0)` on AVX-512. Break-even near `d = 2.3e-3`.
-  `stage_one_ns_per_code(shape, d) = ns_per_code + min(skip_ns(d), 0)` for
-  vector kernels.
-- **resolver**: `g = rows / max(hit_rows, 1)` with `hit_rows = rows · (1 -
-  exp(-expected_hits / rows))`; gallop iff `seek(Gallop, g) < seek(Linear,
-  g)`. The fixed threshold of 32 rows per hit is gone.
-
-Fitted constants, new branch (stage two refitted 2026-09-08, walk measured
-over 57 needles):
-
-| constant | value | meaning |
-| --- | --- | --- |
-| `WORD_NS` | 0.05 | per mask word read in a block that hit |
-| `LINEAR_SEEK_ROW_NS`, `LINEAR_SEEK_CROSS_NS` | 3.98, 0.41 | per emitted row, per row walked past |
-| `GALLOP_SEEK_STEP_NS` | 3.89 | per halving; seek = 3.89 · log2(1 + g) |
-| `WALK_NS_PER_HIT` | 8.0 | per hit through the walk, hits and misses averaged |
+- **skip** = `d < SKIP_BELOW_DENSITY`, `d = expected_hits / code_count`. The
+  flag adds a lane OR per group of 128 codes and saves the pack on each
+  group with no match, an `exp(-128 · d)` share, so the break-even is
+  `ln(pack / reduction) / 128`: 0.0023 on onpair's NEON and AVX2 pair
+  (0.75, 1.01), never on AVX-512, where there is no pack.
 
 ```
-seek(Linear, g) = 3.98 + 0.41·g;   seek(Gallop, g) = 3.89·log2(1 + g)
-stage_two_ns(resolver, words, emitted, crossed) = 0.05·words + emitted·seek(resolver, crossed/emitted)   # 0.05·words if emitted == 0
-
-scan_ns(cover, covered, region):
-    0 if cover empty or no codes or no rows
-    d = covered / codes
-    stage_one = codes · stage_one_ns_per_code(shape, d)
-    emitted   = hit_rows(covered, rows)
-    words     = codes / 64 · (1 - exp(-d · BLOCK))
-    stage_two = min over both resolvers of stage_two_ns(r, words, emitted, rows)
-    total     = stage_one + stage_two + covered · 8.0
+scan_ns(cover, covered, codes):
+    0 if cover empty or no codes
+    codes · ns_per_code(select_matcher(shape), shape) + covered · VERIFY_NS_PER_HIT
 ```
 
-`policy.hpp` carries the 2026-09-15 fit from §11 and the stage-two
-constants from the resolver sweep; its skip-flag pair (3.3, 3.4 ns per
-group) comes from the eq_or K = 1 ends of the same sweep, so the flag turns
-on below about 2e-4 bits per code. Its ladder: eq_or at K ≤ 2, nibble_n8k at
-3..8, nibble from 9; ranges alone to range up to R = 3; beside one token the
-compare carries two ranges; beside eight tokens the batch carries one.
-`policy/tests.cpp` pins those boundaries and runs every plan end to end
-against the scalar rows.
+Stage two, the resolve, is under 3% of the chosen cover's `scan_ns` on
+onpair (median 0.4%, max 2.2%) and changes no plan, so the model leaves it
+out; with it went the resolver sweep and its constants. `VERIFY_NS_PER_HIT`
+is 8.0, onpair's 2026-09-08 median; a fused refit there measured 4.2 ns, and
+the balanced cut picks the same covers anywhere from 2 to 64 ns.
+
+`policy.hpp` carries the 2026-09-15 fit from §11. Its skip pair (3.3, 3.4 ns
+per group) comes from the eq_or K = 1 ends of the same sweep, so
+`SKIP_BELOW_DENSITY` is ln(3.4 / 3.3) / 128 = 0.00023 bits per code, and 0 on
+AVX-512 as in onpair. Its
+ladder: eq_or at K ≤ 2, nibble_n8k at 3..8, nibble from 9; ranges alone to
+range up to R = 3; beside one token the compare carries two ranges; beside
+eight tokens the batch carries one. `policy/tests.cpp` pins those boundaries
+and runs every plan end to end against the scalar rows.
 
 Fitted `ns_per_code` for **u8 codes**, from old (the kernels are unchanged;
 K tokens, R ranges):
@@ -648,20 +641,9 @@ because clang contracts `sw·swxx - swx²` into an FMA and the exact zero
 comes out as 1e-7, which turned the flat `nibble_n8k` line into a negative
 intercept before the fix.
 
-**Stage two sweep**, `prefilter_resolver_sweep` (`resolver_fit.cpp`), the
-mirror of onpair's `resolver_fit`: streams `imdb/name/name_1m` (8 codes a
-row) and `ch/hits/URL_1m` (58), each needing its `.fsst.csv` and catalog
-under `data/`; the IMDb raw comes from `~/imdb.duckdb`, first 1,048,576
-non-empty names. Masks are built once from the cover over a 1M-code prefix,
-for the K = 1 and K = 16 sets of every target; the row layer is fused by
-factors 1, 4, 16 and 64; both resolvers are timed over the blocks that hit
-and checked against the mask's rows. Writes `output/novel_resolve_<stamp>.csv`
-with onpair's columns, 160 rows in under a second, then prints the four
-fitted constants. First fit: word 0.14 ns, linear seek 1.78 per row + 0.39
-per row crossed, gallop 2.55 per halving, crossover at 26 rows crossed per
-emitted row (Rust: 0.05, 3.98, 0.41, 3.89). `plot_resolver.py --data
-paper/data/resolver_fsst_<arch>_<date>.csv --name kernel-resolver-fsst`
-draws it.
+The stage two sweep (`resolver_fit.cpp`, `prefilter_resolver_sweep`) is
+gone with stage two's place in the cost model, as onpair's `resolver_fit`
+is; its last CSV stays in `output/`.
 
 ## 12. Decisions (2026-09-15)
 
@@ -677,4 +659,4 @@ draws it.
 | location | new sources under `search/` in this repo, C++17, library target |
 | pair probes | in, via the unrolled cut graph (§4), a one-symbol terminal range pairs too; pair frequency is counted exactly (`Frequency::pairs`, 256 KB, same pass; the independence estimate ranked `g`,`o` at 3.4k against 25k real and bought nothing); the sweep has pairs-alone rows at P in {1, 2, 4, 8} (`pairs` column) and `eq_or` is fitted at 0.01674 ns per code per pair |
 | raw codes | sorted codes, written by the compressor: `fsst_sort_codes` permutes the codes at the write sites into byte order of their symbols (§3); a `Range` edge is one `CodeRange` weighing `(0, 1)`, a `Set` edge's weight counts the runs its codes merge to |
-| C++ layout | header-only under `search/prefilter/`, one file per Rust module: `cover.hpp`, `scan/scan.hpp` (driver, `both_stages`), `scan/matcher/{shared,eq_or,range,nibble_n8,nibble}.hpp`, `scan/resolver/{shared,linear_seek,gallop_seek}.hpp`, `scan/policy/policy.hpp` (selection and `scan_ns` with the fitted constants), `scan/dispatch.hpp`, `scan/execute.hpp` (facts and the planned run, the rest of Rust's `scan/mod.rs`), `dictionary.hpp` (symbol table as code to bytes, `MAX_TOKEN_SIZE`, `ESCAPE`), `frequency.hpp` (`count[256]`), `graph.hpp` (`Edge`, `Candidates`, `build_alignment_graph`, `from_edge_cut`), `mincut.hpp`, `plan.hpp` (`cheapest_cover`, `plan`), `prefilter.hpp` (`Analysis` with its `Walk`, `analyze`, `execute` over an `Analysis`, exact `candidate_rows`, `Finder`), `scan/walk/walk.hpp` (`Walk`, `WalkCheck`), `compress.hpp` (the FSST round trip the tests and tools share); tests as `tests.cpp` beside each module, registered with ctest from `search/CMakeLists.txt`; `prefilter/tests.cpp` links `fsst` and compresses its own rows |
+| C++ layout | header-only under `search/prefilter/`, one file per Rust module: `cover.hpp`, `scan/scan.hpp` (driver, `both_stages`), `scan/matcher/{shared,eq_or,range,nibble_n8,nibble}.hpp`, `scan/resolver/resolver.hpp` (`GallopSeek`), `scan/policy/policy.hpp` (selection, skip threshold and `scan_ns` with the fitted constants), `scan/dispatch.hpp`, `scan/execute.hpp` (facts and the planned run, the rest of Rust's `scan/mod.rs`), `dictionary.hpp` (symbol table as code to bytes, `MAX_TOKEN_SIZE`, `ESCAPE`), `frequency.hpp` (`count[256]`), `graph.hpp` (`Edge`, `Candidates`, `build_alignment_graph`, `from_edge_cut`), `mincut.hpp` (`min_cut`), `plan.hpp` (`Analysis` with its `Walk`, `cheapest_cover`, `plan`, which also returns the graphs and cut `tools/trace.hpp` labels), `prefilter.hpp` (`analyze`, `execute` over an `Analysis`, exact `candidate_rows`, `Finder`), `scan/walk/walk.hpp` (`Walk`, `WalkCheck`), `compress.hpp` (the FSST round trip the tests and tools share); tests as `tests.cpp` beside each module, registered with ctest from `search/CMakeLists.txt`; `prefilter/tests.cpp` links `fsst` and compresses its own rows |

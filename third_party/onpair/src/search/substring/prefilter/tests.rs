@@ -10,7 +10,7 @@ use super::graph::{
 };
 use super::mincut::min_cut;
 use super::plan::{cheapest_cover, cover_frequency};
-use super::scan::{Region, scan_ns};
+use super::scan::scan_ns;
 use super::{AnchoredWalk, Finder, PrefilterAnalysis, Verify, analyze_prefilter};
 use crate::core::dictionary::{CompactDictionaryView, DictionaryView};
 use crate::core::types::{MAX_TOKEN_SIZE, Token, TokenRange};
@@ -811,23 +811,20 @@ fn cover_of(points: usize) -> ProbeCover {
 /// coverage, and more coverage costs more at equal shape.
 #[test]
 fn scan_cost_is_monotone_in_probes_and_coverage() {
-    let region = Region {
-        code_count: 1 << 24,
-        row_count: 1 << 18,
-    };
+    let codes = 1 << 24;
     let costs: Vec<f64> = [1, 3, 8, 16, 24]
         .into_iter()
-        .map(|points| scan_ns(&cover_of(points), 1 << 12, region))
+        .map(|points| scan_ns(&cover_of(points), 1 << 12, codes))
         .collect();
     assert!(
         costs.windows(2).all(|pair| pair[0] <= pair[1]),
         "wider covers cost less: {costs:?}"
     );
     let one = cover_of(1);
-    let sparse = scan_ns(&one, 1 << 10, region);
-    let dense = scan_ns(&one, 1 << 20, region);
+    let sparse = scan_ns(&one, 1 << 10, codes);
+    let dense = scan_ns(&one, 1 << 20, codes);
     assert!(sparse < dense, "{sparse} for 2^10 hits, {dense} for 2^20");
-    assert_eq!(scan_ns(&cover_of(0), 0, region), 0.0);
+    assert_eq!(scan_ns(&cover_of(0), 0, codes), 0.0);
 }
 
 /// The sweep never does worse than the frequency-only cut it starts from,
@@ -844,10 +841,7 @@ fn sweep_prices_at_or_below_the_frequency_cut() {
     let view = col.view();
     let frequencies = build_token_frequency_index(view.codes, view.dict.num_tokens()).unwrap();
     let freq = frequencies.as_view();
-    let region = Region {
-        code_count: view.codes.len(),
-        row_count: view.num_rows(),
-    };
+    let codes = view.codes.len();
     for pat in [
         b"e".as_slice(),
         b"://",
@@ -862,11 +856,11 @@ fn sweep_prices_at_or_below_the_frequency_cut() {
         .map(|&at| &graph.edges[at as usize])
         .collect();
         let baseline = ProbeCover::from_edge_cut(&by_frequency);
-        let baseline_ns = scan_ns(&baseline, cover_frequency(&baseline, freq), region);
+        let baseline_ns = scan_ns(&baseline, cover_frequency(&baseline, freq), codes);
 
-        let (cover, covered, ns, _) = cheapest_cover(&graph, freq, region);
+        let (cover, covered, ns, _) = cheapest_cover(&graph, freq);
         assert_eq!(covered, cover_frequency(&cover, freq));
-        assert_eq!(ns, scan_ns(&cover, covered, region));
+        assert_eq!(ns, scan_ns(&cover, covered, codes));
         assert!(
             ns <= baseline_ns,
             "{pat:?}: sweep {ns} against {baseline_ns}"

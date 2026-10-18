@@ -48,10 +48,9 @@ static const uint8_t* bytes(const std::string& s) { return reinterpret_cast<cons
 static CutGraph plain(const AlignmentGraph& g) { return CutGraph{g.edges, g.node_count(), g.source(), g.sink()}; }
 
 template <typename Weight>
-static std::vector<const Edge*> min_cut(const CutGraph& graph, Weight weight) {
-    MinCut solver(graph);
+static std::vector<const Edge*> cut_edges(const CutGraph& graph, Weight weight) {
     std::vector<const Edge*> cut;
-    for (uint32_t at : solver.solve(graph, weight)) cut.push_back(&graph.edges[at]);
+    for (uint32_t at : min_cut(graph, weight)) cut.push_back(&graph.edges[at]);
     return cut;
 }
 
@@ -129,7 +128,7 @@ static void check_cut_graph(const Column& col, const std::string& pat, const std
     }
     CHECK_MSG(covers_every_match(col, probes, want), "%s: a matching row holds no probe at all", pat.c_str());
 
-    std::vector<const Edge*> cut = min_cut(g, by_frequency);
+    std::vector<const Edge*> cut = cut_edges(g, by_frequency);
     CHECK_MSG(!sink_reachable_avoiding(g, [&](const Edge& e) { return selected(cut, e); }),
               "%s: the minimum cut leaves a path open", pat.c_str());
     CHECK_MSG(covers_every_match(col, cut, want), "%s: the minimum cut misses a matching row", pat.c_str());
@@ -413,15 +412,15 @@ static void cover_probes_the_maximal_runs_of_its_membership() {
 static void planned_cover_prices_at_or_below_the_frequency_cut() {
     Rng rng{5};
     Column col = column(url_rows(500, rng));
-    scan::policy::Region region{col.codes.size(), col.row_count()};
+    const size_t codes = col.codes.size();
     for (std::string pat : {"e", "://", ".com/page", "https://www.example.com", "user=1"}) {
         AlignmentGraph g = build_alignment_graph(col.dict, bytes(pat), pat.size(), col.freq);
         CutGraph cg = CutGraph::with_pairs(g, col.freq);
-        ProbeCover baseline = from_edge_cut(min_cut(cg, by_frequency));
-        double baseline_ns = scan::policy::scan_ns(baseline, col.freq.of_cover(baseline), region);
-        Planned p = cheapest_cover(cg, col.freq, region);
+        ProbeCover baseline = from_edge_cut(cut_edges(cg, by_frequency));
+        double baseline_ns = scan::policy::scan_ns(baseline, col.freq.of_cover(baseline), codes);
+        Priced p = cheapest_cover(cg, col.freq);
         CHECK(p.covered == col.freq.of_cover(p.cover));
-        CHECK(p.scan_ns == scan::policy::scan_ns(p.cover, p.covered, region));
+        CHECK(p.scan_ns == scan::policy::scan_ns(p.cover, p.covered, codes));
         CHECK_MSG(p.scan_ns <= baseline_ns, "%s: sweep %f against %f", pat.c_str(), p.scan_ns, baseline_ns);
     }
 }
@@ -443,13 +442,13 @@ static Steps steps(const std::vector<const Edge*>& cut) {
 static void shared_suffix_beats_two_local_choices() {
     CutGraph g{{synthetic(0, 1, -1), synthetic(0, 2, -1), synthetic(1, 3, 4), synthetic(2, 3, 4), synthetic(3, 4, 6)},
                5, 0, 4};
-    CHECK(steps(min_cut(g, by_frequency)) == Steps({{3, 4}}));
+    CHECK(steps(cut_edges(g, by_frequency)) == Steps({{3, 4}}));
 }
 
 static void disjoint_paths_are_cut_separately() {
     CutGraph g{{synthetic(0, 1, -1), synthetic(1, 4, 5), synthetic(0, 2, -1), synthetic(2, 3, 9), synthetic(3, 4, 0)},
                5, 0, 4};
-    CHECK(steps(min_cut(g, by_frequency)) == Steps({{1, 4}, {3, 4}}));
+    CHECK(steps(cut_edges(g, by_frequency)) == Steps({{1, 4}, {3, 4}}));
 }
 
 static void deep_chain_does_not_exhaust_the_stack() {
@@ -457,7 +456,7 @@ static void deep_chain_does_not_exhaust_the_stack() {
     CutGraph g{{}, len, 0, len - 1};
     for (uint32_t v = 0; v + 1 < len; ++v) g.edges.push_back(synthetic(v, v + 1, 7));
     g.edges[len / 2] = synthetic(len / 2, len / 2 + 1, 3);
-    CHECK(steps(min_cut(g, by_frequency)) == Steps({{len / 2, len / 2 + 1}}));
+    CHECK(steps(cut_edges(g, by_frequency)) == Steps({{len / 2, len / 2 + 1}}));
 }
 
 // One Finder for every call, so its scratch is reused with stale entries.

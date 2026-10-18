@@ -1,12 +1,12 @@
 #pragma once
 
 // Minimum-weight cut of the alignment graph by Dinic max flow over a CSR
-// residual graph. Built once per graph, refilled per weighting. See
-// docs/prefilter.md section 5.
+// residual graph, built per cut. See docs/prefilter.md section 5.
 
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
+#include <cstdlib>
 #include <vector>
 
 #include "graph.hpp"
@@ -17,7 +17,9 @@ namespace detail {
 
 class Dinic {
   public:
-    Dinic(size_t num_nodes, const std::vector<Edge>& edges) {
+    // capacity(edge) for each edge; twins start empty.
+    template <typename Capacity>
+    Dinic(size_t num_nodes, const std::vector<Edge>& edges, Capacity capacity) {
         head_.assign(num_nodes + 1, 0);
         for (const Edge& e : edges) {
             ++head_[e.from + 1];
@@ -28,7 +30,7 @@ class Dinic {
         std::vector<uint32_t> cursor(head_);
         to_.assign(slots, 0);
         twin_.assign(slots, 0);
-        forward_.resize(edges.size());
+        cap_.assign(slots, 0);
         for (size_t at = 0; at < edges.size(); ++at) {
             uint32_t fwd = cursor[edges[at].from]++;
             uint32_t rev = cursor[edges[at].to]++;
@@ -36,23 +38,16 @@ class Dinic {
             twin_[fwd] = rev;
             to_[rev] = edges[at].from;
             twin_[rev] = fwd;
-            forward_[at] = fwd;
+            cap_[fwd] = capacity(edges[at]);
         }
-        cap_.assign(slots, 0);
         level_.assign(num_nodes, -1);
         next_.assign(num_nodes, 0);
     }
 
-    // capacity(at) for each edge in edge order; twins start empty.
-    template <typename Capacity>
-    void refill(Capacity capacity) {
-        std::fill(cap_.begin(), cap_.end(), 0);
-        for (size_t at = 0; at < forward_.size(); ++at) cap_[forward_[at]] = capacity(at);
-    }
-
     uint64_t max_flow(size_t source, size_t sink) {
         uint64_t total = 0;
-        while (build_levels(source, sink)) total += blocking_flow(source, sink);
+        while (build_levels(source, sink))
+            if (__builtin_add_overflow(total, blocking_flow(source, sink), &total)) std::abort();
         return total;
     }
 
@@ -121,7 +116,7 @@ class Dinic {
         }
     }
 
-    std::vector<uint32_t> head_, to_, twin_, forward_, next_, path_;
+    std::vector<uint32_t> head_, to_, twin_, next_, path_;
     std::vector<uint64_t> cap_;
     std::vector<int32_t> level_;
     std::vector<uint32_t> queue_;  // the BFS queue, read from the front by index
@@ -129,37 +124,26 @@ class Dinic {
 
 }  // namespace detail
 
-class MinCut {
-  public:
-    explicit MinCut(const CutGraph& graph) : flow_(graph.node_count, graph.edges) {}
-
-    // The cheapest set of cuttable edges disconnecting source from sink, as
-    // ascending indices into graph.edges. `weight(edge)` is read for
-    // cuttable edges only; the others get one more than every finite cut.
-    template <typename Weight>
-    const std::vector<uint32_t>& solve(const CutGraph& graph, Weight weight) {
-        uint64_t finite = 0;
-        for (const Edge& e : graph.edges)
-            if (e.cuttable()) finite += weight(e);
-        uint64_t infinite = finite + 1;
-        flow_.refill([&](size_t at) {
-            const Edge& e = graph.edges[at];
-            return e.cuttable() ? weight(e) : infinite;
-        });
-        uint64_t value = flow_.max_flow(graph.source, graph.sink);
-        assert(value < infinite && "a source-to-sink path carries no probe");
-        (void)value;
-        cut_.clear();
-        for (size_t at = 0; at < graph.edges.size(); ++at) {
-            const Edge& e = graph.edges[at];
-            if (e.cuttable() && flow_.level(e.from) >= 0 && flow_.level(e.to) < 0) cut_.push_back(static_cast<uint32_t>(at));
-        }
-        return cut_;
+// The cheapest set of cuttable edges disconnecting source from sink, as
+// ascending indices into graph.edges. `weight(edge)` is read for cuttable
+// edges only; the others get one more than every finite cut. Aborts, in every
+// build, if the weights overflow or a source-to-sink path runs entirely
+// through uncuttable edges: the cut would then not block it, an unsound cover.
+template <typename Weight>
+std::vector<uint32_t> min_cut(const CutGraph& graph, Weight weight) {
+    uint64_t finite = 0;
+    for (const Edge& e : graph.edges)
+        if (e.cuttable() && __builtin_add_overflow(finite, weight(e), &finite)) std::abort();
+    const uint64_t infinite = finite + 1;
+    detail::Dinic flow(graph.node_count, graph.edges,
+                       [&](const Edge& e) { return e.cuttable() ? weight(e) : infinite; });
+    if (flow.max_flow(graph.source, graph.sink) >= infinite) std::abort();
+    std::vector<uint32_t> cut;
+    for (size_t at = 0; at < graph.edges.size(); ++at) {
+        const Edge& e = graph.edges[at];
+        if (e.cuttable() && flow.level(e.from) >= 0 && flow.level(e.to) < 0) cut.push_back(static_cast<uint32_t>(at));
     }
-
-  private:
-    detail::Dinic flow_;
-    std::vector<uint32_t> cut_;
-};
+    return cut;
+}
 
 }  // namespace fsst::search::prefilter

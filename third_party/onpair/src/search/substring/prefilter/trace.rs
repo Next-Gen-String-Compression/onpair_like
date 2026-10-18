@@ -49,6 +49,7 @@ pub struct PrefilterTrace {
 
 /// Plan `pattern` as [`analyze_prefilter`](super::analyze_prefilter) does and
 /// return the graph and cut behind the cover. The pattern must be non-empty.
+/// The row count is ignored, as there.
 ///
 /// # Panics
 /// Panics on an empty pattern or one longer than [`MAX_PATTERN_LEN`].
@@ -56,10 +57,10 @@ pub fn trace_prefilter<S: TokenFrequencyIndexStorage>(
     pattern: &[u8],
     dict: CompactDictionaryView<'_>,
     frequencies: &TokenFrequencyIndex<S>,
-    row_count: usize,
+    _row_count: usize,
 ) -> PrefilterTrace {
     assert!(!pattern.is_empty() && pattern.len() <= MAX_PATTERN_LEN);
-    let (graph, cut, analysis) = plan(dict, pattern, frequencies.as_view(), row_count);
+    let (graph, cut, analysis) = plan(dict, pattern, frequencies.as_view());
 
     let mut in_cut = vec![false; graph.edges.len()];
     for &at in &cut {

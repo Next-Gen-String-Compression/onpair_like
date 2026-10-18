@@ -60,40 +60,28 @@ static void the_model_puts_the_boundaries_where_the_sweep_says() {
     CHECK(select_matcher({8, 2}) == Match::Nibble);
 }
 
-static void the_resolver_follows_the_seek_costs() {
-    // Every row hits: the walk is cheaper than a search of no distance.
-    CHECK(select_resolver({1000, 100000, 1000}) == Resolve::LinearSeek);
-    // One hit in a thousand rows: the search halves its way there.
-    CHECK(select_resolver({10, 1000000, 10000}) == Resolve::GallopSeek);
-    // The crossover is where the two seek costs meet, near 26 rows per hit.
-    double g = 2.0;
-    while (seek_ns_per_row(Resolve::GallopSeek, g) >= seek_ns_per_row(Resolve::LinearSeek, g)) g *= 1.01;
-    CHECK(g > 20 && g < 35);
-    CHECK(select_resolver({100, 100000, static_cast<size_t>(100 * (g * 0.8))}) == Resolve::LinearSeek);
-    CHECK(select_resolver({100, 100000, static_cast<size_t>(100 * (g * 1.3))}) == Resolve::GallopSeek);
-}
-
 static void the_skip_is_taken_only_on_a_sparse_mask() {
-    CHECK(select(probe(1, 0), {0, 1 << 20, 1000}).skip);
-    CHECK(select(probe(1, 0), {10, 1 << 20, 1000}).skip);
-    CHECK(!select(probe(1, 0), {1 << 16, 1 << 20, 1000}).skip);
-    CHECK(!select(probe(1, 0), {1 << 19, 1 << 20, 1000}).skip);
-    CHECK(skip_ns_per_code(0.0) < 0.0);
-    CHECK(skip_ns_per_code(0.5) > 0.0);
+    CHECK(select(probe(1, 0), {0, 1 << 20}).skip);
+    CHECK(select(probe(1, 0), {10, 1 << 20}).skip);
+    CHECK(!select(probe(1, 0), {1 << 16, 1 << 20}).skip);
+    CHECK(!select(probe(1, 0), {1 << 19, 1 << 20}).skip);
+    // The break-even the fitted pair puts it at, ln(3.4 / 3.3) / 128.
+    CHECK(select(probe(1, 0), {240, 1 << 20}).skip);
+    CHECK(!select(probe(1, 0), {250, 1 << 20}).skip);
 }
 
 static void scan_cost_is_monotone_in_probes_and_coverage() {
-    Region region{1 << 22, 1 << 16};
+    const size_t codes = 1 << 22;
     double last = 0.0;
     for (uint32_t covered : {0u, 100u, 10000u, 100000u, 1000000u}) {
-        double ns = scan_ns(probe(1, 0), covered, region);
+        double ns = scan_ns(probe(1, 0), covered, codes);
         CHECK_MSG(ns >= last, "covered %u", covered);
         last = ns;
     }
-    CHECK(scan_ns(probe(0, 0), 5, region) == 0.0);
-    CHECK(scan_ns(probe(1, 0), 5, {0, 5}) == 0.0);
-    CHECK(scan_ns(probe(1, 0), 1000, region) < scan_ns(probe(8, 0), 1000, region));
-    CHECK(scan_ns(probe(8, 0), 1000, region) <= scan_ns(probe(64, 0), 1000, region) + 1e-9);
+    CHECK(scan_ns(probe(0, 0), 5, codes) == 0.0);
+    CHECK(scan_ns(probe(1, 0), 5, 0) == 0.0);
+    CHECK(scan_ns(probe(1, 0), 1000, codes) < scan_ns(probe(8, 0), 1000, codes));
+    CHECK(scan_ns(probe(8, 0), 1000, codes) <= scan_ns(probe(64, 0), 1000, codes) + 1e-9);
 }
 
 // Every plan the region and cover can produce, run end to end.
@@ -126,7 +114,6 @@ static void the_planned_scan_agrees_with_the_rows() {
 int main() {
     the_planned_matcher_takes_its_cover();
     the_model_puts_the_boundaries_where_the_sweep_says();
-    the_resolver_follows_the_seek_costs();
     the_skip_is_taken_only_on_a_sparse_mask();
     scan_cost_is_monotone_in_probes_and_coverage();
     the_planned_scan_agrees_with_the_rows();

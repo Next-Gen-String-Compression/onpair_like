@@ -1,0 +1,51 @@
+[package]
+name = "vortex-ffi"
+description = "Native C FFI bindings for Vortex"
+readme = "README.md"
+# This crate is not meant to be consumed by other Rust code but rather produces a static binary
+# that can be linked to by other languages.
+publish = false
+version = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+keywords = { workspace = true }
+include = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+categories = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+
+[dependencies]
+arrow-array = { workspace = true }
+arrow-schema = { workspace = true }
+async-fs = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
+mimalloc = { workspace = true, optional = true }
+paste = { workspace = true }
+tracing = { workspace = true, features = ["log"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+vortex = { workspace = true, features = ["object_store"] }
+vortex-arrow = { workspace = true }
+
+[dev-dependencies]
+rand = { workspace = true }
+tempfile = { workspace = true }
+vortex-array = { workspace = true, features = ["_test-harness"] }
+
+[build-dependencies]
+cbindgen = { workspace = true }
+
+[features]
+mimalloc = ["dep:mimalloc"]
+
+[lib]
+name = "vortex_ffi"
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[lints]
+workspace = true

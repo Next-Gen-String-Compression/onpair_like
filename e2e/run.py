@@ -46,7 +46,7 @@ from pathlib import Path
 E2E = Path(__file__).resolve().parent
 ROOT = E2E.parent
 BIN = E2E / "builds" / "bin"
-QUERIES = E2E / "builds" / "duckdb" / "benchmark"
+QUERIES = E2E.parent / "third_party" / "duckdb" / "benchmark"
 DATA = Path(os.environ.get("E2E_DATA", E2E / "data"))
 # DuckDB's default memory_limit, 80% of RAM
 SEGMENT_CACHE_MB = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") * 8 // 10 >> 20

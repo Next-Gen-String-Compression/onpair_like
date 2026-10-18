@@ -1,21 +1,20 @@
-// Both resolvers against the rows a mask names, worked out from the row
-// layer directly, over every density and row shape that decides between them.
+// The resolver against the rows a mask names, worked out from the row layer
+// directly, over every density and row shape.
 
 #include <algorithm>
 #include <string>
 #include <vector>
 
 #include "../tests.hpp"
-#include "gallop_seek.hpp"
-#include "linear_seek.hpp"
+#include "resolver.hpp"
 
 using namespace fsst::search::prefilter::scan;
 using namespace fsst::search::prefilter::scan::resolver;
 
-template <typename R, typename Check>
+template <typename Check>
 static std::vector<size_t> resolve(const std::vector<uint64_t>& mask, const std::vector<uint32_t>& offsets,
                                    const Check& check) {
-    R resolver(offsets.data(), offsets.size());
+    GallopSeek resolver(offsets.data(), offsets.size());
     std::vector<size_t> out;
     for (size_t block = 0; block * (BLOCK / 64) < mask.size(); ++block) {
         Mask bits{};
@@ -32,14 +31,11 @@ struct RejectEven {
     bool passes(size_t code, size_t, size_t) const { return code % 2 == 1; }
 };
 
-static void every_resolver(const std::string& name, const std::vector<uint64_t>& mask,
-                           const std::vector<uint32_t>& offsets) {
-    auto want = rows_of_mask(mask, offsets, AcceptAll{});
-    CHECK_MSG(resolve<LinearSeek>(mask, offsets, AcceptAll{}) == want, "linear: %s", name.c_str());
-    CHECK_MSG(resolve<GallopSeek>(mask, offsets, AcceptAll{}) == want, "gallop: %s", name.c_str());
-    auto odd = rows_of_mask(mask, offsets, RejectEven{});
-    CHECK_MSG(resolve<LinearSeek>(mask, offsets, RejectEven{}) == odd, "linear odd: %s", name.c_str());
-    CHECK_MSG(resolve<GallopSeek>(mask, offsets, RejectEven{}) == odd, "gallop odd: %s", name.c_str());
+static void resolves(const std::string& name, const std::vector<uint64_t>& mask,
+                     const std::vector<uint32_t>& offsets) {
+    CHECK_MSG(resolve(mask, offsets, AcceptAll{}) == rows_of_mask(mask, offsets, AcceptAll{}), "%s", name.c_str());
+    CHECK_MSG(resolve(mask, offsets, RejectEven{}) == rows_of_mask(mask, offsets, RejectEven{}), "odd: %s",
+              name.c_str());
 }
 
 static const size_t CODES = 3 * BLOCK + 500;
@@ -83,11 +79,11 @@ static std::vector<std::pair<std::string, std::vector<uint32_t>>> layers() {
 
 static void agree_on_every_density() {
     for (auto& [name, offsets] : layers()) {
-        every_resolver(name + " empty", std::vector<uint64_t>(CODES / 64 + 1, 0), offsets);
+        resolves(name + " empty", std::vector<uint64_t>(CODES / 64 + 1, 0), offsets);
         for (size_t stride : {size_t{1}, size_t{2}, size_t{3}, size_t{7}, size_t{64}, size_t{65}, size_t{1000}, BLOCK - 1, BLOCK, BLOCK + 1})
-            every_resolver(name + " stride " + std::to_string(stride), strided(stride), offsets);
+            resolves(name + " stride " + std::to_string(stride), strided(stride), offsets);
         for (unsigned one_in : {1u, 2u, 10u, 100u, 3000u})
-            every_resolver(name + " random 1/" + std::to_string(one_in), random_mask(one_in, one_in),
+            resolves(name + " random 1/" + std::to_string(one_in), random_mask(one_in, one_in),
                            offsets);
     }
 }
@@ -101,8 +97,8 @@ static void a_row_hit_in_two_blocks() {
     set(BLOCK);
     set(BLOCK + 9);
     set(BLOCK + 10);
-    every_resolver("two blocks", mask, offsets);
-    CHECK((resolve<LinearSeek>(mask, offsets, AcceptAll{}) == std::vector<size_t>{2, 3}));
+    resolves("two blocks", mask, offsets);
+    CHECK((resolve(mask, offsets, AcceptAll{}) == std::vector<size_t>{2, 3}));
 }
 
 static void the_ends_of_the_stream() {
@@ -110,7 +106,7 @@ static void the_ends_of_the_stream() {
         std::vector<uint64_t> mask(CODES / 64 + 1, 0);
         mask[0] |= 1;
         mask[(CODES - 1) / 64] |= uint64_t{1} << ((CODES - 1) % 64);
-        every_resolver(name + " ends", mask, offsets);
+        resolves(name + " ends", mask, offsets);
     }
 }
 
@@ -118,8 +114,8 @@ static void one_hit_after_many_rows() {
     std::vector<uint32_t> offsets = uniform(1);
     std::vector<uint64_t> mask(CODES / 64 + 1, 0);
     mask[(CODES - 1) / 64] |= uint64_t{1} << ((CODES - 1) % 64);
-    every_resolver("one hit at the end of 12k rows", mask, offsets);
-    CHECK((resolve<GallopSeek>(mask, offsets, AcceptAll{}) == std::vector<size_t>{CODES - 1}));
+    resolves("one hit at the end of 12k rows", mask, offsets);
+    CHECK((resolve(mask, offsets, AcceptAll{}) == std::vector<size_t>{CODES - 1}));
 }
 
 int main() {

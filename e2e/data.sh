@@ -24,7 +24,7 @@ set -euo pipefail
 E2E=$(cd "$(dirname "$0")" && pwd)
 DATA=${E2E_DATA:-$E2E/data}
 BIN=$E2E/builds/bin
-SRC=$E2E/builds/duckdb
+SRC=$E2E/../third_party/duckdb
 RAW=$DATA/raw
 mkdir -p "$DATA"
 DUCKDB=$BIN/duckdb

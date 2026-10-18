@@ -235,27 +235,20 @@ fn scalar(matcher: Match, shape: Shape) -> f64 {
 /// jitter floor, spread 2.6 to 30 ns.
 pub(in crate::search::substring::prefilter) const VERIFY_NS_PER_HIT: f64 = 8.0;
 
-/// The stream a cover would be scanned over.
-#[derive(Clone, Copy, Debug)]
-pub(in crate::search::substring::prefilter) struct Region {
-    pub(in crate::search::substring::prefilter) code_count: usize,
-    pub(in crate::search::substring::prefilter) row_count: usize,
-}
-
-/// Expected nanoseconds to scan `cover` over `region` and walk every hit,
-/// given the `covered` codes it matches there: stage one at the kernel the
+/// Expected nanoseconds to scan `cover` over `code_count` codes and walk every
+/// hit, given the `covered` codes it matches there: stage one at the kernel the
 /// shape gets and the walk per hit. Stage two, the resolve, is under 3% of
 /// either and left out. An empty cover proves no row matches and costs
 /// nothing.
 pub(in crate::search::substring::prefilter) fn scan_ns(
     cover: &ProbeCover,
     covered: u32,
-    region: Region,
+    code_count: usize,
 ) -> f64 {
-    if cover.is_empty() || region.code_count == 0 || region.row_count == 0 {
+    if cover.is_empty() || code_count == 0 {
         return 0.0;
     }
-    let codes = region.code_count as f64;
+    let codes = code_count as f64;
     let covered = f64::from(covered);
     let shape = Shape {
         tokens: cover.points().len(),

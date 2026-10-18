@@ -9,8 +9,6 @@
 #include "matcher/nibble_n8.hpp"
 #include "matcher/range.hpp"
 #include "policy/policy.hpp"
-#include "resolver/gallop_seek.hpp"
-#include "resolver/linear_seek.hpp"
 #include "scan.hpp"
 
 namespace fsst::search::prefilter::scan::dispatch {
@@ -44,10 +42,7 @@ template <typename Check>
 void run(policy::Plan plan, const ProbeCover& cover, const Stream& s, const Check& check, std::vector<size_t>& out) {
     with_matcher(plan, [&](auto kernel) {
         using M = typename decltype(kernel)::type;
-        if (plan.resolver == policy::Resolve::LinearSeek)
-            both_stages<M, resolver::LinearSeek>(cover, s, check, out);
-        else
-            both_stages<M, resolver::GallopSeek>(cover, s, check, out);
+        both_stages<M>(cover, s, check, out);
     });
 }
 

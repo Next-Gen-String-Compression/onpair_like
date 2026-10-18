@@ -5,8 +5,6 @@
 #include <set>
 #include <vector>
 
-#include "../resolver/gallop_seek.hpp"
-#include "../resolver/linear_seek.hpp"
 #include "../tests.hpp"
 #include "eq_or.hpp"
 #include "nibble.hpp"
@@ -199,12 +197,12 @@ static std::vector<uint32_t> ragged_offsets(size_t total, Rng& rng) {
     return offsets;
 }
 
-template <typename M, typename R>
+template <typename M>
 static void driver_agrees(const char* name, const ProbeCover& cover, const std::vector<uint8_t>& codes,
                           const std::vector<uint32_t>& offsets) {
     const Stream s{codes.data(), codes.size(), offsets.data(), offsets.size()};
     std::vector<size_t> got;
-    both_stages<M, R>(cover, s, AcceptAll{}, got);
+    both_stages<M>(cover, s, AcceptAll{}, got);
     CHECK_MSG(got == rows_oracle(cover, s), "%s: rows differ over %zu codes", name, codes.size());
 }
 
@@ -220,13 +218,11 @@ static void a_pair_across_the_block_seam() {
         std::vector<uint32_t> offsets{0, static_cast<uint32_t>(BLOCK - 1), static_cast<uint32_t>(BLOCK + 1),
                                       static_cast<uint32_t>(len - 1), static_cast<uint32_t>(len)};
         ProbeCover pair{{}, {}, {{3, 5}}};
-        driver_agrees<EqOr<false>, resolver::LinearSeek>("pair at the seam", pair, codes, offsets);
+        driver_agrees<EqOr<false>>("pair at the seam", pair, codes, offsets);
         ProbeCover zero_second{{}, {}, {{3, 0}}};
-        driver_agrees<EqOr<false>, resolver::LinearSeek>("pair with the padding", zero_second, codes,
-                                                                   offsets);
+        driver_agrees<EqOr<false>>("pair with the padding", zero_second, codes, offsets);
         std::vector<size_t> got;
-        both_stages<EqOr<false>, resolver::LinearSeek>(pair, Stream{codes.data(), len, offsets.data(), offsets.size()},
-                                                       AcceptAll{}, got);
+        both_stages<EqOr<false>>(pair, Stream{codes.data(), len, offsets.data(), offsets.size()}, AcceptAll{}, got);
         CHECK(got == std::vector<size_t>{1});
     }
 }
@@ -244,22 +240,17 @@ static void the_driver_scans_every_block() {
                                  ProbeCover{{}, {}, {{codes.empty() ? uint8_t{0} : codes.back(), 0}}},
                                  ProbeCover{{9}, {{40, 41}}, {{3, 5}, {5, 3}}}}) {
             if (!cover.pairs.empty()) {
-                driver_agrees<EqOr<true>, resolver::GallopSeek>("eq_or pairs gallop", cover, codes, offsets);
-                driver_agrees<EqOr<false>, resolver::LinearSeek>("eq_or pairs linear", cover, codes, offsets);
+                driver_agrees<EqOr<true>>("eq_or pairs skip", cover, codes, offsets);
+                driver_agrees<EqOr<false>>("eq_or pairs", cover, codes, offsets);
                 continue;
             }
-            driver_agrees<Nibble<true>, resolver::GallopSeek>("nibble gallop", cover, codes,
-                                                                        offsets);
-            driver_agrees<Nibble<false>, resolver::LinearSeek>("nibble linear", cover, codes,
-                                                                         offsets);
+            driver_agrees<Nibble<true>>("nibble skip", cover, codes, offsets);
+            driver_agrees<Nibble<false>>("nibble", cover, codes, offsets);
             if (!cover.points.empty()) {
-                driver_agrees<EqOr<true>, resolver::GallopSeek>("eq_or gallop", cover, codes,
-                                                                          offsets);
-                driver_agrees<NibbleN8<1, false>, resolver::LinearSeek>("nibble_n8 linear",
-                                                                                  cover, codes, offsets);
+                driver_agrees<EqOr<true>>("eq_or skip", cover, codes, offsets);
+                driver_agrees<NibbleN8<1, false>>("nibble_n8", cover, codes, offsets);
             } else {
-                driver_agrees<Range<false>, resolver::GallopSeek>("range gallop", cover, codes,
-                                                                            offsets);
+                driver_agrees<Range<false>>("range", cover, codes, offsets);
             }
         }
     }
@@ -271,12 +262,12 @@ static void padding_makes_no_candidate() {
     std::vector<uint32_t> offsets{0, 10};
     const Stream s{codes.data(), codes.size(), offsets.data(), offsets.size()};
     std::vector<size_t> got;
-    both_stages<Nibble<true>, resolver::LinearSeek>(ProbeCover{{0}, {}}, s, AcceptAll{}, got);
+    both_stages<Nibble<true>>(ProbeCover{{0}, {}}, s, AcceptAll{}, got);
     CHECK(got.empty());
-    both_stages<Nibble<false>, resolver::LinearSeek>(ProbeCover{{}, {{0, 3}}}, s, AcceptAll{}, got);
+    both_stages<Nibble<false>>(ProbeCover{{}, {{0, 3}}}, s, AcceptAll{}, got);
     CHECK(got.empty());
     codes[9] = 0;
-    both_stages<EqOr<true>, resolver::GallopSeek>(ProbeCover{{0}, {}}, s, AcceptAll{}, got);
+    both_stages<EqOr<true>>(ProbeCover{{0}, {}}, s, AcceptAll{}, got);
     CHECK((got == std::vector<size_t>{0}));
 }
 

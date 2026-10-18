@@ -85,17 +85,18 @@ impl PrefilterAnalysis {
     }
 }
 
-/// The sound probe cover the cost model prices lowest for `pattern` over `row_count` rows.
+/// The sound probe cover the cost model prices lowest for `pattern`.
 ///
 /// `dict` is sorted, complete and unique, as [`Parser::train`](crate::Parser::train)
 /// builds it, and `frequencies` counts its tokens over the scanned codes. The
 /// frequencies steer the plan only; the cover stays sound whatever they are.
+/// The row count no longer enters the cost model and is ignored.
 /// Panics past [`MAX_PATTERN_LEN`] bytes.
 pub fn analyze_prefilter<S: TokenFrequencyIndexStorage>(
     pattern: &[u8],
     dict: CompactDictionaryView<'_>,
     frequencies: &TokenFrequencyIndex<S>,
-    row_count: usize,
+    _row_count: usize,
 ) -> PrefilterAnalysis {
     if pattern.is_empty() {
         return PrefilterAnalysis {
@@ -112,7 +113,7 @@ pub fn analyze_prefilter<S: TokenFrequencyIndexStorage>(
         "pattern of {} bytes exceeds the prefilter's {MAX_PATTERN_LEN}",
         pattern.len()
     );
-    plan::plan(dict, pattern, frequencies.as_view(), row_count).2
+    plan::plan(dict, pattern, frequencies.as_view()).2
 }
 
 /// A pattern prepared for the rows that start or end with it. The row fixes

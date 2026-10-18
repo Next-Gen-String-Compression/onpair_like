@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "../cover.hpp"
+#include "resolver/resolver.hpp"
 
 namespace fsst::search::prefilter::scan {
 
@@ -73,10 +74,10 @@ inline void last_pair_bit(const ProbeCover& cover, const uint8_t* block, size_t 
     word = cover.contains(block[valid - 1]) ? word | bit : word & ~bit;
 }
 
-template <typename M, typename R, typename Check>
+template <typename M, typename Check>
 void both_stages(const ProbeCover& cover, const Stream& s, const Check& check, std::vector<size_t>& out) {
     M matcher(cover);
-    R resolver(s.row_offsets, s.offsets_len);
+    resolver::GallopSeek resolver(s.row_offsets, s.offsets_len);
     const bool pairs = !cover.pairs.empty();
     Mask bits{};
     blocks<BLOCK / 64>(s.codes, s.len, [&](const uint8_t* block, size_t at, size_t valid) {

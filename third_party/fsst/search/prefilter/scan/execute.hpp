@@ -25,7 +25,7 @@ inline size_t expected_hits(size_t covered_frequency, size_t total_frequency, si
 inline std::optional<policy::Facts> facts(const ProbeCover& cover, const Stream& s, size_t covered_frequency,
                                           size_t total_frequency) {
     if (cover.empty() || s.row_count() == 0) return std::nullopt;
-    return policy::Facts{expected_hits(covered_frequency, total_frequency, s.len), s.len, s.row_count()};
+    return policy::Facts{expected_hits(covered_frequency, total_frequency, s.len), s.len};
 }
 
 // The planned scan over one region under whatever stage two asks of a hit.

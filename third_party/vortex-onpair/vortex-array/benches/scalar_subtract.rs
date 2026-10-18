@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: Copyright the Vortex contributors
+
+#![expect(clippy::unwrap_used)]
+
+use std::sync::LazyLock;
+
+use divan::Bencher;
+use mimalloc::MiMalloc;
+use rand::RngExt;
+use rand::SeedableRng;
+use rand::distr::Uniform;
+use rand::rngs::StdRng;
+use vortex_array::IntoArray;
+use vortex_array::RecursiveCanonical;
+use vortex_array::VortexSessionExecute;
+use vortex_array::array_session;
+use vortex_array::arrays::ChunkedArray;
+use vortex_array::arrays::ConstantArray;
+use vortex_array::builtins::ArrayBuiltins;
+use vortex_array::scalar::Scalar;
+use vortex_array::scalar_fn::fns::operators::Operator;
+use vortex_buffer::Buffer;
+use vortex_session::VortexSession;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
+fn main() {
+    LazyLock::force(&SESSION);
+    divan::main();
+}
+
+static SESSION: LazyLock<VortexSession> = LazyLock::new(array_session);
+
+#[vortex_bench_support::cpu_features]
+#[divan::bench]
+fn scalar_subtract(bencher: Bencher) {
+    let mut rng = StdRng::seed_from_u64(0);
+    let range = Uniform::new(0i64, 100_000_000).unwrap();
+    // Chunks sized to keep the CodSpeed simulation under 1ms.
+    let data1 = (0..4_000)
+        .map(|_| rng.sample(range))
+        .collect::<Buffer<i64>>()
+        .into_array();
+
+    let data2 = (0..4_000)
+        .map(|_| rng.sample(range))
+        .collect::<Buffer<i64>>()
+        .into_array();
+
+    let to_subtract = -1i64;
+
+    let chunked = ChunkedArray::from_iter([data1, data2]).into_array();
+
+    bencher
+        .with_inputs(|| (&chunked, SESSION.create_execution_ctx()))
+        .bench_refs(|(chunked, ctx)| {
+            chunked
+                .clone()
+                .binary(
+                    ConstantArray::new(Scalar::from(to_subtract), chunked.len()).into_array(),
+                    Operator::Sub,
+                )
+                .unwrap()
+                .execute::<RecursiveCanonical>(ctx)
+        });
+}

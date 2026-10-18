@@ -23,7 +23,6 @@
 #include "../matcher/nibble.hpp"
 #include "../matcher/nibble_n8.hpp"
 #include "../matcher/range.hpp"
-#include "../resolver/linear_seek.hpp"
 #include "../scan.hpp"
 #include "../tests.hpp"
 #include "loader.hpp"
@@ -167,7 +166,7 @@ static Timed time_kernel(const Probe& probe, const Timing& s) {
         });
     });
     std::vector<size_t> found;
-    both_stages<M, resolver::LinearSeek>(cover, s.checked, AcceptAll{}, found);
+    both_stages<M>(cover, s.checked, AcceptAll{}, found);
     return {seconds, std::move(found)};
 }
 

@@ -28,7 +28,7 @@ members = [
 # `aho-corasick` crate and loses to `teddy` at small k. Source kept for
 # reference; excluded so the workspace never compiles it. e2e/builds holds
 # cloned repositories with their own manifests.
-exclude = ["e2e/builds", "third_party/onpair"]
+exclude = ["e2e/builds", "third_party"]
 
 [workspace.package]
 version = "0.1.0"

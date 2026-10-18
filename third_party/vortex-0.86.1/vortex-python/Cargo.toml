@@ -1,0 +1,70 @@
+[package]
+name = "vortex-python"
+authors = { workspace = true }
+categories = { workspace = true }
+description = "Python bindings for Vortex, an Apache Arrow-compatible toolkit for working with compressed array data."
+edition = { workspace = true }
+homepage = { workspace = true }
+include = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+publish = false
+readme = { workspace = true }
+repository = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+build = "build.rs"
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = ["extension-module", "tui"]
+# Enable this feature when building the standalone Python extension.
+# Disable it when using vortex-python as a library dependency to avoid
+# duplicate PyInit__lib symbols.
+extension-module = []
+tui = ["dep:tokio", "dep:vortex-tui"]
+
+[dependencies]
+arrow-array = { workspace = true }
+arrow-data = { workspace = true }
+arrow-schema = { workspace = true }
+bytes = { workspace = true }
+itertools = { workspace = true }
+log = { workspace = true }
+object_store = { workspace = true, features = [
+    "fs",
+    "aws",
+    "gcp",
+    "azure",
+    "http",
+] }
+parking_lot = { workspace = true }
+prost = { workspace = true }
+pyo3 = { workspace = true, features = ["abi3", "abi3-py311"] }
+pyo3-bytes = { workspace = true }
+pyo3-log = { workspace = true }
+pyo3-object_store = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
+url = { workspace = true }
+vortex = { workspace = true, features = [
+    "hf",
+    "object_store",
+    "object_store_registry",
+    "opendal",
+] }
+vortex-arrow = { workspace = true }
+vortex-cloud = { workspace = true, features = ["opendal"] }
+vortex-python-abi = { path = "../vortex-python-abi" }
+vortex-tui = { workspace = true, optional = true }
+
+[dev-dependencies]
+rstest = { workspace = true }
+vortex-array = { path = "../vortex-array", features = ["_test-harness"] }
+# Maturin 1.15 only packages resolved dependencies, but Cargo also needs the manifest
+# of vortex-file's disabled optional tensor dependency when loading an sdist.
+vortex-tensor = { workspace = true }

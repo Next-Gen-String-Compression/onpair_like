@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Copyright the Vortex contributors
+
+# Boolean operations tests - derived from vortex-duckdb vortex_scan_test.rs
+
+include ./setup.slt.no
+
+# Create a file with boolean data
+query I
+COPY (SELECT * FROM (VALUES (true), (false), (true), (true), (false)) AS t(flag)) TO '${WORK_DIR}/booleans.vortex';
+----
+5
+
+# Test COUNT with boolean filter
+query I
+SELECT COUNT(*) FROM '${WORK_DIR}/booleans.vortex' WHERE flag = true;
+----
+3
+
+# Test COUNT for false values
+query I
+SELECT COUNT(*) FROM '${WORK_DIR}/booleans.vortex' WHERE flag = false;
+----
+2

@@ -1,0 +1,128 @@
+name: Minimize Fuzz Corpus
+
+on:
+  workflow_call:
+    inputs:
+      fuzz_target:
+        description: "The cargo fuzz target name (e.g., file_io, array_ops, compress_roundtrip)"
+        required: true
+        type: string
+      fuzz_name:
+        description: "Display/storage name. Defaults to fuzz_target."
+        required: false
+        type: string
+        default: ""
+      runner:
+        description: "Runner name from .github-private runs-on.yml"
+        required: false
+        type: string
+        default: "arm64-medium"
+      extra_features:
+        description: "Extra cargo features to enable (e.g., cuda)"
+        required: false
+        type: string
+        default: ""
+      extra_env:
+        description: "Extra environment variables for the fuzzer"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      R2_FUZZ_ACCESS_KEY_ID:
+        required: true
+      R2_FUZZ_SECRET_ACCESS_KEY:
+        required: true
+
+env:
+  NIGHTLY_TOOLCHAIN: nightly-2026-09-10
+
+jobs:
+  minimize:
+    name: "Minimize ${{ inputs.fuzz_name || inputs.fuzz_target }}"
+    env:
+      FUZZ_NAME: ${{ inputs.fuzz_name || inputs.fuzz_target }}
+    runs-on: >-
+      ${{ github.repository == 'vortex-data/vortex'
+          && format('runs-on={0}/runner={1}/tag={2}-minimize', github.run_id, inputs.runner, inputs.fuzz_name || inputs.fuzz_target)
+          || 'ubuntu-latest' }}
+    timeout-minutes: 240
+    steps:
+      - name: Bail if not on develop
+        if: github.ref != 'refs/heads/develop'
+        run: |
+          echo "::error::Corpus minimization should only run on the develop branch (current: ${{ github.ref }})"
+          exit 1
+
+      - uses: runs-on/action@v2
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      - uses: ./.github/actions/setup-prebuild
+        if: >-
+          github.repository == 'vortex-data/vortex' &&
+          contains(fromJSON('["arm64-fuzz", "arm64-medium"]'), inputs.runner)
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          toolchain: ${{ env.NIGHTLY_TOOLCHAIN }}
+          enable-sccache: "false"
+
+      - uses: ./.github/actions/setup-rust
+        if: >-
+          github.repository != 'vortex-data/vortex' ||
+          !contains(fromJSON('["arm64-fuzz", "arm64-medium"]'), inputs.runner)
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          toolchain: ${{ env.NIGHTLY_TOOLCHAIN }}
+          enable-sccache: "false"
+
+      - name: Check LLVM toolchain
+        id: llvm-toolchain
+        shell: bash
+        run: |
+          if command -v clang >/dev/null && command -v llvm-symbolizer >/dev/null; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "installed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install llvm
+        if: steps.llvm-toolchain.outputs.installed != 'true'
+        uses: aminya/setup-cpp@v1
+        with:
+          compiler: llvm
+
+      - name: Install cargo-fuzz
+        uses: taiki-e/cache-cargo-install-action@66c9585ef5ca780ee69399975a5e911f47905995
+        with:
+          tool: cargo-fuzz
+
+      - name: Restore corpus
+        id: corpus
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_FUZZ_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_FUZZ_SECRET_ACCESS_KEY }}
+          AWS_REGION: "us-east-1"
+          AWS_ENDPOINT_URL: "https://01e9655179bbec953276890b183039bc.r2.cloudflarestorage.com"
+        run: .github/scripts/restore-fuzz-corpus.sh minimize
+
+      - name: Minimize corpus
+        if: steps.corpus.outputs.found == 'true'
+        shell: bash
+        env:
+          FUZZ_TARGET: ${{ inputs.fuzz_target }}
+          EXTRA_FEATURES: ${{ inputs.extra_features }}
+          EXTRA_ENV: ${{ inputs.extra_env }}
+        run: .github/scripts/minimize-fuzz-corpus.sh
+
+      - name: Persist corpus
+        if: steps.corpus.outputs.found == 'true'
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_FUZZ_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_FUZZ_SECRET_ACCESS_KEY }}
+          AWS_REGION: "us-east-1"
+          AWS_ENDPOINT_URL: "https://01e9655179bbec953276890b183039bc.r2.cloudflarestorage.com"
+        run: >-
+          .github/scripts/checkpoint-fuzz-corpus.sh
+          "fuzz/corpus/$FUZZ_NAME" "${FUZZ_NAME}_corpus.tar.zst" "$RUNNER_TEMP/${FUZZ_NAME}.etag"

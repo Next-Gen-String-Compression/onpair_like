@@ -1,0 +1,1333 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "numpy",
+#   "pandas",
+#   "tabulate",
+#   "orjson"
+# ]
+# ///
+
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Copyright the Vortex contributors
+
+import math
+import os
+import re
+import subprocess
+import sys
+from collections.abc import Callable
+from dataclasses import dataclass
+from io import StringIO
+from typing import Any
+
+import numpy as np
+import orjson
+import pandas as pd
+
+# Analysis overview:
+# - Join base and PR benchmark rows on benchmark identity.
+# - Split each row's repeated runs into a cold run and the hot runs that follow.
+# - Use log-ratios because benchmark slowdowns/speedups are multiplicative.
+# - Treat parquet rows as controls to estimate systemic drift beta(q).
+# - Attribute the remaining change to the PR as alpha(q, c).
+# - Call a row significant only when alpha clears a conservative noise floor.
+# - Collapse those row-level results into a short verdict for the PR comment.
+#
+# Cold vs hot:
+# - The benchmark binary reports every run of a measurement in `all_runtimes`, in
+#   run order. The first run pays cold-start costs (page cache, allocator arenas,
+#   JIT-like warmup in the engines), so mixing it into a single median blends two
+#   different measurements and inflates run-to-run variance.
+# - cold runtime = the first recorded run.
+# - hot runtime = median of every run after the first.
+# - The verdict, geomeans, and per-row significance all use hot runtimes; cold
+#   runtimes are reported alongside them so a cold-start-only change stays visible.
+# - Rows without `all_runtimes` (older baselines, non-query measurements) keep the
+#   runner-reported value as their hot runtime and report no cold runtime.
+#
+# Concretely:
+# - raw ratio = hot_runtime_pr / hot_runtime_base
+# - log_ratio = log(raw ratio)
+# - beta(q) = mean(log_ratio) across parquet control rows for query q
+# - alpha(q, c) = log_ratio(q, c) - beta(q)
+# - attributed impact = geometric mean of alpha ratios across non-control rows
+
+# Benchmarks are noisier than textbook measurement data, so use a conservative
+# cutoff that is closer to a 99% two-sided interval before calling a change real.
+Z_SCORE_99 = 2.5758293035489004
+CONTROL_FORMAT = "parquet"
+FILE_SIZE_METRIC = "file_size"
+QUERY_TARGET_PATTERN = re.compile(r"_q(\d+)/([^:]+):(.+)$")
+FORMAT_DISPLAY_NAMES = {
+    "vortex": "vortex-file-compressed",
+}
+
+
+@dataclass
+class MedianPolishResult:
+    """Robust additive decomposition for the query x config log-ratio matrix."""
+
+    overall: float
+    row_effects: pd.Series
+    column_effects: pd.Series
+    residuals: pd.DataFrame
+    converged: bool
+
+
+def extract_dataset_key(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize dataset metadata into a stable join key."""
+
+    if "dataset" not in df.columns:
+        df["dataset_key"] = None
+    else:
+        df["dataset_key"] = df["dataset"].apply(dataset_key)
+    return df
+
+
+def split_file_size_rows(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Split shared-stream file-size rows from benchmark timing rows."""
+
+    if df.empty:
+        return df.copy(), df.copy()
+
+    metric = df["metric"] if "metric" in df.columns else pd.Series(pd.NA, index=df.index)
+    file_size = df["file_size"] if "file_size" in df.columns else pd.Series(pd.NA, index=df.index)
+    mask = metric.eq(FILE_SIZE_METRIC) | file_size.notna()
+    return df[mask].copy(), df[~mask].copy()
+
+
+def identity_value(value: object) -> object:
+    """Normalize missing values so benchmark identities compare reliably."""
+
+    return None if pd.isna(value) else value
+
+
+def dataset_key(value: object) -> str | None:
+    """Normalize dataset metadata into the join-key representation."""
+
+    if isinstance(value, dict):
+        return str(sorted(value.items()))
+    return None
+
+
+def normalize_format_name(value: object) -> str | None:
+    """Map serialized format identifiers to the reporter's established labels."""
+
+    value = identity_value(value)
+    if value is None:
+        return None
+    value = str(value)
+    return FORMAT_DISPLAY_NAMES.get(value, value)
+
+
+def comparison_target(name: object, target: object = None) -> tuple[str, str, int | str | None]:
+    """Return the engine, display format, and optional SQL query number."""
+
+    target_engine = None
+    target_format = None
+    if isinstance(target, dict):
+        target_engine = identity_value(target.get("engine"))
+        target_format = normalize_format_name(target.get("format"))
+
+    match = QUERY_TARGET_PATTERN.search(name) if isinstance(name, str) else None
+    name_engine = match.group(2) if match is not None else None
+    name_format = match.group(3) if match is not None else None
+    query = int(match.group(1)) if match is not None else None
+
+    if match is None and isinstance(name, str):
+        random_access = re.match(
+            r"^(?P<prefix>random-access(?:/.*)?)/"
+            r"(?P<file_format>parquet|vortex|lance)-(?P<variant>.+)$",
+            name,
+        )
+        if random_access is not None:
+            file_format = random_access.group("file_format")
+            if file_format == "vortex":
+                file_format = "vortex-file-compressed"
+            query = (
+                None if file_format == "lance" else f"{random_access.group('prefix')}/{random_access.group('variant')}"
+            )
+            return "random-access", file_format, query
+
+    engine = str(target_engine or name_engine or "unknown")
+    file_format = str(target_format or normalize_format_name(name_format) or "unknown")
+    return engine, file_format, query
+
+
+def extract_target_fields(name: str, target: object = None) -> pd.Series:
+    """Extract target metadata, using the benchmark name when needed."""
+
+    engine, file_format, query = comparison_target(name, target)
+    return pd.Series({"engine": engine, "file_format": file_format, "query": query})
+
+
+def benchmark_identity(row: object) -> tuple[Any, Any, Any, str, str, Any] | None:
+    """Return the measurement identity used to find a matching baseline."""
+
+    if row.get("metric") == FILE_SIZE_METRIC or isinstance(row.get("file_size"), dict):
+        return None
+
+    name = row.get("name")
+    if name is None:
+        return None
+
+    engine, file_format, _query = comparison_target(name, row.get("target"))
+    return (
+        identity_value(name),
+        identity_value(row.get("storage")),
+        dataset_key(row.get("dataset")),
+        engine,
+        file_format,
+        identity_value(row.get("unit")),
+    )
+
+
+def benchmark_identity_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """Return timing rows with the identity used to match a PR benchmark."""
+
+    _file_size_rows, timing_rows = split_file_size_rows(df)
+    if timing_rows.empty or "name" not in timing_rows.columns:
+        return pd.DataFrame(columns=["commit_id", "benchmark_identity"])
+
+    timing_rows = timing_rows.copy()
+    if "commit_id" not in timing_rows.columns:
+        timing_rows["commit_id"] = pd.NA
+
+    timing_rows["benchmark_identity"] = [benchmark_identity(row) for _, row in timing_rows.iterrows()]
+
+    return timing_rows[["commit_id", "benchmark_identity"]]
+
+
+def read_jsonl_rows_for_commit(path: str, commit_id: str) -> pd.DataFrame:
+    """Read the latest copy of each row matching a history commit.
+
+    Re-running a develop workflow appends a second result block for the same
+    commit. Keeping the last copy of each logical row prevents a many-to-one
+    merge from weighting that baseline multiple times.
+    """
+
+    rows_by_identity: dict[tuple[Any, ...], dict[str, Any]] = {}
+    with open(path, encoding="utf-8") as lines:
+        for line in lines:
+            if '"commit_id"' not in line or f'"{commit_id}"' not in line:
+                continue
+            record = orjson.loads(line)
+            if record.get("commit_id") != commit_id:
+                continue
+
+            file_size = record.get("file_size")
+            if isinstance(file_size, dict):
+                identity = (
+                    FILE_SIZE_METRIC,
+                    file_size.get("benchmark"),
+                    file_size.get("scale_factor"),
+                    file_size.get("format"),
+                    file_size.get("file"),
+                )
+            else:
+                identity = ("timing", benchmark_identity(record))
+            rows_by_identity[identity] = record
+    return pd.DataFrame(rows_by_identity.values())
+
+
+def git_tree_commit_ids() -> set[str]:
+    """Return every commit reachable from the checked-out branch head.
+
+    A shallow checkout reaches only its own tip, so every recorded baseline
+    commit looks unreachable and the report silently degrades into "no
+    baseline is available for this benchmark yet" — indistinguishable from a
+    genuinely new benchmark, and wrong. Refuse the guess and say what to fix.
+    """
+
+    is_shallow = subprocess.run(
+        ["git", "rev-parse", "--is-shallow-repository"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if is_shallow == "true":
+        raise SystemExit(
+            "Cannot resolve a baseline from a shallow checkout: the baseline is the newest "
+            "recorded commit reachable from HEAD, and a shallow clone reaches only its own "
+            "tip. Check the repository out with `fetch-depth: 0`."
+        )
+
+    commits = subprocess.run(
+        ["git", "rev-list", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    return set(commits.splitlines())
+
+
+def read_latest_baseline_rows(
+    path: str,
+    pr: pd.DataFrame,
+    reachable_commit_ids: set[str],
+) -> pd.DataFrame:
+    """Read rows from the latest reachable commit matching the PR benchmark.
+
+    A benchmark can be new to the PR workflow and therefore have no baseline
+    yet. Return an empty frame with the PR schema in that case so the report
+    can show the measurements without comparison.
+    """
+
+    pr_identities = set(benchmark_identity_rows(pr)["benchmark_identity"])
+    if not pr_identities:
+        return pd.read_json(path, lines=True)
+
+    baseline_commit_id = None
+    with open(path, encoding="utf-8") as lines:
+        for line in lines:
+            if '"name"' not in line or '"commit_id"' not in line:
+                continue
+            record = orjson.loads(line)
+            if benchmark_identity(record) in pr_identities:
+                commit_id = record.get("commit_id")
+                if commit_id is not None and commit_id in reachable_commit_ids:
+                    baseline_commit_id = commit_id
+
+    if baseline_commit_id is None:
+        return pr.iloc[0:0].copy()
+
+    return read_jsonl_rows_for_commit(path, baseline_commit_id)
+
+
+def select_latest_baseline_rows(
+    base: pd.DataFrame,
+    pr: pd.DataFrame,
+    reachable_commit_ids: set[str],
+) -> pd.DataFrame:
+    """Select rows from the latest reachable commit containing this benchmark.
+
+    The persisted benchmark history is append-only. A row only appears after
+    that benchmark job uploaded results, so the newest reachable commit with
+    matching row identities is the latest successful baseline for the benchmark
+    under test.
+    """
+
+    if base.empty or "commit_id" not in base.columns:
+        return base
+
+    base = base[base["commit_id"].isin(reachable_commit_ids)].copy()
+    if base.empty:
+        return base
+
+    commit_ids = base["commit_id"].dropna().unique()
+    if len(commit_ids) <= 1:
+        return base
+
+    pr_identities = set(benchmark_identity_rows(pr)["benchmark_identity"])
+    if not pr_identities:
+        return base
+
+    base_identities = benchmark_identity_rows(base)
+    matches = base_identities[base_identities["benchmark_identity"].isin(pr_identities)]
+    matches = matches[matches["commit_id"].notna()]
+    if matches.empty:
+        return base.iloc[0:0].copy()
+
+    baseline_commit_id = matches["commit_id"].iloc[-1]
+    return base[base["commit_id"] == baseline_commit_id].copy()
+
+
+def normalize_measurement_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """Add canonical comparison keys to benchmark measurement rows."""
+
+    df = df.copy()
+    if "storage" not in df.columns:
+        df["storage"] = None
+    if "unit" not in df.columns:
+        df["unit"] = None
+
+    df["storage"] = df["storage"].apply(identity_value)
+    df["unit"] = df["unit"].apply(identity_value)
+    df = extract_dataset_key(df)
+
+    targets = df["target"] if "target" in df.columns else pd.Series(None, index=df.index)
+    fields = [comparison_target(name, target) for name, target in zip(df["name"], targets)]
+    df[["engine", "file_format", "query"]] = pd.DataFrame(
+        fields,
+        columns=["engine", "file_format", "query"],
+        index=df.index,
+    )
+    df["query"] = df["query"].astype(object)
+
+    runtimes = df["all_runtimes"] if "all_runtimes" in df.columns else pd.Series(None, index=df.index, dtype=object)
+    values = df["value"] if "value" in df.columns else pd.Series(np.nan, index=df.index)
+    df["cold_value"] = [cold_runtime(runs) for runs in runtimes]
+    df["hot_runtimes"] = pd.Series([hot_runtimes(runs) for runs in runtimes], index=df.index, dtype=object)
+    df["hot_value"] = [hot_runtime(runs, value) for runs, value in zip(runtimes, values)]
+    return df
+
+
+def positive_samples(values: object) -> np.ndarray:
+    """Keep only finite, strictly positive runtime samples."""
+
+    if not isinstance(values, (list, tuple, np.ndarray, pd.Series)):
+        return np.array([], dtype=float)
+    samples = np.asarray(values, dtype=float)
+    return samples[np.isfinite(samples) & (samples > 0)]
+
+
+def ordered_runtimes(values: object) -> np.ndarray:
+    """Return the recorded runs in run order, or an empty array when unavailable."""
+
+    if not isinstance(values, (list, tuple, np.ndarray, pd.Series)):
+        return np.array([], dtype=float)
+    return np.asarray(values, dtype=float)
+
+
+def cold_runtime(values: object) -> float:
+    """Return the first recorded run, which is the cold-start measurement."""
+
+    runs = ordered_runtimes(values)
+    if runs.size == 0:
+        return float("nan")
+    first = float(runs[0])
+    return first if np.isfinite(first) and first > 0 else float("nan")
+
+
+def hot_runtimes(values: object) -> list[float]:
+    """Return the runs after the first, which are the warmed-up measurements."""
+
+    runs = ordered_runtimes(values)
+    if runs.size < 2:
+        return []
+    return [float(sample) for sample in positive_samples(runs[1:])]
+
+
+def hot_runtime(values: object, reported_value: object) -> float:
+    """Return the median hot run, falling back to the runner-reported value.
+
+    Rows written before the runner recorded every run, and non-query measurements
+    that only ever report one number, have no hot samples to summarize. Those keep
+    the runner's own value so they still appear in the comparison.
+    """
+
+    samples = hot_runtimes(values)
+    if samples:
+        return float(np.median(samples))
+    if reported_value is None or pd.isna(reported_value):
+        return float("nan")
+    return float(reported_value)
+
+
+def log_runtime_stats(values: object) -> dict[str, float]:
+    """Summarize repeated runtimes on the log scale."""
+
+    samples = positive_samples(values)
+    if samples.size == 0:
+        return {
+            "sample_count": 0,
+            "log_mean": float("nan"),
+            "log_std": float("nan"),
+            "log_se": float("nan"),
+        }
+
+    logs = np.log(samples)
+    log_std = float(np.std(logs, ddof=1)) if logs.size > 1 else 0.0
+    return {
+        "sample_count": int(logs.size),
+        "log_mean": float(logs.mean()),
+        "log_std": log_std,
+        "log_se": float(log_std / np.sqrt(logs.size)),
+    }
+
+
+def ratio_stats(
+    base_values: object,
+    pr_values: object,
+    base_median: float,
+    pr_median: float,
+) -> dict[str, float]:
+    """Compute the PR/base effect and its sampling error for one matched row.
+
+    The samples and the medians are the hot runs of the row, so cold-start costs
+    neither move the effect nor widen its sampling error.
+    """
+
+    base_stats = log_runtime_stats(base_values)
+    pr_stats = log_runtime_stats(pr_values)
+
+    if not np.isfinite(base_median) or not np.isfinite(pr_median) or base_median <= 0 or pr_median <= 0:
+        return {
+            "ratio": float("nan"),
+            "log_ratio": float("nan"),
+            "log_ratio_se": float("nan"),
+            **{f"base_{key}": value for key, value in base_stats.items()},
+            **{f"pr_{key}": value for key, value in pr_stats.items()},
+        }
+
+    ratio = pr_median / base_median
+    return {
+        "ratio": ratio,
+        "log_ratio": float(np.log(ratio)),
+        "log_ratio_se": float(np.hypot(base_stats["log_se"], pr_stats["log_se"])),
+        **{f"base_{key}": value for key, value in base_stats.items()},
+        **{f"pr_{key}": value for key, value in pr_stats.items()},
+    }
+
+
+def median_polish(table: pd.DataFrame, max_iterations: int = 10, tolerance: float = 1e-8) -> MedianPolishResult | None:
+    """Estimate row and column effects for the log-ratio matrix."""
+
+    working = table.copy().astype(float)
+    working = working.dropna(axis=0, how="any").dropna(axis=1, how="any")
+    if working.shape[0] < 2 or working.shape[1] < 2:
+        return None
+
+    row_effects = pd.Series(0.0, index=working.index, dtype=float)
+    column_effects = pd.Series(0.0, index=working.columns, dtype=float)
+    overall = 0.0
+    converged = False
+
+    for _ in range(max_iterations):
+        row_medians = working.median(axis=1)
+        working = working.sub(row_medians, axis=0)
+        row_effects = row_effects.add(row_medians, fill_value=0.0)
+        row_shift = float(row_effects.median())
+        row_effects -= row_shift
+        overall += row_shift
+
+        column_medians = working.median(axis=0)
+        working = working.sub(column_medians, axis=1)
+        column_effects = column_effects.add(column_medians, fill_value=0.0)
+        column_shift = float(column_effects.median())
+        column_effects -= column_shift
+        overall += column_shift
+
+        largest_adjustment = max(
+            float(row_medians.abs().max()) if not row_medians.empty else 0.0,
+            float(column_medians.abs().max()) if not column_medians.empty else 0.0,
+        )
+        if largest_adjustment <= tolerance:
+            converged = True
+            break
+
+    return MedianPolishResult(
+        overall=float(overall),
+        row_effects=row_effects,
+        column_effects=column_effects,
+        residuals=working,
+        converged=converged,
+    )
+
+
+def mean_with_standard_error(group: pd.DataFrame, value_column: str, se_column: str) -> float:
+    """Approximate the standard error of a group mean from row-level errors."""
+
+    valid = group[[value_column, se_column]].dropna()
+    if valid.empty:
+        return float("nan")
+    return float(np.sqrt(np.square(valid[se_column]).sum()) / len(valid))
+
+
+def classify_signal(alpha_log_ratio: float, alpha_log_se: float, control_noise_log_std: float, threshold: float) -> str:
+    """Label an attributed change as real or noise using a conservative floor."""
+
+    if np.isnan(alpha_log_ratio):
+        return "N/A"
+
+    effect_floor = np.log1p(threshold)
+    sample_noise = Z_SCORE_99 * alpha_log_se if np.isfinite(alpha_log_se) else 0.0
+    systemic_noise = Z_SCORE_99 * control_noise_log_std if np.isfinite(control_noise_log_std) else 0.0
+    noise_floor = max(effect_floor, sample_noise, systemic_noise)
+
+    if abs(alpha_log_ratio) < noise_floor:
+        return "noise"
+    return "regression" if alpha_log_ratio > 0 else "improvement"
+
+
+def build_statistical_analysis(df: pd.DataFrame, threshold_pct: int) -> dict[str, Any] | None:
+    """Build the full alpha/beta attribution model for the markdown report."""
+
+    matched = df[
+        df["query"].notna()
+        & df["engine"].notna()
+        & df["file_format"].notna()
+        & df["hot_value_base"].notna()
+        & df["hot_value_pr"].notna()
+    ].copy()
+
+    if matched.empty:
+        return None
+
+    # One row here is one query/config benchmark matched between base and PR.
+    rows: list[dict[str, Any]] = []
+    for _, row in matched.iterrows():
+        stats = ratio_stats(
+            row.get("hot_runtimes_base"),
+            row.get("hot_runtimes_pr"),
+            float(row["hot_value_base"]),
+            float(row["hot_value_pr"]),
+        )
+        rows.append(
+            {
+                "name": row["name"],
+                "query": row["query"],
+                "engine": row["engine"],
+                "file_format": row["file_format"],
+                "combo": f"{row['engine']}:{row['file_format']}",
+                "is_control": row["file_format"] == CONTROL_FORMAT,
+                **stats,
+            }
+        )
+
+    detail_df = pd.DataFrame(rows).sort_values(["query", "engine", "file_format"]).reset_index(drop=True)
+    controls = detail_df[detail_df["is_control"] & detail_df["log_ratio"].notna()]
+    if controls.empty:
+        return None
+
+    # beta(q): systemic drift inferred from parquet controls for query q.
+    query_rows: list[dict[str, Any]] = []
+    for query, group in controls.groupby("query", sort=True):
+        beta_log_ratio = float(group["log_ratio"].mean())
+        query_rows.append(
+            {
+                "query": query,
+                "beta_log_ratio": beta_log_ratio,
+                "beta_ratio": float(np.exp(beta_log_ratio)),
+                "beta_log_se": mean_with_standard_error(group, "log_ratio", "log_ratio_se"),
+                "beta_log_std": float(group["log_ratio"].std(ddof=1)) if len(group) > 1 else 0.0,
+                "control_count": int(len(group)),
+            }
+        )
+
+    query_stats = pd.DataFrame(query_rows)
+    detail_df = detail_df.merge(query_stats, on="query", how="left")
+
+    systemic_shift_log_ratio = float(query_stats["beta_log_ratio"].mean())
+    systemic_shift_std = float(query_stats["beta_log_ratio"].std(ddof=1)) if len(query_stats) > 1 else 0.0
+    # alpha(q, c): PR-attributable effect after subtracting the control drift.
+    detail_df["alpha_log_ratio"] = detail_df["log_ratio"] - detail_df["beta_log_ratio"]
+    detail_df["alpha_ratio"] = np.exp(detail_df["alpha_log_ratio"])
+    detail_df["alpha_log_se"] = np.hypot(detail_df["log_ratio_se"], detail_df["beta_log_se"])
+    # Noise floor = max(user threshold, sampling error, control drift variability).
+    detail_df["noise_floor_log"] = np.maximum.reduce(
+        [
+            np.full(len(detail_df), np.log1p(threshold_pct / 100.0)),
+            Z_SCORE_99 * np.nan_to_num(detail_df["alpha_log_se"], nan=0.0),
+            np.full(len(detail_df), Z_SCORE_99 * systemic_shift_std),
+        ]
+    )
+    detail_df["noise_floor_ratio"] = np.exp(detail_df["noise_floor_log"])
+    detail_df["signal"] = detail_df.apply(
+        lambda row: classify_signal(
+            row["alpha_log_ratio"],
+            row["alpha_log_se"],
+            systemic_shift_std,
+            threshold_pct / 100.0,
+        ),
+        axis=1,
+    )
+
+    # Median polish gives a robust overall shift estimate.
+    log_ratio_table = detail_df.pivot(index="query", columns="combo", values="log_ratio")
+    polish = median_polish(log_ratio_table)
+
+    return {
+        "detail_df": detail_df,
+        "query_stats": query_stats,
+        "systemic_shift_ratio": float(np.exp(systemic_shift_log_ratio)),
+        "systemic_shift_std": systemic_shift_std,
+        "median_polish": polish,
+    }
+
+
+def calculate_geometric_mean(df: pd.DataFrame, column: str = "ratio") -> float:
+    """Geometric mean of positive ratios from a DataFrame ratio column."""
+
+    if column not in df.columns:
+        return float("nan")
+    valid_ratios = [r for r in df[column] if r > 0 and not pd.isna(r)]
+    if len(valid_ratios) > 0:
+        return math.exp(sum(math.log(r) for r in valid_ratios) / len(valid_ratios))
+    return float("nan")
+
+
+def geometric_mean_from_values(values: pd.Series) -> float:
+    """Geometric mean of a ratio series."""
+
+    valid_values = values[(values > 0) & values.notna()]
+    if len(valid_values) == 0:
+        return float("nan")
+    return float(np.exp(np.log(valid_values).mean()))
+
+
+def format_ratio_change(ratio: float) -> str:
+    """Render a ratio as a signed percent delta."""
+
+    if pd.isna(ratio) or ratio <= 0:
+        return "N/A"
+    return f"{(ratio - 1.0) * 100:+.1f}%"
+
+
+def format_performance(
+    ratio: float, improvement_threshold: float, regression_threshold: float, target_name: str
+) -> str:
+    """Render a geomean ratio with a coarse emoji summary."""
+
+    if pd.isna(ratio):
+        return f"no {target_name.lower()} data"
+
+    if improvement_threshold <= ratio <= regression_threshold:
+        emoji = "➖"
+    elif ratio < 1:
+        emoji = "✅"
+    else:
+        emoji = "❌"
+    return f"{ratio:.3f}x {emoji}"
+
+
+def format_target_summary(
+    group: pd.DataFrame,
+    hot_ratio: float,
+    improvement_threshold: float,
+    regression_threshold: float,
+    target_name: str,
+) -> str:
+    """Render one target's hot geomean with its cold geomean beside it.
+
+    The detail tables put a row's hot and cold runs side by side, so the summary
+    reads the same way: a cold-start-only change is visible on the target's own
+    line instead of on a separate one the reader has to cross-reference. Rows that
+    recorded no per-run timings have no cold geomean, and the target then reports
+    its hot geomean alone.
+    """
+
+    hot = format_performance(hot_ratio, improvement_threshold, regression_threshold, target_name)
+    if pd.isna(hot_ratio):
+        return hot
+
+    cold_ratio = calculate_geometric_mean(group, "cold_ratio")
+    if pd.isna(cold_ratio):
+        return f"hot {hot}"
+
+    cold = format_performance(cold_ratio, improvement_threshold, regression_threshold, target_name)
+    return f"hot {hot} · cold {cold}"
+
+
+def format_measurement_value(value: float) -> str:
+    """Render integral and fractional measurements for a Markdown table."""
+
+    if pd.isna(value):
+        return "—"
+
+    value = float(value)
+    if value.is_integer():
+        return str(int(value))
+    # A hot median over an even number of runs lands on a half nanosecond, which
+    # %g renders in scientific notation once it passes nine significant digits.
+    # That fraction is noise next to a measurement this large, so round it away
+    # and keep the column readable.
+    if abs(value) >= 1e6:
+        return str(round(value))
+    return f"{value:.9g}"
+
+
+def format_factor(value: float) -> str:
+    """Render a dimensionless factor such as a row's hot/cold ratio."""
+
+    if pd.isna(value) or not np.isfinite(value):
+        return "—"
+    return f"{float(value):.2f}"
+
+
+def format_change_marker(ratio: float, improvement_threshold: float, regression_threshold: float) -> str:
+    """Mark a change that clears the suite's threshold, leaving everything quieter bare.
+
+    Anything inside the threshold is treated as noise for this environment, so it
+    carries no mark at all rather than a colour the reader has to discount.
+    """
+
+    if pd.isna(ratio) or ratio <= 0:
+        return ""
+    if ratio <= improvement_threshold:
+        return "🟢"
+    if ratio >= regression_threshold:
+        return "🔴"
+    return ""
+
+
+def format_delta_cell(
+    pr_value: object,
+    base_value: object,
+    improvement_threshold: float,
+    regression_threshold: float,
+    render: Callable[[object], str] | None = None,
+    mark: bool = True,
+) -> str:
+    """Render one cell as PR value, base value, and the change between them.
+
+    Only the runs themselves carry a direction marker. A derived column such as
+    `hot/cold` moves for reasons that are not a win or a loss on their own, so it
+    renders the change unmarked.
+    """
+
+    render = format_measurement_value if render is None else render
+    pr_text = render(pr_value)
+    base_text = render(base_value)
+    if pd.isna(pr_value) or pd.isna(base_value) or float(base_value) <= 0:
+        return f"{pr_text} / {base_text} / no baseline"
+
+    ratio = float(pr_value) / float(base_value)
+    change_text = format_ratio_change(ratio)
+    if not mark:
+        return f"{pr_text} / {base_text} / {change_text}"
+
+    marker = format_change_marker(ratio, improvement_threshold, regression_threshold)
+    if not marker:
+        return f"{pr_text} / {base_text} / {change_text}"
+    return f"{pr_text} / {base_text} / {change_text} {marker}"
+
+
+def format_comparison_ratio(value: float) -> str:
+    """Render a PR/base ratio or identify an unmatched PR measurement."""
+
+    if pd.isna(value):
+        return "no baseline"
+    return f"{float(value):.2f}"
+
+
+def format_size(size_bytes: int) -> str:
+    """Format bytes as a human-readable size."""
+
+    if size_bytes >= 1024**3:
+        return f"{size_bytes / (1024**3):.2f} GB"
+    if size_bytes >= 1024**2:
+        return f"{size_bytes / (1024**2):.2f} MB"
+    if size_bytes >= 1024:
+        return f"{size_bytes / 1024:.2f} KB"
+    return f"{size_bytes} B"
+
+
+def format_size_change(change_bytes: int) -> str:
+    """Format a byte change with a sign."""
+
+    sign = "+" if change_bytes > 0 else ""
+    return f"{sign}{format_size(abs(change_bytes))}"
+
+
+def format_pct_change(pct: float) -> str:
+    """Format a percentage change with a sign."""
+
+    sign = "+" if pct > 0 else ""
+    return f"{sign}{pct:.1f}%"
+
+
+def extract_file_size_data(
+    df: pd.DataFrame,
+) -> tuple[dict[tuple[str, str, str, str], int], set[tuple[str, str, str, str]]]:
+    """Extract file-size rows and the identities explicitly ignored for being empty."""
+
+    data = {}
+    ignored = set()
+    if df.empty:
+        return data, ignored
+
+    for _, row in df.iterrows():
+        metadata = row.get("file_size")
+        if not isinstance(metadata, dict):
+            continue
+
+        key = (
+            str(metadata.get("benchmark", "")),
+            str(metadata.get("scale_factor", "1.0")),
+            str(metadata.get("format", "")),
+            str(metadata.get("file", "")),
+        )
+        value = row.get("value")
+        if pd.isna(value):
+            continue
+        size = int(value)
+        if size == 0:
+            ignored.add(key)
+            continue
+        data[key] = size
+
+    return data, ignored
+
+
+def format_file_size_report(base_rows: pd.DataFrame, pr_rows: pd.DataFrame) -> str:
+    """Render a shared-comment file-size comparison report."""
+
+    pr_data, pr_ignored = extract_file_size_data(pr_rows)
+    base_data, base_ignored = extract_file_size_data(base_rows)
+    ignored = base_ignored | pr_ignored
+    pr_data = {key: value for key, value in pr_data.items() if key not in ignored}
+    if not pr_data:
+        return ""
+
+    base_data = {key: value for key, value in base_data.items() if key not in ignored}
+    # Omit baseline files whose (benchmark, scale factor, format) the PR run skipped entirely.
+    pr_scopes = {(benchmark, scale_factor, file_format) for benchmark, scale_factor, file_format, _file_name in pr_data}
+    base_data = {key: value for key, value in base_data.items() if key[:3] in pr_scopes}
+    if not base_data:
+        return "_No baseline file sizes found for base commit._"
+
+    comparisons = []
+    format_totals: dict[str, dict[str, int]] = {}
+
+    for key in sorted(set(base_data) | set(pr_data)):
+        _benchmark, scale_factor, file_format, file_name = key
+        base_size = base_data.get(key, 0)
+        pr_size = pr_data.get(key, 0)
+
+        totals = format_totals.setdefault(file_format, {"base": 0, "pr": 0})
+        totals["base"] += base_size
+        totals["pr"] += pr_size
+
+        change = pr_size - base_size
+        if change == 0:
+            continue
+
+        if base_size > 0:
+            pct_change = (pr_size / base_size - 1) * 100
+        elif pr_size > 0:
+            pct_change = float("inf")
+        else:
+            pct_change = 0.0
+
+        comparisons.append(
+            {
+                "file": file_name,
+                "scale_factor": scale_factor,
+                "format": file_format,
+                "base_size": base_size,
+                "pr_size": pr_size,
+                "change": change,
+                "pct_change": pct_change,
+            }
+        )
+
+    if not comparisons:
+        return "_No file size changes detected._"
+
+    comparisons.sort(key=lambda comparison: comparison["pct_change"], reverse=True)
+
+    total_base = sum(totals["base"] for totals in format_totals.values())
+    total_pr = sum(totals["pr"] for totals in format_totals.values())
+    overall_pct_str = "new" if total_base == 0 else format_pct_change((total_pr / total_base - 1) * 100)
+    increases = sum(1 for comparison in comparisons if comparison["change"] > 0)
+    decreases = sum(1 for comparison in comparisons if comparison["change"] < 0)
+
+    output = StringIO()
+    print("<details>", file=output)
+    print(
+        f"<summary>File Size Changes ({len(comparisons)} files changed, "
+        f"{overall_pct_str} overall, {increases}↑ {decreases}↓)</summary>",
+        file=output,
+    )
+    print("", file=output)
+    print("<br>", file=output)
+    print("", file=output)
+    print("| File | Scale | Format | Base | HEAD | Change | % |", file=output)
+    print("|------|-------|--------|------|------|--------|---|", file=output)
+
+    for comparison in comparisons:
+        pct_str = "new" if comparison["pct_change"] == float("inf") else format_pct_change(comparison["pct_change"])
+        base_str = format_size(comparison["base_size"]) if comparison["base_size"] > 0 else "-"
+        print(
+            f"| {comparison['file']} | {comparison['scale_factor']} | {comparison['format']} | {base_str} | "
+            f"{format_size(comparison['pr_size'])} | {format_size_change(comparison['change'])} | {pct_str} |",
+            file=output,
+        )
+
+    print("", file=output)
+    print("**Totals:**", file=output)
+    for file_format in sorted(format_totals):
+        totals = format_totals[file_format]
+        base_total = totals["base"]
+        pr_total = totals["pr"]
+        pct_str = "" if base_total == 0 else f" ({format_pct_change((pr_total / base_total - 1) * 100)})"
+        print(f"- {file_format}: {format_size(base_total)} → {format_size(pr_total)}{pct_str}", file=output)
+
+    print("", file=output)
+    print("</details>", file=output)
+    return output.getvalue().rstrip()
+
+
+def format_signal(signal: str) -> str:
+    """Render the attributed-change label for markdown output."""
+
+    if signal == "improvement":
+        return "✅ faster"
+    if signal == "regression":
+        return "🚨 regression"
+    if signal == "noise":
+        return "➖ noise"
+    return "N/A"
+
+
+def build_verdict(statistical_analysis: dict[str, Any]) -> dict[str, str] | None:
+    """Collapse row-level attribution into a short PR-comment headline."""
+
+    alpha_rows = statistical_analysis["detail_df"][~statistical_analysis["detail_df"]["is_control"]].copy()
+    if alpha_rows.empty:
+        return None
+
+    # Attributed impact is the geometric mean of non-control alpha ratios.
+    attributed_impact_ratio = geometric_mean_from_values(alpha_rows["alpha_ratio"])
+    if pd.isna(attributed_impact_ratio):
+        return None
+
+    # Confidence depends on directional consistency, share above the noise floor,
+    # and whether the controls themselves look unusually noisy.
+    signs = alpha_rows["alpha_log_ratio"].dropna()
+    consistent_sign_share = 0.0
+    if not signs.empty:
+        positive_share = float((signs > 0).mean())
+        negative_share = float((signs < 0).mean())
+        consistent_sign_share = max(positive_share, negative_share)
+
+    significant_share = float((alpha_rows["signal"] != "noise").mean())
+    evidence_share = min(consistent_sign_share, significant_share)
+
+    control_sigma = float(np.exp(statistical_analysis["systemic_shift_std"]))
+    aggregate_noise_floor = max(
+        1.0 + 1e-9,
+        control_sigma,
+        geometric_mean_from_values(alpha_rows["noise_floor_ratio"]),
+    )
+
+    if (
+        not np.isfinite(aggregate_noise_floor)
+        or attributed_impact_ratio < aggregate_noise_floor
+        and (1.0 / attributed_impact_ratio if attributed_impact_ratio > 0 else float("inf")) < aggregate_noise_floor
+    ):
+        status = "No clear signal"
+    elif attributed_impact_ratio > 1.0:
+        status = "Likely regression"
+    else:
+        status = "Likely improvement"
+
+    if control_sigma > 1.05:
+        confidence = "environment too noisy"
+    elif evidence_share >= 0.7:
+        confidence = "high"
+    elif evidence_share >= 0.4:
+        confidence = "medium"
+    else:
+        confidence = "low"
+
+    return {
+        "status": status,
+        "impact": format_ratio_change(attributed_impact_ratio),
+        "confidence": confidence,
+        "environment_shift": format_ratio_change(statistical_analysis["systemic_shift_ratio"]),
+    }
+
+
+def build_within_engine_statistical_analyses(df: pd.DataFrame, threshold_pct: int) -> dict[str, dict[str, Any]]:
+    """Build an attribution model per engine, using that engine's own parquet rows as controls."""
+
+    analyses = {}
+    matched = df[df["engine"].notna() & (df["engine"] != "unknown")]
+    for engine, engine_df in matched.groupby("engine", sort=False):
+        if engine_df["file_format"].eq(CONTROL_FORMAT).sum() == 0:
+            continue
+        if (~engine_df["file_format"].eq(CONTROL_FORMAT)).sum() == 0:
+            continue
+        analysis = build_statistical_analysis(engine_df.copy(), threshold_pct)
+        if analysis is not None:
+            analyses[str(engine)] = analysis
+    return analyses
+
+
+def format_within_engine_summary(analyses: dict[str, dict[str, Any]]) -> str | None:
+    """Render a compact summary of per-engine attributed changes."""
+
+    summaries = []
+    for engine in sorted(analyses, key=lambda value: (ENGINE_ORDER.get(value, len(ENGINE_ORDER)), value)):
+        verdict = build_verdict(analyses[engine])
+        if verdict is None:
+            continue
+        display_name = {
+            "datafusion": "DataFusion",
+            "duckdb": "DuckDB",
+        }.get(engine, engine)
+        summaries.append(
+            f"{display_name} {verdict['status']} ({verdict['impact']}, {verdict['confidence']} confidence)"
+        )
+
+    if not summaries:
+        return None
+    return " · ".join(summaries)
+
+
+def format_title(benchmark_name: str, pr: pd.DataFrame) -> str:
+    """Render the comment title, linking the suite explainer doc emitted by the benchmark binary.
+
+    The doc path is a repo-relative markdown path carried on the PR result rows (the `doc`
+    field, populated from `Benchmark::doc_path` in Rust), so the benchmark code is the single
+    source of truth for where each suite is documented. The link pins the PR's own commit so
+    it resolves before the PR merges and stays valid afterwards.
+    """
+
+    title = f"# Benchmarks: {benchmark_name}" if benchmark_name else "# Benchmarks"
+    if "doc" in pr.columns:
+        docs = pr["doc"].dropna().unique()
+        if len(docs) > 0:
+            server_url = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
+            repository = os.environ.get("GITHUB_REPOSITORY", "vortex-data/vortex")
+            commits = pr["commit_id"].dropna().unique() if "commit_id" in pr.columns else []
+            ref = commits[0] if len(commits) > 0 else "develop"
+            title += f" [\N{OPEN BOOK}]({server_url}/{repository}/blob/{ref}/{docs[0]})"
+    return title
+
+
+def format_report_help() -> str:
+    """Render explanatory markdown for the benchmark report headline fields."""
+
+    return "\n".join(
+        [
+            "<details>",
+            "<summary>How to read Verdict and Engines</summary>",
+            "",
+            "<br>",
+            "",
+            "- **Verdict**: Overall PR-level signal after subtracting baseline drift "
+            "estimated from Parquet control rows. It can be `Likely improvement`, "
+            "`Likely regression`, or `No clear signal`.",
+            "- **Engines**: Per-engine attribution. DataFusion is compared against "
+            "DataFusion/Parquet controls; DuckDB is compared against DuckDB/Parquet "
+            "controls. This answers whether each engine improved or regressed independently.",
+            "- **Confidence**: Based on directional consistency, share of rows above "
+            "the noise floor, and control-run noise.",
+            "- **Hot vs cold**: Every measurement is run several times. The first run is "
+            "reported as the cold run, and the median of the runs after it is reported as "
+            "the hot run. The verdict and significance use hot runs; each target's "
+            "geomean reports hot and cold beside each other where the individual runs "
+            "were recorded and hot alone where they were not, the cold column shows "
+            "first-run cost per row, and `hot/cold` is how much of "
+            "each run the warm path saves. Rows whose results predate per-run reporting "
+            "show only one value, taken from the value the runner reported.",
+            "- **Table cells**: Each cell reads `PR / base / %diff`. The hot and cold "
+            "columns mark a change as 🔴 slower or 🟢 faster once it clears this suite's "
+            "threshold; anything smaller is noise here and is left unmarked, as is "
+            "`hot/cold`, because a shift in the warm-up ratio is not a win or a loss by itself.",
+            "",
+            "</details>",
+        ]
+    )
+
+
+ENGINE_ORDER = {
+    "vortex": 0,
+    "datafusion": 1,
+    "duckdb": 2,
+    "lance": 3,
+    "arrow": 4,
+}
+
+FILE_FORMAT_ORDER = {
+    "vortex-file-compressed": 0,
+    "vortex-compact": 1,
+    "parquet": 2,
+    "lance": 3,
+    "duckdb": 4,
+    "arrow": 5,
+}
+
+UNIT_ORDER = {
+    "ns": 0,
+    "μs": 1,
+    "ms": 2,
+    "bytes": 3,
+    "MB": 4,
+    "%": 5,
+    "ratio": 6,
+}
+
+
+def group_sort_key(group_key: tuple[str, str, str]) -> tuple[int, int, int, str, str, str]:
+    """Keep output ordering stable."""
+
+    engine, file_format, unit = group_key
+    return (
+        ENGINE_ORDER.get(engine, len(ENGINE_ORDER)),
+        FILE_FORMAT_ORDER.get(file_format, len(FILE_FORMAT_ORDER)),
+        UNIT_ORDER.get(unit, len(UNIT_ORDER)),
+        engine,
+        file_format,
+        unit,
+    )
+
+
+def main() -> None:
+    """Render the benchmark comparison markdown used in CI PR comments."""
+
+    benchmark_name = sys.argv[3] if len(sys.argv) > 3 else ""
+
+    pr = pd.read_json(sys.argv[2], lines=True)
+    title = format_title(benchmark_name, pr)
+    base = read_latest_baseline_rows(sys.argv[1], pr, git_tree_commit_ids())
+
+    base_commit_ids = set(base["commit_id"].unique())
+    pr_commit_id = set(pr["commit_id"].unique())
+    assert len(base_commit_ids) <= 1, base_commit_ids
+    assert len(pr_commit_id) == 1, pr_commit_id
+    base_commit_id = next(iter(base_commit_ids), None)
+    pr_commit_id = next(iter(pr_commit_id))
+
+    base_file_sizes, base = split_file_size_rows(base)
+    pr_file_sizes, pr = split_file_size_rows(pr)
+
+    base = normalize_measurement_rows(base)
+    pr = normalize_measurement_rows(pr)
+
+    comparison_keys = ["name", "storage", "dataset_key", "engine", "file_format", "unit", "query"]
+    df3 = pd.merge(base, pr, on=comparison_keys, how="right", suffixes=("_base", "_pr"))
+    df3["unit"] = df3["unit"].fillna("unit")
+    # The headline ratio is the hot-run ratio; the cold ratio is reported beside it.
+    df3["ratio"] = df3["hot_value_pr"] / df3["hot_value_base"]
+    df3["cold_ratio"] = df3["cold_value_pr"] / df3["cold_value_base"]
+
+    is_s3_benchmark = "s3" in benchmark_name.lower()
+    threshold_pct = 30 if is_s3_benchmark else 10
+    improvement_threshold = 1.0 - (threshold_pct / 100.0)
+    regression_threshold = 1.0 + (threshold_pct / 100.0)
+
+    query_df = df3[df3["query"].notna()]
+    headline_df = query_df
+    if headline_df.empty and df3["unit"].nunique() == 1:
+        headline_df = df3
+    vortex_df = headline_df[headline_df["file_format"].str.startswith("vortex")]
+    parquet_df = headline_df[headline_df["file_format"].eq(CONTROL_FORMAT)]
+
+    vortex_geometric_mean_ratio = calculate_geometric_mean(vortex_df)
+    parquet_geometric_mean_ratio = calculate_geometric_mean(parquet_df)
+
+    statistical_analysis = build_statistical_analysis(query_df, threshold_pct)
+    verdict = build_verdict(statistical_analysis) if statistical_analysis is not None else None
+    engine_analyses = build_within_engine_statistical_analyses(query_df, threshold_pct)
+    engine_summary = format_within_engine_summary(engine_analyses)
+
+    base_label = str(base_commit_id)[:8] if base_commit_id is not None else "none"
+    summary_fields: list[str] = [f"**Commits**: PR `{pr_commit_id[:8]}` vs base `{base_label}`"]
+
+    if verdict is not None:
+        summary_fields.append(f"**Verdict**: {verdict['status']} ({verdict['confidence']} confidence)")
+        summary_fields.append(f"**Attributed Vortex impact**: {verdict['impact']}")
+    if engine_summary is not None:
+        summary_fields.append(f"**Engines**: {engine_summary}")
+
+    if len(vortex_df) > 0:
+        vortex_performance = format_target_summary(
+            vortex_df,
+            vortex_geometric_mean_ratio,
+            improvement_threshold,
+            regression_threshold,
+            "vortex",
+        )
+        summary_fields.append(f"**Vortex (geomean)**: {vortex_performance}")
+    if len(parquet_df) > 0:
+        parquet_performance = format_target_summary(
+            parquet_df,
+            parquet_geometric_mean_ratio,
+            improvement_threshold,
+            regression_threshold,
+            "parquet",
+        )
+        summary_fields.append(f"**Parquet (geomean)**: {parquet_performance}")
+
+    if verdict is not None:
+        shifts = f"Parquet (control) {verdict['environment_shift']}"
+        if statistical_analysis is not None:
+            polish = statistical_analysis["median_polish"]
+            if polish is not None:
+                shifts += f" · Median polish {format_ratio_change(float(np.exp(polish.overall)))}"
+        summary_fields.append(f"**Shifts**: {shifts}")
+
+    print(title)
+    print("")
+    if summary_fields:
+        print("<br>".join(summary_fields))
+        print("")
+    if base_commit_id is None:
+        print("_No baseline is available for this benchmark yet; PR measurements are shown without comparison._")
+        print("")
+    if verdict is not None or engine_summary is not None:
+        print(format_report_help())
+        print("")
+    print("---")
+    print("")
+
+    grouped_tables = df3.groupby(["engine", "file_format", "unit"], dropna=False, sort=False)
+    for engine, file_format, unit in sorted(grouped_tables.groups.keys(), key=group_sort_key):
+        group_df = grouped_tables.get_group((engine, file_format, unit)).sort_values("name")
+        group_performance = format_performance(
+            calculate_geometric_mean(group_df),
+            improvement_threshold,
+            regression_threshold,
+            "group",
+        )
+        significant_improvements = (group_df["ratio"] <= improvement_threshold).sum()
+        significant_regressions = (group_df["ratio"] >= regression_threshold).sum()
+        has_cold_runs = group_df[["cold_value_pr", "cold_value_base"]].notna().any().any()
+
+        # Each cell carries the PR value, the base value, and the change between
+        # them, so one row fits the three measurements without going ten columns wide.
+        def delta_cell(
+            pr_value: object,
+            base_value: object,
+            render: Callable[[object], str] | None = None,
+            mark: bool = True,
+        ) -> str:
+            return format_delta_cell(pr_value, base_value, improvement_threshold, regression_threshold, render, mark)
+
+        hot_cells = [
+            delta_cell(pr_value, base_value)
+            for pr_value, base_value in zip(group_df["hot_value_pr"], group_df["hot_value_base"])
+        ]
+        columns = {"name": list(group_df["name"])}
+        # Only label the columns hot/cold where the rows actually recorded every run.
+        if has_cold_runs:
+            columns[f"hot {unit} (PR / base / %diff)"] = hot_cells
+            columns[f"cold {unit} (PR / base / %diff)"] = [
+                delta_cell(pr_value, base_value)
+                for pr_value, base_value in zip(group_df["cold_value_pr"], group_df["cold_value_base"])
+            ]
+            columns["hot/cold (PR / base / %diff)"] = [
+                delta_cell(pr_factor, base_factor, format_factor, mark=False)
+                for pr_factor, base_factor in zip(
+                    group_df["hot_value_pr"] / group_df["cold_value_pr"],
+                    group_df["hot_value_base"] / group_df["cold_value_base"],
+                )
+            ]
+        else:
+            columns[f"{unit} (PR / base / %diff)"] = hot_cells
+        display_df = pd.DataFrame(columns)
+        print("<details>")
+        summary_text = (
+            f"{engine} / {file_format} / {unit} "
+            f"({group_performance}, {significant_improvements}↑ {significant_regressions}↓)"
+        )
+        print(f"<summary>{summary_text}</summary>")
+        print("")
+        print("<br>")
+        print("")
+        print(
+            display_df.to_markdown(
+                index=False,
+                tablefmt="github",
+                disable_numparse=True,
+                colalign=tuple("left" for _ in display_df.columns),
+            )
+        )
+        print("")
+        print("</details>")
+
+    file_size_report = format_file_size_report(base_file_sizes, pr_file_sizes)
+    if file_size_report:
+        print("")
+        print("---")
+        print("")
+        print(file_size_report)
+
+
+if __name__ == "__main__":
+    main()

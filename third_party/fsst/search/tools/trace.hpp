@@ -2,8 +2,8 @@
 
 // The planner's alignment graph and chosen cut, for logging and figures.
 // Paper tooling, removable as a whole: this directory, the plan_log target in
-// search/CMakeLists.txt, and the two optional outputs it reads, the `origin`
-// of CutGraph::with_pairs and the `chosen` cut of cheapest_cover.
+// search/CMakeLists.txt, and the graphs, origin and cut that Planned carries
+// beside its analysis.
 
 #include <cassert>
 #include <cstdint>
@@ -23,22 +23,20 @@ struct Trace {
 };
 
 // Plans a non-empty pattern as analyze does, keeping the graph and the cut.
-inline Trace trace(const uint8_t* pattern, size_t n, const Dictionary& dict, const Frequency& freq, size_t row_count) {
+inline Trace trace(const uint8_t* pattern, size_t n, const Dictionary& dict, const Frequency& freq,
+                   size_t /*row_count, ignored as in analyze*/) {
     assert(n > 0);
-    Trace t{build_alignment_graph(dict, pattern, n, freq), {}, {}, {}};
-    std::vector<uint32_t> origin, chosen;
-    const CutGraph cg = CutGraph::with_pairs(t.graph, freq, &origin);
-    Planned p = cheapest_cover(cg, freq, scan::policy::Region{freq.total, row_count}, &chosen);
+    Planned p = plan(dict, pattern, n, freq);
+    Trace t{std::move(p.graph), {}, {}, std::move(p.analysis)};
     t.cut.assign(t.graph.edges.size(), false);
     t.paired.assign(t.graph.edges.size(), {});
-    for (uint32_t at : chosen) {
-        const Edge& e = cg.edges[at];
+    for (uint32_t at : p.cut) {
+        const Edge& e = p.cut_graph.edges[at];
         if (e.probe == Probe::Pair)
-            t.paired[origin[at]].push_back(e.pair.first);
+            t.paired[p.origin[at]].push_back(e.pair.first);
         else
-            t.cut[origin[at]] = true;
+            t.cut[p.origin[at]] = true;
     }
-    t.analysis = Analysis{std::move(p.cover), p.covered, freq.total, scan::Walk(t.graph, pattern), false};
     return t;
 }
 

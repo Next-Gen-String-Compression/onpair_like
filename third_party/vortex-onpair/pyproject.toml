@@ -1,0 +1,109 @@
+[project]
+name = "workspace"
+version = "0.1.0"
+description = "Add your description here"
+authors = [{ name = "Nicholas Gates", email = "nick@nickgates.com" }]
+requires-python = ">= 3.11"
+dependencies = ["bench-orchestrator", "vortex-data", "docs"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["dummy"] # Required for workspace project
+
+[dependency-groups]
+# Shared dev tooling. Member-specific dev deps live in each member's pyproject.toml.
+# `uv sync --all-packages` picks up dev groups from all workspace members.
+dev = [
+    "ipython>=8.26.0",
+    "pip>=23.3.2",
+    "pytest>=7.4.0",
+    "ruff>=0.7.1",
+    # forced transitive bumps
+    "urllib3>=2.6.3",
+    "filelock>=3.20.3",
+]
+
+[tool.uv]
+managed = true
+required-version = ">=0.8.0"
+
+[tool.uv.workspace]
+members = ["bench-orchestrator", "vortex-python", "docs"]
+
+[tool.uv.sources]
+bench-orchestrator = { workspace = true }
+vortex-data = { workspace = true }
+# Resolve vortex-data-cuda from its local path so the optional `cuda` extra is
+# lockable before the package is published to PyPI. A path source (not
+# `workspace = true`) keeps the CUDA extension out of the default `--all-packages`
+# set, so it is only built when the `cuda` extra is requested.
+vortex-data-cuda = { path = "vortex-python-cuda" }
+docs = { workspace = true }
+
+[tool.ruff]
+line-length = 120
+extend-exclude = [".venv", "vortex-duckdb/duckdb/**"]
+
+[tool.ruff.format]
+# ruff 0.16 started formatting Python code blocks inside Markdown by default; our docs use
+# deliberate alignment in code examples, so keep Markdown out of the formatter.
+exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "UP", "I", "ANN"]
+# Allow bare returns and implicit None returns in functions with optional results.
+ignore = ["RET502", "RET503"]
+# Do not auto-fix unused variables. This is really annoying when IntelliJ runs autofix while editing.
+unfixable = ["F841"]
+
+[tool.ruff.lint.flake8-annotations]
+# Functions that only return None, including tests, do not need a -> None annotation.
+suppress-none-returning = true
+
+[tool.ruff.lint.per-file-ignores]
+# Pytest supplies fixture parameters dynamically.
+"**/test*/**/*.py" = ["ANN001"]
+# These integration hooks receive values from untyped external runtimes.
+"docs/conf.py" = ["ANN001"]
+"scripts/cudf-parquet-read.py" = ["ANN001"]
+"scripts/post-ingest.py" = ["ANN001"]
+"scripts/vortex_gdb.py" = ["ANN001"]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "vortex.scan",
+    "vortex.file",
+    "vortex.expr",
+    "vortex.ray",
+    "vortex.type_aliases",
+    "vortex.polars_",
+]
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "INFO"
+xfail_strict = true
+
+[tool.ty.environment]
+# First-party source roots so `vortex` and `vortex_cuda` resolve without an
+# editable install of the Rust extensions.
+root = [
+    "vortex-python/python",
+    "vortex-python",
+    "vortex-python-cuda/python",
+    "vortex-python-cuda",
+    "vortex-ffi/cmake/tests",
+]
+
+[tool.ty.src]
+# Vendored obstore stubs are not checked.
+exclude = ["vortex-python/python/vortex/_lib/store/**/*.pyi"]
+
+[tool.ty.rules]
+missing-type-argument = "error"
+unsound-assignment = "error"
+unsound-return-statement = "error"
+unsound-yield = "error"

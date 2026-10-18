@@ -12,24 +12,15 @@
 
 namespace fsst::search::prefilter {
 
-struct Analysis {
-    ProbeCover cover;  // empty when anchored: the row loop needs no cover
-    uint32_t covered_frequency;
-    uint32_t total_frequency;
-    scan::Walk walk;
-    bool matches_all;  // the empty pattern: every row, no scan
-};
-
 inline Analysis analyze(const uint8_t* pattern, size_t n, const Dictionary& dict, const Frequency& freq,
-                        size_t row_count, Anchor anchor = Anchor::None) {
+                        size_t /*row_count, no longer in the cost model*/, Anchor anchor = Anchor::None) {
     if (n == 0) return Analysis{ProbeCover{}, 0, freq.total, {}, true};
     if (anchor != Anchor::None) {
         // one layout, so nothing to cut and no cover to price: the walk alone decides, per row
         AlignmentGraph graph = build_alignment_graph(dict, pattern, n, freq, anchor);
         return Analysis{ProbeCover{}, 0, freq.total, scan::Walk(graph, pattern), false};
     }
-    Planned p = plan(dict, pattern, n, freq, row_count);
-    return Analysis{std::move(p.cover), p.covered, freq.total, std::move(p.walk), false};
+    return plan(dict, pattern, n, freq).analysis;
 }
 
 // The analysis's planned scan over `s`, each hit decided by `check`. A

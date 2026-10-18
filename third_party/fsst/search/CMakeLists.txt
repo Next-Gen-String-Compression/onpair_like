@@ -36,10 +36,6 @@ add_executable(prefilter_matcher_sweep prefilter/scan/bench/matcher_fit.cpp)
 target_link_libraries(prefilter_matcher_sweep fsst_search)
 target_compile_definitions(prefilter_matcher_sweep PRIVATE BENCH_DIR="${BENCH_DIR}")
 
-add_executable(prefilter_resolver_sweep prefilter/scan/bench/resolver_fit.cpp)
-target_link_libraries(prefilter_resolver_sweep fsst_search)
-target_compile_definitions(prefilter_resolver_sweep PRIVATE BENCH_DIR="${BENCH_DIR}")
-
 # Paper tooling (tools/): logs the alignment graph and min cut per needle.
 add_executable(plan_log tools/plan_log.cpp)
 target_link_libraries(plan_log fsst_search fsst)

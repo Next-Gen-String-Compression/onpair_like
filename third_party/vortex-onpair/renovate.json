@@ -1,0 +1,144 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":automergeRequireAllStatusChecks",
+    ":separateMultipleMajorReleases",
+    ":configMigration",
+    "group:rust-futuresMonorepo",
+    "helpers:pinGitHubActionDigests",
+    "docker:disable",
+    ":maintainLockFilesWeekly"
+  ],
+  "schedule": "* 0-3 * * 1#2,1#4",
+  "autoApprove": true,
+  "automergeStrategy": "squash",
+  "prHourlyLimit": 0,
+  "prConcurrentLimit": 20,
+  "rebaseWhen": "conflicted",
+  "labels": [
+    "changelog/chore"
+  ],
+  "minor": { "enabled": false },
+  "patch": { "enabled": false },
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "vulnerabilityFixStrategy": "lowest"
+  },
+  "packageRules": [
+    {
+      "matchPackageNames": [
+        "ubuntu",
+        "python"
+      ],
+      "enabled": false
+    },
+    {
+      "groupName": "arrow-rs",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "matchSourceUrls": [
+        "https://github.com/apache/arrow-rs"
+      ]
+    },
+    {
+      "description": "Do not split lance-bench grouped majors by target major",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "benchmarks/lance-bench/Cargo.toml"
+      ],
+      "separateMultipleMajor": false
+    },
+    {
+      "description": "Keep lance-bench dependency majors together because they are tested as one benchmark stack",
+      "groupName": "lance benchmark dependencies",
+      "groupSlug": "lance-bench",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "benchmarks/lance-bench/Cargo.toml"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ]
+    },
+    {
+      "groupName": "flatbuffers",
+      "matchSourceUrls": [
+        "https://github.com/google/flatbuffers"
+      ]
+    },
+    {
+      "groupName": "tonic",
+      "matchSourceUrls": [
+        "https://github.com/hyperium/tonic"
+      ]
+    },
+    {
+      "description": "Disable routine npm dependency updates; keep security alerts and lock file maintenance",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "digest",
+        "major",
+        "minor",
+        "patch",
+        "pin",
+        "replacement"
+      ],
+      "enabled": false
+    },
+    {
+      "groupName": "Rust lock file maintenance",
+      "groupSlug": "rust-lock-file-maintenance",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchUpdateTypes": [
+        "lockFileMaintenance"
+      ]
+    },
+    {
+      "groupName": "Python lock file maintenance",
+      "groupSlug": "python-lock-file-maintenance",
+      "matchManagers": [
+        "pep621"
+      ],
+      "matchUpdateTypes": [
+        "lockFileMaintenance"
+      ]
+    },
+    {
+      "groupName": "JS lock file maintenance",
+      "groupSlug": "js-lock-file-maintenance",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "lockFileMaintenance"
+      ]
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "Update DuckDB version in vortex-duckdb/build.rs",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/vortex-duckdb/build\\.rs/"
+      ],
+      "matchStrings": [
+        "const DEFAULT_DUCKDB_VERSION: &str = \"(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\";"
+      ],
+      "depNameTemplate": "duckdb/duckdb",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    }
+  ]
+}
