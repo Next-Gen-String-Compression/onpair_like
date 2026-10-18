@@ -118,6 +118,9 @@ enum Cmd {
         /// Abort at the first gate failure (debugging aid).
         #[arg(long)]
         fail_fast: bool,
+        /// Override the spec's measure.min_iters; the manifest records the value used.
+        #[arg(long)]
+        min_iters: Option<u32>,
         // Hidden worker-mode flags: the parent re-executes itself with
         // these to run one (candidate, config, dataset) in a child.
         #[arg(long, hide = true)]
@@ -282,8 +285,11 @@ fn run(cli: Cli) -> Result<ExitCode, Error> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        Cmd::Run { spec, out, fail_fast, worker_candidate, worker_config, worker_dataset } => {
-            let loaded = LoadedSpec::load(&spec)?;
+        Cmd::Run { spec, out, fail_fast, min_iters, worker_candidate, worker_config, worker_dataset } => {
+            let mut loaded = LoadedSpec::load(&spec)?;
+            if let Some(n) = min_iters {
+                loaded.spec.measure.min_iters = n;
+            }
             match worker_candidate {
                 Some(candidate) => run_worker_process(
                     &loaded,
@@ -526,6 +532,7 @@ fn run_parent(loaded: &LoadedSpec, out_dir: &std::path::Path, fail_fast: bool) -
                 if fail_fast {
                     cmd.arg("--fail-fast");
                 }
+                cmd.arg("--min-iters").arg(spec.measure.min_iters.to_string());
                 let status = cmd.status()?;
                 partials.push(
                     out_dir

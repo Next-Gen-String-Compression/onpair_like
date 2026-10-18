@@ -6,11 +6,12 @@
 # reproduce-neon.sh measures the arm64 side; with both machines' results/ and
 # paper/data in one tree, paper/make-figures.sh draws every figure.
 #
-#   ./reproduce-avx512.sh [--small|--medium|--large]     default: --small
+#   ./reproduce-avx512.sh [--small|--medium|--large] [--min-iters=N]
+#       default: --small, each spec's own min_iters
 #
 # The size picks the needle set, the same four columns and grid cells with
 # 1, 10 or 20 needles per cell. The micro run alone takes about 0.6, 5.3 and
-# 10.4 hours.
+# 10.4 hours. --min-iters=N sets every harness run's timed iterations per cell.
 #
 # Needs a Rust toolchain, a C++ compiler, cmake, python3, uv, the duckdb CLI,
 # and LLVM 14-16 for the `llvm-simd` baseline. Downloads about 7 GB for the
@@ -22,12 +23,16 @@ ROOT=$(pwd)
 
 [ "$(uname -m)" = x86_64 ] && grep -q avx512bw /proc/cpuinfo \
   || { echo "reproduce-avx512.sh runs on an x86_64 host with AVX-512BW" >&2; exit 2; }
-case "${1:---small}" in
-  --small) SIZE=fast PER_CELL=1 ;;
-  --medium) SIZE=medium PER_CELL=10 ;;
-  --large) SIZE=full PER_CELL=20 ;;
-  *) sed -n '2,17p' "$0"; exit 2 ;;
-esac
+SIZE=fast PER_CELL=1
+for arg in "$@"; do
+  case $arg in
+    --small) SIZE=fast PER_CELL=1 ;;
+    --medium) SIZE=medium PER_CELL=10 ;;
+    --large) SIZE=full PER_CELL=20 ;;
+    --min-iters=*) export MIN_ITERS=${arg#--min-iters=} ;;
+    *) sed -n '2,18p' "$0"; exit 2 ;;
+  esac
+done
 
 stage() { echo; echo "===== reproduce: $* ====="; }
 

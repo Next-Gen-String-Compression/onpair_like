@@ -13,6 +13,6 @@ case $(uname -m) in arm64) ;; *) echo "gen-fig1.sh runs on the M4 Pro only" >&2;
 DATE=$(date +%F)
 (cd "$ROOT" && cargo build --release --bin bench)
 for spec in lz4 uncompressed onpair fsst; do
-  "$ROOT/target/release/bench" run "$HERE/specs/fig1/$spec.toml" -o "$ROOT/results/paper/fig1-$spec-neon-$DATE"
+  "$ROOT/target/release/bench" run "$HERE/specs/fig1/$spec.toml" ${MIN_ITERS:+--min-iters "$MIN_ITERS"} -o "$ROOT/results/paper/fig1-$spec-neon-$DATE"
   echo "-> run fig1-$spec-neon-$DATE"
 done

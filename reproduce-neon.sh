@@ -6,11 +6,14 @@
 # machines' results/ and paper/data in one tree, paper/make-figures.sh draws
 # every figure.
 #
-#   ./reproduce-neon.sh [--small|--medium|--large]     default: --small
+#   ./reproduce-neon.sh [--small|--medium|--large] [--prefix-suffix] [--min-iters=N]
+#       default: --small, each spec's own min_iters
 #
 # The size picks the needle set, the same four columns and grid cells with
 # 1, 10 or 20 needles per cell. The micro run alone takes about 0.5, 4.5 and
 # 8.8 hours. The ablation has no large set and runs medium there.
+# --prefix-suffix also runs the PREFIX/SUFFIX block, about 50 minutes at --small.
+# --min-iters=N sets every harness run's timed iterations per cell.
 #
 # Needs a Rust toolchain, a C++ compiler, cmake, python3, uv and the duckdb
 # CLI. Downloads about 7 GB for the four columns and 15 GB for the end-to-end
@@ -21,12 +24,17 @@ ROOT=$(pwd)
 . ./pins.env
 
 case $(uname -m) in arm64 | aarch64) ;; *) echo "reproduce-neon.sh runs on arm64" >&2; exit 2 ;; esac
-case "${1:---small}" in
-  --small) SIZE=fast PER_CELL=1 ABLATION=fast ;;
-  --medium) SIZE=medium PER_CELL=10 ABLATION=medium ;;
-  --large) SIZE=full PER_CELL=20 ABLATION=medium ;;
-  *) sed -n '2,17p' "$0"; exit 2 ;;
-esac
+SIZE=fast PER_CELL=1 ABLATION=fast PREFIX_SUFFIX=
+for arg in "$@"; do
+  case $arg in
+    --small) SIZE=fast PER_CELL=1 ABLATION=fast ;;
+    --medium) SIZE=medium PER_CELL=10 ABLATION=medium ;;
+    --large) SIZE=full PER_CELL=20 ABLATION=medium ;;
+    --prefix-suffix) PREFIX_SUFFIX=1 ;;
+    --min-iters=*) export MIN_ITERS=${arg#--min-iters=} ;;
+    *) sed -n '2,20p' "$0"; exit 2 ;;
+  esac
+done
 
 stage() { echo; echo "===== reproduce: $* ====="; }
 
@@ -51,7 +59,7 @@ stage "needle suites, $PER_CELL per cell"
 
 stage "benchmark blocks ($SIZE)"
 paper/gen-micro.sh "$SIZE" neon
-paper/gen-prefix-suffix.sh "$SIZE"
+[ -z "$PREFIX_SUFFIX" ] || paper/gen-prefix-suffix.sh "$SIZE"
 paper/gen-rows.sh
 paper/gen-phases.sh "$SIZE" neon
 paper/gen-ablation.sh "$ABLATION"

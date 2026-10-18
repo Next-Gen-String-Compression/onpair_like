@@ -17,10 +17,10 @@ DATE=$(date +%F)
 case $(uname -m) in
   x86_64)
     for spec in rowgroup rowgroup-llvm selection; do
-      "$ROOT/target/release/bench" run "$HERE/specs/rows/$spec.toml" -o "$ROOT/results/paper/$spec-fast-avx512-$DATE"
+      "$ROOT/target/release/bench" run "$HERE/specs/rows/$spec.toml" ${MIN_ITERS:+--min-iters "$MIN_ITERS"} -o "$ROOT/results/paper/$spec-fast-avx512-$DATE"
     done ;;
   arm64|aarch64)
-    "$ROOT/target/release/bench" run "$HERE/specs/rows/rowgroup-neon.toml" -o "$ROOT/results/paper/rowgroup-fast-neon-$DATE" ;;
+    "$ROOT/target/release/bench" run "$HERE/specs/rows/rowgroup-neon.toml" ${MIN_ITERS:+--min-iters "$MIN_ITERS"} -o "$ROOT/results/paper/rowgroup-fast-neon-$DATE" ;;
 esac
 (cd "$ROOT" && uv run paper/check_inputs.py --update) || true
 echo "-> runs rowgroup-fast-avx512-$DATE, rowgroup-llvm-fast-avx512-$DATE, selection-fast-avx512-$DATE"

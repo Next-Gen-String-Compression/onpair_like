@@ -15,5 +15,5 @@ case $(uname -m) in arm64 | aarch64) ARCH=neon ;; *) ARCH=avx512 ;; esac
 
 NAME="ablation-$SIZE-$ARCH-$(date +%F)"
 (cd "$ROOT" && cargo build --release --bin bench)
-"$ROOT/target/release/bench" run "$HERE/specs/ablation/$SIZE.toml" -o "$ROOT/results/paper/$NAME"
+"$ROOT/target/release/bench" run "$HERE/specs/ablation/$SIZE.toml" ${MIN_ITERS:+--min-iters "$MIN_ITERS"} -o "$ROOT/results/paper/$NAME"
 echo "-> run $NAME"

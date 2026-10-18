@@ -17,6 +17,6 @@ case $ARCH in neon | avx512) ;; *) echo "unknown instruction set: $ARCH (neon, a
 
 NAME="verify-${SIZE%-walk}-$ARCH-$(date +%F)"
 (cd "$ROOT" && cargo build --release --bin bench)
-"$ROOT/target/release/bench" run "$HERE/specs/phases/verify-$SIZE.toml" -o "$ROOT/results/paper/$NAME"
+"$ROOT/target/release/bench" run "$HERE/specs/phases/verify-$SIZE.toml" ${MIN_ITERS:+--min-iters "$MIN_ITERS"} -o "$ROOT/results/paper/$NAME"
 (cd "$ROOT" && uv run paper/check_inputs.py --update) || true
 echo "-> run $NAME"
