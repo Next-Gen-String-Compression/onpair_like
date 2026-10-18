@@ -384,7 +384,7 @@ fn ingest_into_db(out_dir: &std::path::Path) -> Result<(), Error> {
         return Ok(());
     }
     let python = root.join(".venv/bin/python");
-    let loader = root.join("analysis/db/load.py");
+    let loader = root.join("tools/results-db/load.py");
     if !python.exists() {
         return Err(format!(
             "ingest: {} not found — create it with `python3 -m venv .venv && \
@@ -608,7 +608,7 @@ fn run_parent(loaded: &LoadedSpec, out_dir: &std::path::Path, fail_fast: bool) -
     if let Err(e) = ingest_into_db(out_dir) {
         eprintln!("error: {e}");
         eprintln!("       results.jsonl and manifest.json are intact; re-ingest with");
-        eprintln!("       .venv/bin/python analysis/db/load.py {}", out_dir.display());
+        eprintln!("       .venv/bin/python tools/results-db/load.py {}", out_dir.display());
         any_error = true;
     }
 

@@ -5,8 +5,8 @@ This DB is a derived index over it: five dimensions, one fact table, one view.
 Delete the file and rebuild whenever you like.
 
 ```sh
-.venv/bin/python analysis/db/load.py --all        # (re)load every run under results/
-.venv/bin/python analysis/db/load.py results/sqlstorm   # one run
+.venv/bin/python tools/results-db/load.py --all        # (re)load every run under results/
+.venv/bin/python tools/results-db/load.py results/smoke   # one run
 duckdb results/bench.duckdb
 ```
 

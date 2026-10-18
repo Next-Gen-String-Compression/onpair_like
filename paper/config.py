@@ -155,10 +155,10 @@ INPUTS = {
     "kernel": {
         "bandwidth_line": True,
         "matcher": [
-            "data/matcher_m4pro_2026-10-14.csv",
+            "data/matcher_arm64_2026-10-14.csv",
             "data/matcher_x86_64_2026-10-14b.csv",
             "data/matcher_x86_64_avx512_2026-10-14b.csv",
-            "data/matcher_fsst_m4pro_2026-10-14.csv",
+            "data/matcher_fsst_arm64_2026-10-14.csv",
             "data/matcher_fsst_x86_64_2026-10-14b.csv",
             "data/matcher_fsst_x86_64_avx512_2026-10-14b.csv",
         ],

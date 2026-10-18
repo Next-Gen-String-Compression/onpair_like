@@ -31,7 +31,7 @@ cargo build --release
 Outputs: `results/<run>/results.jsonl` (one self-contained row per build /
 per gated query cell) + `manifest.json` (environment, versions, checksums,
 spec hash). Every run also loads itself into `results/bench.duckdb`, the
-queryable index over all runs — see [analysis/db/README.md](analysis/db/README.md).
+queryable index over all runs — see [tools/results-db/README.md](tools/results-db/README.md).
 
 ## Generating query workloads
 
@@ -87,8 +87,7 @@ records its spec hash and environment.
 | `e2e/` | DuckDB and Vortex end to end: ClickBench, JOB and the micro needles |
 | `suites/`, `specs/` | the smoke suite and specs the harness tests run |
 | `datasets/` | `sources.yaml` (pinned URLs, sha256, licenses, canonical checksums) and `prepare.py`; artifacts and downloads are gitignored |
-| `analysis/` | `db/` builds `results/bench.duckdb` from `results/**` at the end of each run |
-| `tools/` | `dashboard/` (marimo), `bench-viz/` (static HTML explorer), `graph-viz/` (alignment graph and cut drawings) |
+| `tools/` | `results-db/` (builds `results/bench.duckdb` from `results/**` at the end of each run), `dashboard/` (marimo), `bench-viz/` (static HTML explorer), `graph-viz/` (alignment graph and cut drawings) |
 
 ## Adding a candidate or scanner
 

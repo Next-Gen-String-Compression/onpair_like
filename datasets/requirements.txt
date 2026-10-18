@@ -1,6 +1,6 @@
 # Dependencies of datasets/prepare.py (downloads and archive extraction are
 # stdlib; these are the manifest reader and the parquet writer), plus duckdb for
-# the results database analysis/ builds.
+# the results database tools/results-db/ builds.
 pyyaml>=6
 pyarrow>=15
 duckdb>=1.0
