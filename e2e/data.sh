@@ -8,8 +8,8 @@
 #
 #   raw/hits/hits_<i>.parquet  ClickBench, the 100 athena_partitioned files
 #   raw/job/job_<t>.parquet    IMDb (JOB), duckdb-data v1.0
-#   ch.duckdb                  hits, by DuckDB's benchmark/clickbench load.sql
-#   imdb.duckdb                the 21 JOB tables, by benchmark/imdb_plan_cost/init
+#   ch.duckdb                  hits, by DuckDB's benchmark/clickbench load.sql, written by stock DuckDB
+#   imdb.duckdb                the 21 JOB tables, by benchmark/imdb_plan_cost/init, written by stock DuckDB
 #   ch.contains.duckdb         hits, FSST forced, storage v1.2.0, written by the fork
 #   imdb.pf.duckdb             the JOB tables, storage v1.2.0, written by the fork
 #   hits.0861.vortex           hits, written by duckdb-vortex 0.86.1
@@ -20,6 +20,9 @@
 #
 # The fork writes FSST segments with sorted symbol tables, which the
 # compressed contains needs; storage v1.2.0 is the oldest that carries them.
+# The Vortex builds, stock DuckDB 1.5.5, can read neither those segments nor
+# the fork's default storage version, so the two source databases they copy
+# hits and the JOB tables from are written by stock DuckDB, the 0.86.1 build's.
 set -euo pipefail
 E2E=$(cd "$(dirname "$0")" && pwd)
 DATA=${E2E_DATA:-$E2E/data}
@@ -28,6 +31,7 @@ SRC=$E2E/../third_party/duckdb
 RAW=$DATA/raw
 mkdir -p "$DATA"
 DUCKDB=$BIN/duckdb
+STOCK=$BIN/duckdb-vortex-0.86.1
 
 # download <url> <file>
 download() {
@@ -48,7 +52,7 @@ if need ch.duckdb && { need ch.contains.duckdb || need hits.0861.vortex || need 
   echo "== ch.duckdb"
   rm -f "$DATA/ch.duckdb.tmp"
   { echo "PRAGMA disable_progress_bar;"; sed "s|$url/|$RAW/hits/|" "$SRC/benchmark/clickbench/queries/load.sql"; } |
-    "$DUCKDB" "$DATA/ch.duckdb.tmp"
+    "$STOCK" "$DATA/ch.duckdb.tmp"
   mv "$DATA/ch.duckdb.tmp" "$DATA/ch.duckdb"
 fi
 
@@ -59,7 +63,7 @@ if need imdb.duckdb && { need imdb.pf.duckdb || need imdb.0861.vortex || need im
   rm -f "$DATA/imdb.duckdb.tmp"
   { echo "PRAGMA disable_progress_bar;"; cat "$SRC/benchmark/imdb_plan_cost/init/schema.sql"
     sed "s|$url/|$RAW/job/|" "$SRC/benchmark/imdb_plan_cost/init/load.sql"; } |
-    "$DUCKDB" "$DATA/imdb.duckdb.tmp"
+    "$STOCK" "$DATA/imdb.duckdb.tmp"
   mv "$DATA/imdb.duckdb.tmp" "$DATA/imdb.duckdb"
 fi
 
