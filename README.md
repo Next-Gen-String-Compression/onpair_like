@@ -18,9 +18,13 @@ columns, the needle suites, every benchmark block for its instruction set, and o
 end-to-end runs.
 
 ```sh
-./reproduce-neon.sh   [--small|--medium|--large] [--prefix-suffix] [--min-iters=N]
-./reproduce-avx512.sh [--small|--medium|--large] [--min-iters=N]
+bash reproduce-neon.sh   [--small|--medium|--large] [--prefix-suffix] [--min-iters=N]
+bash reproduce-avx512.sh [--small|--medium|--large] [--min-iters=N]
 ```
+
+The anonymized download drops executable bits. The reproduce scripts run every other script
+through `sh` or `bash` and do not need them; to run single scripts as `./…`, first run
+`find . -name '*.sh' -exec chmod +x {} +`.
 
 | flag | effect |
 |---|---|
@@ -39,7 +43,7 @@ The size flag changes the micro, phases, ablation, plan-cut and end-to-end micro
 row group block always uses the small needle set and takes about 3.5 h on AVX-512 by itself.
 
 Runs land in `results/` and kernel sweeps in `paper/data/`. With both machines' results in one
-tree, `paper/make-figures.sh --out DIR` checks the inputs `paper/config.py` names and draws
+tree, `sh paper/make-figures.sh --out DIR` checks the inputs `paper/config.py` names and draws
 every figure. [paper/README.md](paper/README.md) describes each figure block, its specs and its
 inputs.
 

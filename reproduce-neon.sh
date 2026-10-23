@@ -6,7 +6,7 @@
 # machines' results/ and paper/data in one tree, paper/make-figures.sh draws
 # every figure.
 #
-#   ./reproduce-neon.sh [--small|--medium|--large] [--prefix-suffix] [--min-iters=N]
+#   bash reproduce-neon.sh [--small|--medium|--large] [--prefix-suffix] [--min-iters=N]
 #       default: --small, each spec's own min_iters
 #
 # The size picks the needle set, the same four columns and grid cells with
@@ -48,18 +48,20 @@ stage "needle suites, $PER_CELL per cell"
 ./target/release/matcher-selection --config experiments/matcher_selection/config-1mi.toml --per-cell "$PER_CELL" --bless
 
 stage "benchmark blocks ($SIZE)"
-paper/gen-micro.sh "$SIZE" neon
-[ -z "$PREFIX_SUFFIX" ] || paper/gen-prefix-suffix.sh "$SIZE"
-paper/gen-rows.sh
-paper/gen-phases.sh "$SIZE" neon
-paper/gen-ablation.sh "$ABLATION"
-paper/gen-fig1.sh
-paper/reproduce-kernel.sh
-paper/gen-plan-cut.sh "$SIZE"
+# Every script runs through its interpreter: the anonymized download drops the
+# executable bits.
+sh paper/gen-micro.sh "$SIZE" neon
+[ -z "$PREFIX_SUFFIX" ] || sh paper/gen-prefix-suffix.sh "$SIZE"
+sh paper/gen-rows.sh
+sh paper/gen-phases.sh "$SIZE" neon
+sh paper/gen-ablation.sh "$ABLATION"
+sh paper/gen-fig1.sh
+sh paper/reproduce-kernel.sh
+sh paper/gen-plan-cut.sh "$SIZE"
 
 stage "end to end"
-e2e/build.sh
-e2e/data.sh
+bash e2e/build.sh
+bash e2e/data.sh
 python3 e2e/run.py
 python3 e2e/micro.py --spec "$SIZE"
 

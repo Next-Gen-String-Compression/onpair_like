@@ -6,7 +6,7 @@
 # reproduce-neon.sh measures the arm64 side; with both machines' results/ and
 # paper/data in one tree, paper/make-figures.sh draws every figure.
 #
-#   ./reproduce-avx512.sh [--small|--medium|--large] [--min-iters=N]
+#   bash reproduce-avx512.sh [--small|--medium|--large] [--min-iters=N]
 #       default: --small, each spec's own min_iters
 #
 # The size picks the needle set, the same four columns and grid cells with
@@ -73,10 +73,12 @@ stage "needle suites, $PER_CELL per cell"
 ./target/release/matcher-selection --config experiments/matcher_selection/config-1mi.toml --per-cell "$PER_CELL" --bless
 
 stage "benchmark blocks ($SIZE)"
-paper/gen-micro.sh "$SIZE" avx512
-paper/gen-rows.sh
-paper/gen-phases.sh "$SIZE" avx512
+# Every script runs through its interpreter: the anonymized download drops the
+# executable bits.
+sh paper/gen-micro.sh "$SIZE" avx512
+sh paper/gen-rows.sh
+sh paper/gen-phases.sh "$SIZE" avx512
 # Runs the AVX2 sweep with a default build and the AVX-512 one native itself.
-env -u RUSTFLAGS paper/reproduce-kernel.sh
+env -u RUSTFLAGS sh paper/reproduce-kernel.sh
 
 uv run paper/check_inputs.py --update || true

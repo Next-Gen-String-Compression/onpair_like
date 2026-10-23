@@ -21,12 +21,12 @@ AVX512=
 [ "$MACHINE" = x86_64 ] && grep -q avx512bw /proc/cpuinfo 2>/dev/null && AVX512=1
 
 if [ -n "$AVX512" ]; then
-  RUSTFLAGS="-C target-cpu=native" CARGO_TARGET_DIR="$ONPAIR/target-native" "$HERE/gen-kernel.sh"
+  RUSTFLAGS="-C target-cpu=native" CARGO_TARGET_DIR="$ONPAIR/target-native" sh "$HERE/gen-kernel.sh"
   mv "$HERE/data/matcher_${MACHINE}_$DATE.csv" "$HERE/data/matcher_${MACHINE}_avx512_$DATE.csv"
 fi
-"$HERE/gen-kernel.sh"
+sh "$HERE/gen-kernel.sh"
 
-"$HERE/gen-kernel-fsst.sh"
+sh "$HERE/gen-kernel-fsst.sh"
 if [ -n "$AVX512" ]; then
   mv "$HERE/data/matcher_fsst_${MACHINE}_$DATE.csv" "$HERE/data/matcher_fsst_${MACHINE}_avx512_$DATE.csv"
 fi
