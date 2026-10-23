@@ -3,9 +3,7 @@
 # the CSV into paper/data. The FSST fork is third_party/fsst.
 # The stream and catalog are built first when missing: prefilter_corpus over
 # onpair's raw ch/hits/URL_1m.csv (gen-kernel.sh writes it), then onpair's
-# bench_needles example over the URL_1m.fsst.csv it writes. The stage-two
-# sweep, which no figure draws, runs only when onpair's raw IMDb name stream
-# exists, encoding it the same way.
+# bench_needles example over the URL_1m.fsst.csv it writes.
 #
 #   paper/gen-kernel-fsst.sh
 #
@@ -21,7 +19,7 @@ DATE=$(date +%F)
 DATA="$FSST/search/prefilter/scan/bench/data"
 
 cmake -S "$FSST" -B "$BUILD" -DCMAKE_BUILD_TYPE=Release >/dev/null
-cmake --build "$BUILD" --target prefilter_corpus prefilter_matcher_sweep prefilter_resolver_sweep >/dev/null
+cmake --build "$BUILD" --target prefilter_corpus prefilter_matcher_sweep >/dev/null
 
 corpus() { # <db/table/column_size>: encode onpair's raw stream and draw its catalog
   raw="$ONPAIR/bench/data/$1.csv"
@@ -39,10 +37,4 @@ run() { # <sweep binary> <csv prefix> <target name>
   echo "-> paper/data/$3_fsst_${MACHINE}_${DATE}.csv"
 }
 
-run prefilter_matcher_sweep  novel_mask    matcher
-if [ -f "$ONPAIR/bench/data/imdb/name/name_1m.csv" ]; then
-  corpus imdb/name/name_1m
-  run prefilter_resolver_sweep novel_resolve resolver
-else
-  echo "no imdb/name/name_1m stream: resolver sweep skipped"
-fi
+run prefilter_matcher_sweep novel_mask matcher
