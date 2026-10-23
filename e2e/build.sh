@@ -58,7 +58,10 @@ use_vortex() {
 }
 
 use_vortex vortex-0.86.1 "$DV/vortex-extension/Cargo.lock"
-make -C "$DV" release
+# The version is given: with vortex-duckdb taken by path, duckdb-vortex's CMake finds no git
+# revision to read it from. 0.86.1 is VORTEX_UPSTREAM_REV's tag; the deployment target is
+# the Makefile's default EXT_FLAGS, which this replaces.
+make -C "$DV" release EXT_FLAGS="-DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DVORTEX_VERSION=0.86.1"
 cp "$DV/build/release/duckdb" "$BIN/duckdb-vortex-0.86.1"
 git -C "$DV" checkout -q -- vortex-extension/Cargo.toml vortex-extension/Cargo.lock
 
