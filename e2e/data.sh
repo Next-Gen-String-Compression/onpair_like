@@ -4,7 +4,12 @@
 # file derived from it is missing, so pointing E2E_DATA at a directory that
 # already holds them skips every step.
 #
-#   E2E_DATA=/data e2e/data.sh
+#   E2E_DATA=/data [E2E_CLICKBENCH=1] e2e/data.sh
+#
+# The paper's end-to-end figures read JOB and the micro columns only. The full
+# ClickBench table, 14 GB of downloads and about 76 GB more of copies, feeds
+# figures the paper does not include, so its files (hits_*, ch.*, hits.*) are
+# built only with E2E_CLICKBENCH=1.
 #
 #   raw/hits/hits_<i>.parquet  ClickBench, the 100 athena_partitioned files
 #   raw/job/job_<t>.parquet    IMDb (JOB), duckdb-data v1.0
@@ -26,6 +31,7 @@
 set -euo pipefail
 E2E=$(cd "$(dirname "$0")" && pwd)
 DATA=${E2E_DATA:-$E2E/data}
+CLICKBENCH=${E2E_CLICKBENCH:-}
 BIN=$E2E/builds/bin
 SRC=$E2E/../third_party/duckdb
 RAW=$DATA/raw
@@ -46,7 +52,7 @@ TABLES=$(sed -n 's/^CREATE TABLE \([a-z_]*\).*/\1/p' "$SRC/benchmark/imdb_plan_c
 
 need() { [ ! -e "$DATA/$1" ]; }
 
-if need ch.duckdb && { need ch.contains.duckdb || need hits.0861.vortex || need hits.onpair.vortex; }; then
+if [ -n "$CLICKBENCH" ] && need ch.duckdb && { need ch.contains.duckdb || need hits.0861.vortex || need hits.onpair.vortex; }; then
   url=https://datasets.clickhouse.com/hits_compatible/athena_partitioned
   for i in $(seq 0 99); do download "$url/hits_$i.parquet" "$RAW/hits/hits_$i.parquet"; done
   echo "== ch.duckdb"
@@ -85,7 +91,7 @@ SQL
   mv "$DATA/$dst.tmp" "$DATA/$dst"
 }
 
-need ch.contains.duckdb && copy_duckdb ch.duckdb ch.contains.duckdb hits \
+[ -n "$CLICKBENCH" ] && need ch.contains.duckdb && copy_duckdb ch.duckdb ch.contains.duckdb hits \
   "SET storage_compatibility_version='v1.2.0'; SET force_compression='fsst';"
 need imdb.pf.duckdb && copy_duckdb imdb.duckdb imdb.pf.duckdb "$TABLES" \
   "SET storage_compatibility_version='v1.2.0';"
@@ -113,8 +119,8 @@ SQL
   mv "$DATA/$dst.tmp" "$DATA/$dst"
 }
 
-need hits.0861.vortex && write_vortex "$BIN/duckdb-vortex-0.86.1" ch.duckdb hits.0861.vortex hits
-need hits.onpair.vortex && write_vortex "$BIN/duckdb-vortex-onpair" ch.duckdb hits.onpair.vortex hits VORTEX_SKIP_FSST=1
+[ -n "$CLICKBENCH" ] && need hits.0861.vortex && write_vortex "$BIN/duckdb-vortex-0.86.1" ch.duckdb hits.0861.vortex hits
+[ -n "$CLICKBENCH" ] && need hits.onpair.vortex && write_vortex "$BIN/duckdb-vortex-onpair" ch.duckdb hits.onpair.vortex hits VORTEX_SKIP_FSST=1
 need imdb.0861.vortex && write_vortex "$BIN/duckdb-vortex-0.86.1" imdb.duckdb imdb.0861.vortex "$TABLES"
 need imdb.onpair.vortex && write_vortex "$BIN/duckdb-vortex-onpair" imdb.duckdb imdb.onpair.vortex "$TABLES" VORTEX_SKIP_FSST=1
 
@@ -172,13 +178,15 @@ for t in $TABLES; do
     [ "$got" = "$want" ] || { echo "$t: $got rows, $want in imdb.duckdb"; exit 1; }
   done
 done
-want=$("$DUCKDB" -readonly "$DATA/ch.duckdb" -noheader -list -c "SELECT count(*) FROM hits")
-for got in \
-  "$("$DUCKDB" -readonly "$DATA/ch.contains.duckdb" -noheader -list -c "SELECT count(*) FROM hits")" \
-  "$("$BIN/duckdb-vortex-0.86.1" -noheader -list -c "SELECT count(*) FROM '$DATA/hits.0861.vortex'")" \
-  "$("$BIN/duckdb-vortex-onpair" -noheader -list -c "SELECT count(*) FROM '$DATA/hits.onpair.vortex'")"; do
-  [ "$got" = "$want" ] || { echo "hits: $got rows, $want in ch.duckdb"; exit 1; }
-done
+if [ -n "$CLICKBENCH" ]; then
+  want=$("$DUCKDB" -readonly "$DATA/ch.duckdb" -noheader -list -c "SELECT count(*) FROM hits")
+  for got in \
+    "$("$DUCKDB" -readonly "$DATA/ch.contains.duckdb" -noheader -list -c "SELECT count(*) FROM hits")" \
+    "$("$BIN/duckdb-vortex-0.86.1" -noheader -list -c "SELECT count(*) FROM '$DATA/hits.0861.vortex'")" \
+    "$("$BIN/duckdb-vortex-onpair" -noheader -list -c "SELECT count(*) FROM '$DATA/hits.onpair.vortex'")"; do
+    [ "$got" = "$want" ] || { echo "hits: $got rows, $want in ch.duckdb"; exit 1; }
+  done
+fi
 for t in $MICRO; do
   want=$("$DUCKDB" -noheader -list -c "SELECT count(*) FROM '$E2E/../datasets/raw/${t//_/-}-1mi/column.parquet'")
   for got in \

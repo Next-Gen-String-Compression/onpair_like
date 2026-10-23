@@ -6,31 +6,35 @@
 # machines' results/ and paper/data in one tree, paper/make-figures.sh draws
 # every figure.
 #
-#   bash reproduce-neon.sh [--small|--medium|--large] [--prefix-suffix] [--min-iters=N]
+#   bash reproduce-neon.sh [--small|--medium|--large] [--prefix-suffix] [--clickbench] [--min-iters=N]
 #       default: --small, each spec's own min_iters
 #
 # The size picks the needle set, the same four columns and grid cells with
 # 1, 10 or 20 needles per cell. The micro run alone takes about 0.5, 4.5 and
 # 8.8 hours. The ablation has no large set and runs medium there.
 # --prefix-suffix also runs the PREFIX/SUFFIX block, about 50 minutes at --small.
+# --clickbench also runs the end-to-end ClickBench queries over the full table,
+# which no figure in the paper draws: 14 GB more downloads, about 90 GB more disk.
 # --min-iters=N sets every harness run's timed iterations per cell.
 #
 # Needs a Rust toolchain, a C++ compiler, cmake, python3, uv and the duckdb
-# CLI. Downloads about 7 GB for the four columns and 15 GB for the end-to-end
-# data, into datasets/ and $E2E_DATA (default e2e/data).
+# CLI. Downloads about 7 GB for the four columns and 2 GB of JOB data for the
+# end-to-end runs, into datasets/ and $E2E_DATA (default e2e/data), which then
+# holds about 9 GB.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 case $(uname -m) in arm64 | aarch64) ;; *) echo "reproduce-neon.sh runs on arm64" >&2; exit 2 ;; esac
-SIZE=fast PER_CELL=1 ABLATION=fast PREFIX_SUFFIX=
+SIZE=fast PER_CELL=1 ABLATION=fast PREFIX_SUFFIX= CLICKBENCH=
 for arg in "$@"; do
   case $arg in
     --small) SIZE=fast PER_CELL=1 ABLATION=fast ;;
     --medium) SIZE=medium PER_CELL=10 ABLATION=medium ;;
     --large) SIZE=full PER_CELL=20 ABLATION=medium ;;
     --prefix-suffix) PREFIX_SUFFIX=1 ;;
+    --clickbench) CLICKBENCH=1 ;;
     --min-iters=*) export MIN_ITERS=${arg#--min-iters=} ;;
-    *) sed -n '2,20p' "$0"; exit 2 ;;
+    *) sed -n '2,23p' "$0"; exit 2 ;;
   esac
 done
 
@@ -61,8 +65,8 @@ sh paper/gen-plan-cut.sh "$SIZE"
 
 stage "end to end"
 bash e2e/build.sh
-bash e2e/data.sh
-python3 e2e/run.py
+E2E_CLICKBENCH=$CLICKBENCH bash e2e/data.sh
+python3 e2e/run.py ${CLICKBENCH:+--workloads clickbench,job}
 python3 e2e/micro.py --spec "$SIZE"
 
 uv run paper/check_inputs.py --update || true

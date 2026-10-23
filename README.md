@@ -30,6 +30,7 @@ through `sh` or `bash` and do not need them; to run single scripts as `./…`, f
 |---|---|
 | `--small`, `--medium`, `--large` | needles per grid cell: 1, 10 or 20 (211, 2,053 or 4,052 needles); default `--small` |
 | `--prefix-suffix` | also run the PREFIX/SUFFIX block (NEON only, about 50 min at `--small`) |
+| `--clickbench` | also run the end-to-end ClickBench queries over the full table, which no figure in the paper draws (NEON only, 14 GB more downloads, about 90 GB more disk) |
 | `--min-iters=N` | timed iterations per cell for every harness run, overriding each spec |
 
 Approximate wall clock:
@@ -58,7 +59,8 @@ inputs.
   `target/llvm-16`; without it that baseline is skipped.
 
 Disk: about 15 GB for the four columns and builds. The end-to-end block on NEON adds about
-100 GB of ClickBench and JOB data under `$E2E_DATA` (default `e2e/data`).
+9 GB of JOB and micro-column data under `$E2E_DATA` (default `e2e/data`), and `--clickbench`
+about 90 GB more for the full ClickBench table.
 
 ## Quick check on a fixture
 

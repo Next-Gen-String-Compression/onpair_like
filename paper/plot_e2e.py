@@ -18,7 +18,8 @@ results/e2e/<run>/. Writes `e2e-queries/` and `e2e-queries-speedup/`, from
 queries.csv, the queries whose SQL has a LIKE, and `e2e-scans/` and `e2e-scans-speedup/`, from scans.csv: every table scan whose filters, as the profile
 prints them, hold a LIKE (DuckDB rewrites one into contains, prefix, suffix or
 ~~), its operator time in the query's fastest run, CPU time over all threads.
-Each `clickbench.pdf` and `job.pdf`, and the runtime figures `legend.pdf`.
+Each `job.pdf`, `clickbench.pdf` when the run has ClickBench (e2e/run.py
+--workloads clickbench,job), and the runtime figures `legend.pdf`.
 `e2e-job-duckdb/` is the DuckDB pair on JOB alone, `queries.pdf` and
 `scans.pdf`, each a horizontal box on its own linear axis. Every figure is drawn
 twice: DuckDB's pair as run, and again from the pair with compressed equality on
@@ -184,14 +185,16 @@ def job_duckdb(data, suffix, out):
 
 
 def draw(data, suffix, out):
+    # A panel per workload the run holds: a default run has JOB only.
+    workloads = [(w, t) for w, t in WORKLOADS if (data["e2e-queries"]["workload"] == w).any()]
     for name, source, ylabel, speedup in FIGURES:
         d = data[source]
         if not speedup:
             summary(source + suffix, d)
         pf.clear_figure(name + suffix, out)
         titles = [f"{t}, {d.loc[d['workload'] == w, 'item'].nunique()} queries" if source == "e2e-queries" and not speedup else t
-                  for w, t in WORKLOADS]
-        panels = [panel(d, w, t, ylabel, speedup) for (w, _), t in zip(WORKLOADS, titles)]
+                  for w, t in workloads]
+        panels = [panel(d, w, t, ylabel, speedup) for (w, _), t in zip(workloads, titles)]
         # Each panel its own range, but for the scan speedups, which share one.
         axes = [ax for _, ax in panels]
         for ax in axes:
@@ -203,7 +206,7 @@ def draw(data, suffix, out):
             lims = [ax.get_ylim() for ax in axes]
             for ax in axes:
                 ax.set_ylim(min(lo for lo, _ in lims), max(hi for _, hi in lims))
-        pf.save_row(panels, name + suffix, [w for w, _ in WORKLOADS], 0.5 * pf.COLUMN_IN, out, unit=pf.COLUMN_IN)
+        pf.save_row(panels, name + suffix, [w for w, _ in workloads], 0.5 * pf.COLUMN_IN, out, unit=pf.COLUMN_IN)
         if not speedup:
             pf.save_legend(panels[-1][1], name + suffix, 4, out)
     job_duckdb(data, suffix, out)

@@ -15,7 +15,7 @@ one `gen-<block>.sh` that runs them, and one section of `INPUTS` in `config.py`.
 | `kernel` | - | NEON, AVX2, AVX-512 | - | `gen-kernel.sh`, `gen-kernel-fsst.sh` -> `data/matcher_*.csv` | `kernel-matcher` |
 | `plan-cut` | a micro spec | - | 512k | `gen-plan-cut.sh <size>` -> `results/plan-log/micro-<size>-<date>/` | `plan-cut`, `kernel-choice` |
 | `ablation` | `specs/ablation/{fast,medium}.toml` | NEON | 512k | `gen-ablation.sh <size>` -> `ablation-<size>-neon-<date>`; the `simd_cut_onpair_debug` and `simd_cut_fsst_debug` candidates with `"sorted": false` or `"uniform": true` | `no-sort`, `uniform-freq` |
-| `e2e` | - | NEON | engine default | `e2e/run.py` -> `results/e2e/<run>` | `e2e-job-duckdb` (also `e2e-*-speedup`, `e2e-queries`, `e2e-scans`, not in the paper) |
+| `e2e` | - | NEON | engine default | `e2e/run.py` -> `results/e2e/<run>`, JOB; with `--workloads clickbench,job` (and `E2E_CLICKBENCH=1 e2e/data.sh`) ClickBench too | `e2e-job-duckdb` (also `e2e-*-speedup`, `e2e-queries`, `e2e-scans`, not in the paper; their ClickBench panels only from a run with ClickBench) |
 | `e2e-micro` | `specs/micro/<size>.toml`'s suites | NEON | engine default | `e2e/micro.py [--spec <size>]` -> `results/e2e/e2e-micro-<size>-neon-<date>` | `e2e-micro-datasets`, `e2e-micro-pooled` |
 
 `llvm-simd`, the JIT-compiled pattern automaton, is in the micro and rows

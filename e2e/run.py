@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Runs every ClickBench and JOB query on the six systems of the end-to-end
-benchmark, best of `runs`, and keeps the plan of the fastest run.
+"""Runs every JOB query, and with `--workloads clickbench,job` every ClickBench
+query too, on the six systems of the end-to-end benchmark, best of `runs`, and
+keeps the plan of the fastest run. The paper's end-to-end figure is JOB's;
+ClickBench needs the full table, e2e/data.sh with E2E_CLICKBENCH=1.
 
     duckdb            the fork, FSST vectors on, compressed contains off
     duckdb-contains   the fork, FSST vectors on, compressed contains on
@@ -8,7 +10,7 @@ benchmark, best of `runs`, and keeps the plan of the fastest run.
     vortex            duckdb-vortex with vortex-duckdb 0.86.1
     vortex-onpair     duckdb-vortex with the OnPair revision
 
-    e2e/run.py [--runs 5] [--threads 4] [--name NAME]
+    e2e/run.py [--workloads job|clickbench,job] [--runs 5] [--threads 4] [--name NAME]
 
 Reads the binaries from e2e/build.sh and the files from e2e/data.sh
 ($E2E_DATA, default e2e/data). One shell per system and workload, so the
@@ -135,16 +137,21 @@ def same_result(a, b):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--workloads", default="job", help="comma-separated, of " + ", ".join(WORKLOADS))
     ap.add_argument("--runs", type=int, default=5)
     ap.add_argument("--threads", type=int, default=4)
     arch = "neon" if platform.machine() == "arm64" else platform.machine()
     ap.add_argument("--name", default=f"e2e-{arch}-{datetime.date.today()}")
     args = ap.parse_args()
+    chosen = args.workloads.split(",")
+    if unknown := set(chosen) - set(WORKLOADS):
+        ap.error(f"unknown workload {', '.join(sorted(unknown))}; there are {', '.join(WORKLOADS)}")
+    workloads = {w: v for w, v in WORKLOADS.items() if w in chosen}
     out = ROOT / "results" / "e2e" / args.name
     out.mkdir(parents=True, exist_ok=True)
 
     rows, scan_rows, missing = [], [], []
-    for workload in WORKLOADS:
+    for workload in workloads:
         for system in ARMS:
             start = datetime.datetime.now()
             plans = out / "plans" / system / workload
@@ -176,20 +183,22 @@ def main():
     # A result that differs from the DuckDB baseline's, compared as sorted lines:
     # ties under a LIMIT and float formatting differ between versions too.
     mismatches = [f"{system}/{workload}/{f.stem}"
-                  for workload, (files, _) in WORKLOADS.items() for f in files for system in list(ARMS)[1:]
+                  for workload, (files, _) in workloads.items() for f in files for system in list(ARMS)[1:]
                   if not same_result(out / "results" / "duckdb" / workload / f"{f.stem}.csv",
                                      out / "results" / system / workload / f"{f.stem}.csv")]
     pins = dict(re.findall(r"^(\w+)=(\S+)", (ROOT / "pins.env").read_text(), re.M))
     versions = {b: subprocess.run([str(BIN / b), "-noheader", "-list", "-c", "SELECT version()"],
                                   capture_output=True, text=True).stdout.strip()
                 for b in sorted({s[0] for s in ARMS.values()})}
-    used = [db for _, db in WORKLOADS.values()] + [f"{w}.{tag}.vortex" for w in ("hits", "imdb")
+    used = [db for _, db in workloads.values()] + [f"{w}.{tag}.vortex" for w in ("hits", "imdb")
+                                                    if {"hits": "clickbench", "imdb": "job"}[w] in workloads
                                                     for _, _, tag in SYSTEMS.values() if tag]
     data = {name: sum(f.stat().st_size for f in ([p] if p.is_file() else p.iterdir()))
             for name in used if (p := DATA / name).exists()}
     manifest = {"name": args.name, "date": str(datetime.date.today()), "machine": platform.machine(),
                 "cpu": subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True,
                                       text=True).stdout.strip(),
+                "workloads": list(workloads),
                 "threads": args.threads, "runs": args.runs, "pins": pins, "versions": versions,
                 "data_dir": str(DATA), "data_bytes": data,
                 "settings": {s: v[1] for s, v in ARMS.items()}, "segment_cache_mb": SEGMENT_CACHE_MB,
