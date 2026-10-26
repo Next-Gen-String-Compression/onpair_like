@@ -23,6 +23,7 @@
 #   hits.onpair.vortex         hits, written by the OnPair build, FSST skipped
 #   imdb.{0861,onpair}.vortex/<table>.vortex   the same for each JOB table
 #   micro.duckdb               the micro benchmark's four columns, FSST forced, by the fork
+#   micro.uncompressed.duckdb  the same columns stored uncompressed, by the fork
 #   micro.{0861,onpair}.vortex/<table>.vortex  the same for each of them
 #
 # The fork writes FSST segments with sorted symbol tables, which the
@@ -130,10 +131,11 @@ need imdb.onpair.vortex && write_vortex "$BIN/duckdb-vortex-onpair" imdb.duckdb 
 # The micro benchmark's four 2^20-row columns (datasets/prepare.py), one table
 # each with the column `data`, for e2e/micro.py.
 MICRO="clickbench_url amazon_title dbpedia_abstract imdb_charname"
-if need micro.duckdb; then
-  echo "== micro.duckdb"
-  rm -f "$DATA/micro.duckdb.tmp"
-  sql=""
+# write_micro_duckdb <target> <compression>: the columns written by the fork
+write_micro_duckdb() {
+  local dst=$1 compression=$2 sql=""
+  echo "== $dst"
+  rm -f "$DATA/$dst.tmp"
   for t in $MICRO; do
     sql+="CREATE TABLE dst.$t AS SELECT data FROM '$E2E/../datasets/raw/${t//_/-}-1mi/column.parquet';"$'\n'
   done
@@ -143,13 +145,16 @@ if need micro.duckdb; then
 SET threads=4;
 PRAGMA disable_progress_bar;
 SET storage_compatibility_version='v1.2.0';
-SET force_compression='fsst';
-ATTACH '$DATA/micro.duckdb.tmp' AS dst;
+SET force_compression='$compression';
+ATTACH '$DATA/$dst.tmp' AS dst;
 $sql
 CHECKPOINT dst;
 SQL
-  mv "$DATA/micro.duckdb.tmp" "$DATA/micro.duckdb"
-fi
+  mv "$DATA/$dst.tmp" "$DATA/$dst"
+}
+need micro.duckdb && write_micro_duckdb micro.duckdb fsst
+# Figure 15's uncompressed baseline: the same columns stored as plain strings.
+need micro.uncompressed.duckdb && write_micro_duckdb micro.uncompressed.duckdb uncompressed
 # write_micro_vortex <binary> <target> [env]: from the parquet columns, since the
 # Vortex builds cannot open a file the fork wrote
 write_micro_vortex() {
@@ -194,6 +199,7 @@ for t in $MICRO; do
   want=$("$DUCKDB" -noheader -list -c "SELECT count(*) FROM '$E2E/../datasets/raw/${t//_/-}-1mi/column.parquet'")
   for got in \
     "$("$DUCKDB" -readonly "$DATA/micro.duckdb" -noheader -list -c "SELECT count(*) FROM $t")" \
+    "$("$DUCKDB" -readonly "$DATA/micro.uncompressed.duckdb" -noheader -list -c "SELECT count(*) FROM $t")" \
     "$("$BIN/duckdb-vortex-0.86.1" -noheader -list -c "SELECT count(*) FROM '$DATA/micro.0861.vortex/$t.vortex'")" \
     "$("$BIN/duckdb-vortex-onpair" -noheader -list -c "SELECT count(*) FROM '$DATA/micro.onpair.vortex/$t.vortex'")"; do
     [ "$got" = "$want" ] || { echo "$t: $got rows, $want in its parquet"; exit 1; }

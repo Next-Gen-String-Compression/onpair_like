@@ -11,7 +11,10 @@ throughput the column's uncompressed bytes over that latency.
     uv run paper/plot_e2e_micro.py [--run RUN] [--uncompressed RUN] [--out DIR]
 
 The runs default to config.INPUTS["e2e-micro"] and are read from
-results/e2e/<run>/. Of the uncompressed run, which holds DuckDB and Vortex on
+results/e2e/<run>/. e2e/micro.py runs DuckDB on an uncompressed copy of the
+columns (duckdb-uncompressed) with the others; for a run without it the series
+comes from a separate run, --uncompressed or the config's `uncompressed`. Of
+that uncompressed run, which holds DuckDB and Vortex on
 uncompressed copies of the columns, DuckDB is drawn: Vortex validates every
 string as UTF-8 on each decode of an uncompressed column, which is most of
 its scan. Writes `e2e-micro-datasets/`, one
@@ -98,7 +101,12 @@ def main():
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
     runs = pf.inputs("e2e-micro")
-    d = load(args.run or runs["run"], args.uncompressed or runs["uncompressed"])
+    run = args.run or runs["run"]
+    # e2e/micro.py runs duckdb-uncompressed with the others; a run without it
+    # takes that series from a separate run, --uncompressed or the config's.
+    systems = set(pd.read_csv(ROOT / "results" / "e2e" / run / "needles.csv", usecols=["system"])["system"])
+    uncompressed = args.uncompressed or (None if "duckdb-uncompressed" in systems else runs["uncompressed"])
+    d = load(run, *([uncompressed] if uncompressed else []))
     print(d.pivot_table(index="dataset", columns="system", values="gbps", aggfunc="median").round(2).to_string())
 
     drawn = [k for k in DATASET_ORDER if k in set(d["dataset"])]

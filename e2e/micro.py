@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Runs the micro benchmark's needles end to end: one
 `SELECT count(*) FROM <column> WHERE data LIKE '%<needle>%'` per needle of a
-micro spec's suites, on the four systems of e2e/run.py, best of `runs`.
+micro spec's suites, on the four systems of e2e/run.py and on DuckDB over the
+same columns stored uncompressed (duckdb-uncompressed), best of `runs`.
 
     e2e/micro.py [--spec fast] [--runs 5] [--threads 1] [--name NAME]
 
-Reads the columns e2e/data.sh writes into $E2E_DATA (micro.duckdb and
-micro.{0861,onpair}.vortex) and the suites paper/specs/micro/<spec>.toml
+Reads the columns e2e/data.sh writes into $E2E_DATA (micro.duckdb,
+micro.uncompressed.duckdb and micro.{0861,onpair}.vortex) and the suites paper/specs/micro/<spec>.toml
 names. A needle is left out when it is not valid UTF-8, which a VARCHAR
 literal cannot hold, or holds `%`, `_` or a backslash: vortex-duckdb turns
 contains(x, n) into LIKE '%n%' without escaping n. The URL column also runs
@@ -36,7 +37,13 @@ import subprocess
 import tomllib
 from pathlib import Path
 
-from run import BIN, DATA, E2E, ROOT, SEGMENT_CACHE_MB, SYSTEMS, parse
+from run import BIN, DATA, E2E, ROOT, SEGMENT_CACHE_MB, SYSTEMS as E2E_SYSTEMS, parse
+
+# Figure 15's uncompressed baseline, DuckDB over the columns stored uncompressed
+# with the fork's decompress-and-search settings, then e2e/run.py's four.
+SYSTEMS = {"duckdb-uncompressed": E2E_SYSTEMS["duckdb"], **E2E_SYSTEMS}
+# The DuckDB file each DuckDB system reads, micro.duckdb unless named here.
+DUCKDB_FILE = {"duckdb-uncompressed": "micro.uncompressed.duckdb"}
 
 SPECS = ROOT / "paper" / "specs" / "micro"
 # ClickBench q20, SELECT COUNT(*) FROM hits WHERE URL LIKE '%google%', as one more needle of the URL column
@@ -94,7 +101,7 @@ def run_shell(system, dataset, queries, runs, threads, out):
             lines += [f"PRAGMA profiling_output='{profile}/{q['id'].split('.')[-1]}_{r}.json';",
                       ".timer on", sql, ".timer off"]
         lines += ["PRAGMA disable_profiling;"]
-    args = [str(BIN / binary)] + ([] if tag else ["-readonly", str(DATA / "micro.duckdb")])
+    args = [str(BIN / binary)] + ([] if tag else ["-readonly", str(DATA / DUCKDB_FILE.get(system, "micro.duckdb"))])
     env = {**os.environ, "VORTEX_SEGMENT_CACHE_MB": str(SEGMENT_CACHE_MB)} if tag else None
     proc = subprocess.run(args, input="\n".join(lines) + "\n", capture_output=True, text=True, env=env)
     (out / "logs").mkdir(exist_ok=True)
