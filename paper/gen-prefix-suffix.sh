@@ -18,7 +18,8 @@ case $SIZE in
   *) echo "unknown size: $SIZE (fast, medium, full)" >&2; exit 2 ;;
 esac
 
-NAME="prefix-suffix-$SIZE-neon-$(date +%F)"
+case $(uname -m) in arm64 | aarch64) ARCH=neon ;; *) ARCH=avx512 ;; esac
+NAME="prefix-suffix-$SIZE-$ARCH-$(date +%F)"
 (cd "$ROOT" && cargo build --release --bin bench && cargo build --release -p matcher-selection)
 (cd "$ROOT" && ./target/release/matcher-selection \
   --config experiments/matcher_selection/config-1mi.toml --per-cell "$PER_CELL" --bless)
