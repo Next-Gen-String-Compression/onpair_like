@@ -55,8 +55,8 @@ figures set the two machines side by side, so first copy one machine's `results/
 
 ```sh
 mkdir -p mac/paper
-scp -r mac-host:onpair_like/results mac/
-scp -r mac-host:onpair_like/paper/data mac/paper/
+scp -r mac-host:simd_cut/results mac/
+scp -r mac-host:simd_cut/paper/data mac/paper/
 sh paper/make-figures.sh --from mac
 ```
 
