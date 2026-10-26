@@ -183,6 +183,35 @@ fn simd_cut_onpair_gates_on_native_and_decode_strategies() {
     }
 }
 
+/// simd_cut_fsst and simd_cut_fsst_debug compile two revisions of the same C++
+/// sources into one binary, this one included; neither may run the other's
+/// code (candidates/simd_cut_fsst/cpp/localize.sh), so both gate clean here.
+#[cfg(all(feature = "cand-simd-cut-fsst", feature = "cand-simd-cut-fsst-debug"))]
+#[test]
+fn simd_cut_fsst_and_its_debug_copy_gate_side_by_side() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (ds_dir, suite_dir) = prepare_fixture(tmp.path());
+    let candidates = ["simd_cut_fsst", "simd_cut_fsst_debug"];
+    let spec_path = write_spec(tmp.path(), &ds_dir, &suite_dir, &candidates, "[0, 64]");
+    let loaded = LoadedSpec::load(&spec_path).unwrap();
+
+    for name in candidates {
+        let out_path = tmp.path().join(format!("{name}.jsonl"));
+        let mut writer = Writer::create(&out_path).unwrap();
+        let summary = runner::run_worker(&loaded, name, 0, 0, &mut writer, false).unwrap();
+        writer.finish().unwrap();
+        assert_eq!(summary.gate_failures, 0, "{name}: gate failures");
+        assert_eq!(summary.errors, 0, "{name}: errors");
+        let rows = read_rows(&out_path);
+        assert!(
+            rows.iter().any(|r| {
+                r["kind"] == "query" && r["strategy"] == "simd-cut" && r["status"] == "ok"
+            }),
+            "{name}: no simd-cut cell ran"
+        );
+    }
+}
+
 /// The gate canary: its "ok" strategy passes everywhere, its "wrong"
 /// strategy (bit flip on row 0) fails every cell loudly. A gate that has
 /// never fired is not known to work.
