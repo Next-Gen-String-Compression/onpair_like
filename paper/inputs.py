@@ -12,7 +12,7 @@ figures that read it are not drawn.
 
 Writes OUT.json, which paperfig.inputs and check_inputs.py read when
 PAPER_INPUTS names it, reports every entry on stderr, and prints on stdout the
-plot scripts whose inputs are all present, one per line.
+scripts whose inputs are all present, one per line.
 """
 
 import json
@@ -32,7 +32,7 @@ DATE = r"\d{4}-\d{2}-\d{2}[a-z]?"
 PAPER_SIZE = {"micro": "medium", "verify": "medium", "ablation": "medium", "plan-cut": "medium",
               "prefix-suffix": "fast", "e2e-micro": "fast"}
 ARCH = {"ARM, NEON": "neon", "x86, AVX-512": "avx512"}
-# The plot scripts make-figures.sh runs, in its order, each with the entries it reads.
+# The scripts make-figures.sh runs, in its order, each with the entries it reads.
 SCRIPTS = {
     "plot_fig1": lambda i: list(i["fig1"].values()),
     "plot_matcher": lambda i: [i["kernel"]["matcher"] or None],
@@ -45,6 +45,7 @@ SCRIPTS = {
     "plot_e2e": lambda i: [i["e2e"]["run"]],
     "plot_e2e_micro": lambda i: [i["e2e-micro"]["run"]],
     "plot_no_sort": lambda i: [i["ablation"]["run"]],
+    "table1": lambda i: [i["rows"]["rowgroup"]["run"] or i["rows"]["rowgroup-neon"]["run"]],
 }
 
 

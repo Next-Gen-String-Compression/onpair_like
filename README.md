@@ -63,7 +63,8 @@ sh paper/make-figures.sh --from mac
 `--from` copies that folder's runs and sweeps into this tree and loads them. For every figure,
 `make-figures.sh` then takes the newest run of its block and machine in this tree
 (`paper/inputs.py`, of the needle size the paper uses when there is one), checks them with
-`paper/check_inputs.py` and draws into `paper/out/figures/` (`--out DIR`). With one machine's
+`paper/check_inputs.py` and draws into `paper/out/figures/` (`--out DIR`), where it also
+writes Table 1 as `table1.txt` (`paper/table1.py`, from the row group run). With one machine's
 runs it draws the figures those feed and names the others. The kernel figure takes the shipped
 sweep of a machine you did not run, and the phase-shares split CSVs in `paper/data/` cover the
 medium needle set only. In a tree holding the authors' runs, which `paper/config.py` pins and

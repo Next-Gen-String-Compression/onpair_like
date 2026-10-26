@@ -1,8 +1,9 @@
 #!/usr/bin/env sh
-# Redraws every figure the preprint includes: from the runs paper/config.py pins
-# when this tree holds them all (the authors'), checked first and stopping on
-# any finding; else from the newest runs this tree holds (paper/inputs.py),
-# every figure their machines' runs feed, listing the others as skipped.
+# Redraws every figure the preprint includes and prints Table 1: from the runs
+# paper/config.py pins when this tree holds them all (the authors'), checked
+# first and stopping on any finding; else from the newest runs this tree holds
+# (paper/inputs.py), every figure their machines' runs feed, listing the others
+# as skipped.
 #
 #   sh paper/make-figures.sh [--from DIR] [--pinned | --latest] [--out DIR]
 #
@@ -22,11 +23,11 @@ while [ $# -gt 0 ]; do
     --pinned) MODE=pinned; shift ;;
     --latest) MODE=latest; shift ;;
     --out) OUT=$2; shift 2 ;;
-    *) sed -n '2,15p' "$0"; exit 2 ;;
+    *) sed -n '2,16p' "$0"; exit 2 ;;
   esac
 done
 SCRIPTS="plot_fig1 plot_matcher plot_phase_shares plot_micro plot_prefix_suffix plot_selection
-  plot_plan_cut plot_kernel_choice plot_e2e plot_e2e_micro plot_no_sort"
+  plot_plan_cut plot_kernel_choice plot_e2e plot_e2e_micro plot_no_sort table1"
 
 if [ -n "$FROM" ]; then
   for d in results/paper results/plan-log results/e2e; do

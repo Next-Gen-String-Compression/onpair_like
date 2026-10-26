@@ -10,7 +10,7 @@ one `gen-<block>.sh` that runs them, and one section of `INPUTS` in `config.py`.
 | --- | --- | --- | --- | --- | --- |
 | `micro` | `specs/micro/{fast,medium,full}.toml` | NEON, AVX-512 | 512k | `gen-micro.sh <size> [neon\|avx512]` -> `micro-<size>-<arch>-<date>` | `micro-arch`, `micro-datasets`, `micro-matrix`, `false-positives` |
 | `prefix-suffix` | `specs/prefix-suffix/{fast,medium,full}.toml` | NEON | 512k | `gen-prefix-suffix.sh <size>` -> `prefix-suffix-<size>-neon-<date>`, generating missing suites first | `micro-prefix-suffix` |
-| `rows` | `specs/rows/{rowgroup,rowgroup-llvm,selection}.toml`, `rowgroup-neon.toml` | AVX-512; `rowgroup-neon` on NEON | whole, 512k .. 2k (LLVM to 32k); selection: whole, 2^-9 .. 2^-1 | `gen-rows.sh` -> `{rowgroup,rowgroup-llvm,selection}-fast-avx512-<date>` on x86, `rowgroup-fast-neon-<date>` on arm64 | `micro-rows` |
+| `rows` | `specs/rows/{rowgroup,rowgroup-llvm,selection}.toml`, `rowgroup-neon.toml` | AVX-512; `rowgroup-neon` on NEON | whole, 512k .. 2k (LLVM to 32k); selection: whole, 2^-9 .. 2^-1 | `gen-rows.sh` -> `{rowgroup,rowgroup-llvm,selection}-fast-avx512-<date>` on x86, `rowgroup-fast-neon-<date>` on arm64 | `micro-rows`; Table 1 (`table1.py`) from `rowgroup` or `rowgroup-neon` |
 | `phases` | `specs/phases/verify-<size>.toml` | NEON, AVX-512 | 512k | `gen-phases.sh <size> [neon\|avx512]` -> `verify-<size>-<arch>-<date>` | `phase-shares` |
 | `kernel` | - | NEON, AVX2, AVX-512 | - | `gen-kernel.sh`, `gen-kernel-fsst.sh` -> `data/matcher_*.csv` | `kernel-matcher` |
 | `plan-cut` | a micro spec | - | 512k | `gen-plan-cut.sh <size>` -> `results/plan-log/micro-<size>-<date>/` | `plan-cut`, `kernel-choice` |
