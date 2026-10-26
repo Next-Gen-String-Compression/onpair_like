@@ -43,10 +43,34 @@ Approximate wall clock:
 The size flag changes the micro, phases, ablation, plan-cut and end-to-end micro blocks. The
 row group block always uses the small needle set and takes about 3.5 h on AVX-512 by itself.
 
-Runs land in `results/` and kernel sweeps in `paper/data/`. With both machines' results in one
-tree, `sh paper/make-figures.sh --out DIR` checks the inputs `paper/config.py` names and draws
-every figure. [paper/README.md](paper/README.md) describes each figure block, its specs and its
-inputs.
+Runs land in `results/` and kernel sweeps in `paper/data/`. [paper/README.md](paper/README.md)
+describes each figure block, its specs and its inputs.
+
+### Drawing the figures
+
+`INPUTS` in `paper/config.py` names the runs, sweeps and logs each figure is drawn from. As
+shipped they are the authors' runs, which the artifact does not include, so
+`paper/check_inputs.py` reports them missing and `paper/make-figures.sh` stops. To draw the
+figures from your own runs:
+
+1. Gather both machines' runs in one tree: copy the Mac's `results/paper/`, `results/plan-log/`
+   and `results/e2e/` folders and its `paper/data/matcher_*arm64*.csv` sweeps next to the x86
+   ones, then load the benchmark runs into `results/bench.duckdb` with
+   `.venv/bin/python tools/results-db/load.py results/paper/*` (the end-to-end figures read
+   `results/e2e/` directly).
+2. Replace each run name in `INPUTS` with yours of the same block and machine: every
+   `paper/gen-*.sh` prints the runs it wrote (`-> run <name>`), `gen-plan-cut.sh` its log
+   directory, and `e2e/run.py` and `e2e/micro.py` their `results/e2e/<name>`. The sweeps need
+   no edit: `uv run paper/check_inputs.py --update` moves each to the newest CSV of its name.
+3. `uv run paper/check_inputs.py` lists what is still missing or mixed; once it reports every
+   input present, `sh paper/make-figures.sh --out DIR` draws the figures.
+
+The paper draws the micro, phases, ablation and plan-cut figures from the medium needle set
+(`--medium`), and Figure 1, the row group figures and the end-to-end micro figure from the small
+one (after a `--medium` run, `python3 e2e/micro.py --spec fast`). The phase-shares split CSVs in
+`paper/data/` cover the medium set only. `make-figures.sh` also draws the PREFIX/SUFFIX figure,
+which the paper does not include, from a `--prefix-suffix` run. Each plot script also draws a
+single figure from a run given with `--run`, `--data` or `--log`.
 
 ### Requirements
 
