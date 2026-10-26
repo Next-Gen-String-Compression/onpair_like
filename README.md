@@ -97,13 +97,13 @@ or `--log`.
   libncurses-dev` on Ubuntu), which the script installs when `sudo` needs no password; it
   warns when the baseline was not built.
 
-Disk: about 15 GB for the four columns and builds. The end-to-end block on NEON adds about
-9 GB of JOB and micro-column data under `$E2E_DATA` (default `e2e/data`), and `--clickbench`
+Disk: about 15 GB for the four columns and builds. The end-to-end block on NEON adds around
+15 to 20 GB, its data under `$E2E_DATA` (default `e2e/data`) and its builds, and `--clickbench`
 about 90 GB more for the full ClickBench table.
 
 ## Quick check on a fixture
 
-A few seconds, no downloads:
+A few minutes, no dataset downloads:
 
 ```sh
 cargo build --release
