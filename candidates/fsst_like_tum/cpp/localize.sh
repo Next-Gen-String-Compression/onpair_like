@@ -1,23 +1,27 @@
 #!/bin/sh
-# Localize the FSST / FSST-LIKE symbols in the combined relocatable object so
-# this candidate's calin2110 FSST fork cannot clash with the `fsst` candidate's
-# cwida FSST symbols at the final harness link — WITHOUT touching weak COMDAT
-# symbols.
+# Keep this candidate's FSST-LIKE code and its calin2110 FSST fork to itself at
+# the final harness link, where the `fsst` candidate brings cwida's FSST under
+# the same names (libfsst::SymbolTable's shared_ptr, the QSymbol hash table):
+# strong globals localized, weak symbols and COMDAT group signatures suffixed
+# .lb_fsst_like_tum, as simd_cut_fsst/cpp/localize.sh (which says why), with
+# one entry point left global.
 #
-# We localize only STRONG-global defined symbols (nm types T/D/B), excluding the
-# single entry point. Those are the real hard clashers (duplicate strong defs),
-# and being non-COMDAT they localize cleanly. Weak COMDAT symbols (C++ template
-# instantiations, vtables, typeinfo, inline fsst_decompress, libstdc++ shared_ptr
-# machinery) are LEFT ALONE: a blanket `objcopy --keep-global-symbol=<entry>`
-# demotes those to local, which corrupts their group sections — the final linker
-# discards them and intra-object references dangle. lld tolerates that for this
-# archive but crashes the co-linked `fsst` candidate; bfd refuses to link at all.
-# Localizing by binding (not by name) keeps the weak COMDAT groups valid, so the
-# result links cleanly under both lld and bfd. See DESIGN.md §17.
+# The weak COMDAT symbols are renamed rather than localized: a blanket
+# `objcopy --keep-global-symbol=<entry>` demotes them to local, which corrupts
+# their group sections -- the final linker discards them and intra-object
+# references dangle. lld tolerated that for this archive but crashed the
+# co-linked `fsst` candidate; bfd refused to link at all. Renamed, they stay
+# valid groups. The LLVM symbols this object only references stay as they are.
+# See DESIGN.md §17.
 set -eu
 obj="$1"
-list="$obj.localize"
+tag=lb_fsst_like_tum
 nm --defined-only "$obj" \
-  | awk '($2=="T" || $2=="D" || $2=="B") && $3 != "lb_candidate_fsst_like_tum" { print $3 }' \
-  | sort -u > "$list"
-objcopy --localize-symbols="$list" "$obj"
+  | awk '($2=="W" || $2=="V" || $2=="u") { print $3 }' > "$obj.rename"
+readelf -gW "$obj" | awk -F'[][]' '/^COMDAT group section/ { print $4 }' >> "$obj.rename"
+sort -u "$obj.rename" | awk -v tag="$tag" '{ print $1, $1 "." tag }' > "$obj.redefine"
+objcopy --redefine-syms="$obj.redefine" "$obj"
+nm --defined-only "$obj" \
+  | awk '($2=="T" || $2=="D" || $2=="B" || $2=="R") && $3 != "lb_candidate_fsst_like_tum" { print $3 }' \
+  | sort -u > "$obj.localize"
+objcopy --localize-symbols="$obj.localize" "$obj"

@@ -156,8 +156,8 @@ set_source_files_properties(${fsst_fork_SOURCE_DIR}/fsst_avx512.cpp
     PROPERTIES COMPILE_FLAGS "-O1")
 
 # Combine all objects into one relocatable object, exporting ONLY the entry
-# point; every FSST / FSST-LIKE symbol becomes local, so this archive cannot
-# clash with the `fsst` candidate's cwida FSST symbols.
+# point; no other FSST / FSST-LIKE symbol keeps a name another object has, so
+# this archive cannot clash with the `fsst` candidate's cwida FSST symbols.
 set(COMBINED ${CMAKE_CURRENT_BINARY_DIR}/lb_fsst_like_tum_combined${CMAKE_CXX_OUTPUT_EXTENSION})
 # DEPENDS names the object files as well as the target: a bare target name is
 # only an ordering dependency, so an edited source would recompile the objects
@@ -169,14 +169,13 @@ if(APPLE)
                 $<TARGET_OBJECTS:fl_objs> -o ${COMBINED}
         DEPENDS fl_objs $<TARGET_OBJECTS:fl_objs> COMMAND_EXPAND_LISTS VERBATIM)
 else()
-    # Combine all objects into one relocatable object, then localize the
-    # calin2110 FSST-fork symbols so they can't clash with the `fsst` candidate's
-    # cwida FSST symbols at the final harness link. localize.sh localizes only
-    # strong-global (non-COMDAT) defs and leaves weak COMDAT symbols (C++
-    # templates, vtables, typeinfo, inline fsst_decompress, libstdc++ machinery)
-    # intact — a blanket `objcopy --keep-global-symbol=<entry>` demotes those weak
-    # COMDAT symbols to local, corrupting their group sections (lld tolerates it
-    # but crashes the co-linked fsst candidate; bfd refuses). See localize.sh.
+    # Combine all objects into one relocatable object, then keep the calin2110
+    # FSST-fork symbols from clashing with the `fsst` candidate's cwida FSST
+    # symbols at the final harness link: localize.sh localizes the strong
+    # globals and renames the weak COMDAT symbols (C++ templates, vtables,
+    # typeinfo, inline fsst_decompress, libstdc++ machinery) with this
+    # candidate's suffix, as demoting those to local corrupts their group
+    # sections. See localize.sh.
     add_custom_command(OUTPUT ${COMBINED}
         COMMAND ${CMAKE_LINKER} -r $<TARGET_OBJECTS:fl_objs> -o ${COMBINED}
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/localize.sh ${COMBINED}
