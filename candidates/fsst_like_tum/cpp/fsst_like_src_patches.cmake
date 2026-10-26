@@ -114,7 +114,8 @@ set(AUT_H include/like_pattern_automaton.hpp)
 set(AUT_CPP src/like_pattern_automaton.cpp)
 file(READ ${AUT_H} aut_h)
 file(READ ${AUT_CPP} aut_cpp)
-string(FIND "${aut_h}" "onpair_like patch 3" aut_already)
+# The marker below, also under its earlier name in a build patched before.
+string(FIND "${aut_h}" "patch 3. Per skip state" aut_already)
 if(aut_already EQUAL -1)
     set(H1 [=[#include <optional>
 ]=])
@@ -133,7 +134,7 @@ if(aut_already EQUAL -1)
         AutomatonTable(]=])
     set(H2R [=[        size_t N;
 
-        // onpair_like patch 3. Per skip state: the bytes that leave it when
+        // fsst_like_tum patch 3. Per skip state: the bytes that leave it when
         // there are at most 16 (simdCount 0xFF: more), and the same set as a
         // 16x16 bit table, rows by low nibble, for high nibbles 0..7 (nibLow)
         // and 8..15 (nibHigh).

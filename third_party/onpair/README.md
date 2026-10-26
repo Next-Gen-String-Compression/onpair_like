@@ -77,6 +77,5 @@ for a larger one, up to 2^16.
 
 - [In-memory interchange format](docs/interchange-format.md)
 - [OnPair: Short Strings Compression for Fast Random Access](https://arxiv.org/abs/2508.02280)
-- [C++ reference implementation](https://github.com/gargiulofrancesco/onpair_cpp)
 
 OnPair is licensed under [Apache-2.0](LICENSE).

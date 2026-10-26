@@ -10,10 +10,9 @@
 #   - `expected_checksum` is the canonical dataset identity (`bench ingest`'s
 #     logical xxh3 over rows). Two machines that end with the same value have
 #     bit-identical benchmark inputs, whatever the raw transport did.
-#   - Extraction rules mirror the OnPair compression paper's benchmark
-#     (github.com/gargiulofrancesco/compression_benchmark,
-#     tools/datasets/*.py), so the row streams match it:
-#     original file order, no shuffling, same field/strip/skip rules.
+#   - Extraction rules mirror the OnPair compression paper's benchmark, so
+#     the row streams match it: original file order, no shuffling, same
+#     field/strip/skip rules.
 #
 # The paper's 2^20-row roster: one row count for every column, so a needle
 # grid means the same thing across them.
