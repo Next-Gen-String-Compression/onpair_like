@@ -39,7 +39,8 @@ export RUSTFLAGS="-C target-cpu=native"
 
 # LLVM 14-16 for fsst_like_tum's compiled backends (llvm, llvm-simd), which distributions after 2024
 # no longer package: an installed one, else LLVM's 16.0.4 release in target/llvm-16, whose static
-# libraries link zstd. Optional: without it those backends are skipped.
+# libraries link zstd, libxml2 and libtinfo: without their -dev packages fsst_like_tum leaves
+# the backends out. Optional: without LLVM those backends are skipped.
 stage "LLVM 16 (optional)"
 if [ -z "${LLVM_ROOT:-}" ]; then
   for v in 16 15 14; do
@@ -56,13 +57,22 @@ if [ -z "${LLVM_ROOT:-}" ]; then
     rm -rf "$LLVM"
   fi
 fi
-if [ -n "${LLVM_ROOT:-}" ] && ! ldconfig -p | grep -q 'libzstd\.so '; then
-  sudo -n apt-get install -y -q libzstd-dev >/dev/null 2>&1 || true
+if [ -n "${LLVM_ROOT:-}" ]; then
+  for lib in zstd xml2 tinfo; do
+    ldconfig -p | grep "lib$lib\.so " >/dev/null && continue
+    sudo -n apt-get install -y -q libzstd-dev libxml2-dev libncurses-dev >/dev/null 2>&1 || true
+    break
+  done
 fi
 echo "LLVM: ${LLVM_ROOT:-none, the llvm and llvm-simd backends are skipped}"
 
 stage "build and test"
 cargo build --release --workspace
+if [ -n "${LLVM_ROOT:-}" ] && ! ./target/release/bench list | grep '"llvm-simd"' >/dev/null; then
+  echo "warning: LLVM is at $LLVM_ROOT but the llvm-simd baseline was not built: install" \
+    "libzstd-dev libxml2-dev libncurses-dev, run cargo clean --release -p lb-cand-fsst-like-tum" \
+    "and run this script again, or its series stay empty" >&2
+fi
 cargo test --release --workspace
 
 stage "the four columns"

@@ -64,7 +64,10 @@ inputs.
   which rustup installs on first use
 - on x86, optionally LLVM 14 to 16 for the compiled-automaton baseline (`llvm-simd`).
   `reproduce-avx512.sh` uses an installed one or downloads LLVM's 16.0.4 release into
-  `target/llvm-16`; without it that baseline is skipped.
+  `target/llvm-16`; without it that baseline is skipped. The release's static libraries also
+  need the zstd, libxml2 and ncurses development packages (`libzstd-dev libxml2-dev
+  libncurses-dev` on Ubuntu), which the script installs when `sudo` needs no password; it
+  warns when the baseline was not built.
 
 Disk: about 15 GB for the four columns and builds. The end-to-end block on NEON adds about
 9 GB of JOB and micro-column data under `$E2E_DATA` (default `e2e/data`), and `--clickbench`
