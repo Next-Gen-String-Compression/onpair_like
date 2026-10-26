@@ -140,7 +140,7 @@ def main():
     ap.add_argument("--workloads", default="job", help="comma-separated, of " + ", ".join(WORKLOADS))
     ap.add_argument("--runs", type=int, default=5)
     ap.add_argument("--threads", type=int, default=4)
-    arch = "neon" if platform.machine() == "arm64" else platform.machine()
+    arch = "neon" if platform.machine() in ("arm64", "aarch64") else platform.machine()
     ap.add_argument("--name", default=f"e2e-{arch}-{datetime.date.today()}")
     args = ap.parse_args()
     chosen = args.workloads.split(",")

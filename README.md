@@ -74,7 +74,8 @@ or `--log`.
 
 ### Requirements
 
-- hardware: for `reproduce-neon.sh` an arm64 Mac (the paper's is an Apple M4 Pro); for
+- hardware: for `reproduce-neon.sh` an arm64 host, macOS or Linux (the paper's is an Apple M4
+  Pro; on Linux, e.g. an AWS Graviton instance); for
   `reproduce-avx512.sh` an x86-64 Linux host with AVX-512BW, such as the paper's AWS
   `c7a.xlarge` (AMD EPYC 9R14). The script refuses a host without AVX-512BW: the AVX-512
   kernels are compile-time gated, so such a host would measure other kernels under the
@@ -85,7 +86,9 @@ or `--log`.
 - a TeX installation with the `libertine`, `zi4` and `newtxmath` packages, to draw figures
 - for the end-to-end block on NEON, `ninja` and `flatc`, the FlatBuffers compiler the OnPair
   Vortex build runs (`brew install ninja flatbuffers`); the Vortex folders pin Rust 1.98,
-  which rustup installs on first use
+  which rustup installs on first use. On Linux the block also needs libclang with its
+  headers (`libclang-dev`), and `flatc` 25.12.19, the version of the `flatbuffers` crate the
+  Vortex build locks, as a release binary or built from the `v25.12.19` tag with CMake
 - on x86, optionally LLVM 14 to 16 for the compiled-automaton baseline (`llvm-simd`).
   `reproduce-avx512.sh` uses an installed one or downloads LLVM's 16.0.4 release into
   `target/llvm-16`; without it that baseline is skipped. The release's static libraries also

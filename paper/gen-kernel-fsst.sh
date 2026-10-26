@@ -14,7 +14,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 FSST=$(cd "$HERE/../third_party/fsst" && pwd)
 ONPAIR=$(cd "$HERE/../third_party/onpair" && pwd)
 BUILD="$HERE/../target/fsst-search"
-MACHINE=$(uname -m)
+# Linux calls arm64 aarch64; the sweeps take the name config.py and inputs.py look for.
+MACHINE=$(uname -m | sed 's/^aarch64$/arm64/')
 DATE=$(date +%F)
 DATA="$FSST/search/prefilter/scan/bench/data"
 

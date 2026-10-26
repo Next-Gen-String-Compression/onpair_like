@@ -1,12 +1,13 @@
 #!/usr/bin/env sh
-# Runs every Figure 1 bar on the M4 Pro, specs/fig1/*.toml: LZ4, uncompressed,
-# OnPair16 and FSST SIMD cut, and FSST decompress and automaton (selection.toml).
+# Runs every Figure 1 bar on arm64 (the paper's M4 Pro), specs/fig1/*.toml:
+# LZ4, uncompressed, OnPair16 and FSST SIMD cut, and FSST decompress and
+# automaton (selection.toml).
 #
 #   paper/gen-fig1.sh
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT="$HERE/.."
-case $(uname -m) in arm64) ;; *) echo "gen-fig1.sh runs on the M4 Pro only" >&2; exit 2 ;; esac
+case $(uname -m) in arm64 | aarch64) ;; *) echo "gen-fig1.sh runs on arm64 (NEON) only" >&2; exit 2 ;; esac
 
 DATE=$(date +%F)
 (cd "$ROOT" && cargo build --release --bin bench)

@@ -13,7 +13,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/.." && pwd)
 . "$ROOT/pins.env"
 DATE=$(date +%F)
-MACHINE=$(uname -m)
+# Linux calls arm64 aarch64; the sweeps take the name config.py and inputs.py look for.
+MACHINE=$(uname -m | sed 's/^aarch64$/arm64/')
 
 ONPAIR="$ROOT/third_party/onpair"
 

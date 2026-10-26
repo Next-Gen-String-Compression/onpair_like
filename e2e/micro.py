@@ -119,7 +119,7 @@ def main():
     ap.add_argument("--spec", default="fast")
     ap.add_argument("--runs", type=int, default=5)
     ap.add_argument("--threads", type=int, default=1)
-    arch = "neon" if platform.machine() == "arm64" else platform.machine()
+    arch = "neon" if platform.machine() in ("arm64", "aarch64") else platform.machine()
     ap.add_argument("--name")
     args = ap.parse_args()
     name = args.name or f"e2e-micro-{args.spec}-{arch}-{datetime.date.today()}"

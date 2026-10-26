@@ -1,6 +1,6 @@
 #!/bin/bash
-# Reproduces the paper's NEON measurements on an arm64 Mac (the M4 Pro), end to
-# end from a clone: build and tests, the four
+# Reproduces the paper's NEON measurements on arm64, macOS or Linux (the paper's
+# is an M4 Pro), end to end from a clone: build and tests, the four
 # columns, the needle suites, every block the paper runs on NEON, and the
 # end-to-end runs. reproduce-avx512.sh measures the x86 side; with both
 # machines' results/ and paper/data in one tree, paper/make-figures.sh draws
@@ -20,9 +20,9 @@
 # --min-iters=N sets every harness run's timed iterations per cell.
 #
 # Needs a Rust toolchain, a C++ compiler, cmake, python3, uv and the duckdb
-# CLI, and for the end-to-end block ninja and flatc. Downloads about 7 GB for
-# the four columns and 2 GB of JOB data for the end-to-end runs, into datasets/
-# and $E2E_DATA (default e2e/data), which then holds about 9 GB.
+# CLI, and for the end-to-end block ninja, flatc and, on Linux, libclang-dev.
+# Downloads about 7 GB for the four columns and 2 GB of JOB data for the
+# end-to-end runs, into datasets/ and $E2E_DATA (default e2e/data, about 9 GB).
 set -euo pipefail
 cd "$(dirname "$0")"
 

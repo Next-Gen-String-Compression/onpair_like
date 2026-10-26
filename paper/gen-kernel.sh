@@ -16,7 +16,8 @@
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 ONPAIR=$(cd "$HERE/../third_party/onpair" && pwd)
-MACHINE=$(uname -m)
+# Linux calls arm64 aarch64; the sweeps take the name config.py and inputs.py look for.
+MACHINE=$(uname -m | sed 's/^aarch64$/arm64/')
 DATE=$(date +%F)
 DATA="$ONPAIR/bench/data/ch/hits"
 RAW="$HERE/../datasets/raw/clickbench"
