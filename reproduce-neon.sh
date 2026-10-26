@@ -7,12 +7,14 @@
 # every figure.
 #
 #   bash reproduce-neon.sh [--small|--medium|--large] [--prefix-suffix] [--clickbench] [--min-iters=N]
-#       default: --small, each spec's own min_iters
+#       default: --medium, the needle set the paper draws from; each spec's own min_iters
 #
-# The size picks the needle set, the same four columns and grid cells with
-# 1, 10 or 20 needles per cell. The micro run alone takes about 0.5, 4.5 and
+# The size picks the needle set of the micro, phases, ablation and plan-cut
+# blocks, the same four columns and grid cells with 1, 10 or 20 needles per
+# cell; Figure 1, the row group block and the end-to-end micro block always take
+# 1, so that set is generated too. The micro run alone takes about 0.5, 4.5 and
 # 8.8 hours. The ablation has no large set and runs medium there.
-# --prefix-suffix also runs the PREFIX/SUFFIX block, about 50 minutes at --small.
+# --prefix-suffix also runs the PREFIX/SUFFIX block, about 50 minutes, on 1 per cell.
 # --clickbench also runs the end-to-end ClickBench queries over the full table,
 # which no figure in the paper draws: 14 GB more downloads, about 90 GB more disk.
 # --min-iters=N sets every harness run's timed iterations per cell.
@@ -25,7 +27,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 case $(uname -m) in arm64 | aarch64) ;; *) echo "reproduce-neon.sh runs on arm64" >&2; exit 2 ;; esac
-SIZE=fast PER_CELL=1 ABLATION=fast PREFIX_SUFFIX= CLICKBENCH=
+SIZE=medium PER_CELL=10 ABLATION=medium PREFIX_SUFFIX= CLICKBENCH=
 for arg in "$@"; do
   case $arg in
     --small) SIZE=fast PER_CELL=1 ABLATION=fast ;;
@@ -34,7 +36,7 @@ for arg in "$@"; do
     --prefix-suffix) PREFIX_SUFFIX=1 ;;
     --clickbench) CLICKBENCH=1 ;;
     --min-iters=*) export MIN_ITERS=${arg#--min-iters=} ;;
-    *) sed -n '2,23p' "$0"; exit 2 ;;
+    *) sed -n '2,25p' "$0"; exit 2 ;;
   esac
 done
 
@@ -48,14 +50,16 @@ stage "the four columns"
 [ -x .venv/bin/python ] || { python3 -m venv .venv && .venv/bin/pip install --quiet -r datasets/requirements.txt; }
 .venv/bin/python datasets/prepare.py --all
 
-stage "needle suites, $PER_CELL per cell"
-./target/release/matcher-selection --config experiments/matcher_selection/config-1mi.toml --per-cell "$PER_CELL" --bless
+stage "needle suites, 1 and $PER_CELL per cell"
+for n in $(printf '%s\n' 1 "$PER_CELL" | sort -un); do
+  ./target/release/matcher-selection --config experiments/matcher_selection/config-1mi.toml --per-cell "$n" --bless
+done
 
 stage "benchmark blocks ($SIZE)"
 # Every script runs through its interpreter: the anonymized download drops the
 # executable bits.
 sh paper/gen-micro.sh "$SIZE" neon
-[ -z "$PREFIX_SUFFIX" ] || sh paper/gen-prefix-suffix.sh "$SIZE"
+[ -z "$PREFIX_SUFFIX" ] || sh paper/gen-prefix-suffix.sh fast
 sh paper/gen-rows.sh
 sh paper/gen-phases.sh "$SIZE" neon
 sh paper/gen-ablation.sh "$ABLATION"
@@ -67,6 +71,9 @@ stage "end to end"
 bash e2e/build.sh
 E2E_CLICKBENCH=$CLICKBENCH bash e2e/data.sh
 python3 e2e/run.py ${CLICKBENCH:+--workloads clickbench,job}
-python3 e2e/micro.py --spec "$SIZE"
+# Figure 15 draws the end-to-end micro block from 1 needle per cell.
+python3 e2e/micro.py --spec fast
 
-uv run paper/check_inputs.py --update || true
+stage "done"
+echo "The numbers are in results/ and paper/data/. With the AVX-512 host's runs, copied"
+echo "into a folder here, sh paper/make-figures.sh --from <that folder> draws the figures."

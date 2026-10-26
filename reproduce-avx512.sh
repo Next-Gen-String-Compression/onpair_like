@@ -7,11 +7,13 @@
 # paper/data in one tree, paper/make-figures.sh draws every figure.
 #
 #   bash reproduce-avx512.sh [--small|--medium|--large] [--min-iters=N]
-#       default: --small, each spec's own min_iters
+#       default: --medium, the needle set the paper draws from; each spec's own min_iters
 #
-# The size picks the needle set, the same four columns and grid cells with
-# 1, 10 or 20 needles per cell. The micro run alone takes about 0.6, 5.3 and
-# 10.4 hours. --min-iters=N sets every harness run's timed iterations per cell.
+# The size picks the needle set of the micro and phases blocks, the same four
+# columns and grid cells with 1, 10 or 20 needles per cell; the row group block
+# always takes 1, so that set is generated too. The micro run alone takes about
+# 0.6, 5.3 and 10.4 hours. --min-iters=N sets every harness run's timed
+# iterations per cell. Draw the figures with paper/make-figures.sh (README.md).
 #
 # Needs a Rust toolchain, a C++ compiler, cmake, python3, uv, the duckdb CLI,
 # and LLVM 14-16 for the `llvm-simd` baseline. Downloads about 7 GB for the
@@ -21,14 +23,14 @@ cd "$(dirname "$0")"
 
 [ "$(uname -m)" = x86_64 ] && grep -q avx512bw /proc/cpuinfo \
   || { echo "reproduce-avx512.sh needs an x86_64 host with AVX-512BW, such as an AWS c7a.xlarge (README.md, Requirements)" >&2; exit 2; }
-SIZE=fast PER_CELL=1
+SIZE=medium PER_CELL=10
 for arg in "$@"; do
   case $arg in
     --small) SIZE=fast PER_CELL=1 ;;
     --medium) SIZE=medium PER_CELL=10 ;;
     --large) SIZE=full PER_CELL=20 ;;
     --min-iters=*) export MIN_ITERS=${arg#--min-iters=} ;;
-    *) sed -n '2,18p' "$0"; exit 2 ;;
+    *) sed -n '2,20p' "$0"; exit 2 ;;
   esac
 done
 
@@ -79,8 +81,10 @@ stage "the four columns"
 [ -x .venv/bin/python ] || { python3 -m venv .venv && .venv/bin/pip install --quiet -r datasets/requirements.txt; }
 .venv/bin/python datasets/prepare.py --all
 
-stage "needle suites, $PER_CELL per cell"
-./target/release/matcher-selection --config experiments/matcher_selection/config-1mi.toml --per-cell "$PER_CELL" --bless
+stage "needle suites, 1 and $PER_CELL per cell"
+for n in $(printf '%s\n' 1 "$PER_CELL" | sort -un); do
+  ./target/release/matcher-selection --config experiments/matcher_selection/config-1mi.toml --per-cell "$n" --bless
+done
 
 stage "benchmark blocks ($SIZE)"
 # Every script runs through its interpreter: the anonymized download drops the
@@ -91,4 +95,6 @@ sh paper/gen-phases.sh "$SIZE" avx512
 # Runs the AVX2 sweep with a default build and the AVX-512 one native itself.
 env -u RUSTFLAGS sh paper/reproduce-kernel.sh
 
-uv run paper/check_inputs.py --update || true
+stage "done"
+echo "The numbers are in results/ and paper/data/. With the Mac's runs, copied into"
+echo "a folder here, sh paper/make-figures.sh --from <that folder> draws the figures."

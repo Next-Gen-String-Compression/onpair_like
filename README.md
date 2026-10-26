@@ -18,7 +18,7 @@ columns, the needle suites, every benchmark block for its instruction set, and o
 end-to-end runs.
 
 ```sh
-bash reproduce-neon.sh   [--small|--medium|--large] [--prefix-suffix] [--min-iters=N]
+bash reproduce-neon.sh   [--small|--medium|--large] [--prefix-suffix] [--clickbench] [--min-iters=N]
 bash reproduce-avx512.sh [--small|--medium|--large] [--min-iters=N]
 ```
 
@@ -28,20 +28,21 @@ through `sh` or `bash` and do not need them; to run single scripts as `./…`, f
 
 | flag | effect |
 |---|---|
-| `--small`, `--medium`, `--large` | needles per grid cell: 1, 10 or 20 (211, 2,053 or 4,052 needles); default `--small` |
-| `--prefix-suffix` | also run the PREFIX/SUFFIX block (NEON only, about 50 min at `--small`) |
+| `--small`, `--medium`, `--large` | needles per grid cell of the micro, phases, ablation and plan-cut blocks: 1, 10 or 20 (211, 2,053 or 4,052 needles); default `--medium`, the set the paper draws from; `--small` is a quicker check |
+| `--prefix-suffix` | also run the PREFIX/SUFFIX block, which the paper does not include (NEON only, about 50 min) |
 | `--clickbench` | also run the end-to-end ClickBench queries over the full table, which no figure in the paper draws (NEON only, 14 GB more downloads, about 90 GB more disk) |
 | `--min-iters=N` | timed iterations per cell for every harness run, overriding each spec |
 
 Approximate wall clock:
 
-| script | `--small` | `--medium` |
+| script | default (`--medium`) | `--small` |
 |---|---|---|
-| `reproduce-neon.sh` | 5 to 6.5 h | 10 to 11 h |
-| `reproduce-avx512.sh` | 5 to 6 h | 7.5 to 8.5 h |
+| `reproduce-neon.sh` | 10 to 11 h | 5 to 6.5 h |
+| `reproduce-avx512.sh` | 7.5 to 8.5 h | 5 to 6 h |
 
-The size flag changes the micro, phases, ablation, plan-cut and end-to-end micro blocks. The
-row group block always uses the small needle set and takes about 3.5 h on AVX-512 by itself.
+Figure 1, the row group block and the end-to-end micro block always use the small needle set,
+which the scripts generate beside the chosen one; the row group block takes about 3.5 h on
+AVX-512 by itself.
 
 Runs land in `results/` and kernel sweeps in `paper/data/`. [paper/README.md](paper/README.md)
 describes each figure block, its specs and its inputs.
