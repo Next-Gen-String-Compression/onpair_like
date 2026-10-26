@@ -43,11 +43,15 @@ mkdir -p "$DATA"
 DUCKDB=$BIN/duckdb
 STOCK=$BIN/duckdb-vortex-0.86.1
 
-# download <url> <file>
+# download <url> <file>: a connection below 100 kB/s for a minute is cut and
+# retried, resuming; when resuming keeps failing the file starts over once.
 download() {
   [ -s "$2" ] && return
   mkdir -p "$(dirname "$2")"
-  curl --fail --location --retry 3 --continue-at - --output "$2.part" "$1"
+  curl --fail --location --retry 3 --speed-limit 100000 --speed-time 60 --continue-at - --output "$2.part" "$1" || {
+    rm -f "$2.part"
+    curl --fail --location --retry 3 --speed-limit 100000 --speed-time 60 --output "$2.part" "$1"
+  }
   mv "$2.part" "$2"
 }
 

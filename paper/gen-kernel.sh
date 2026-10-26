@@ -27,8 +27,15 @@ if [ ! -f "$DATA/URL_1m.onpair16.csv" ]; then
     url=https://datasets.clickhouse.com/hits_compatible/athena_partitioned
     mkdir -p "$RAW" "$CORPUS"
     for i in 0 1; do
+      # Below 100 kB/s for a minute the connection is cut and retried,
+      # resuming; when resuming keeps failing the file starts over once.
       [ -s "$RAW/hits_$i.parquet" ] || {
-        curl --fail --location --retry 3 --continue-at - --output "$RAW/hits_$i.parquet.part" "$url/hits_$i.parquet"
+        curl --fail --location --retry 3 --speed-limit 100000 --speed-time 60 --continue-at - \
+            --output "$RAW/hits_$i.parquet.part" "$url/hits_$i.parquet" || {
+          rm -f "$RAW/hits_$i.parquet.part"
+          curl --fail --location --retry 3 --speed-limit 100000 --speed-time 60 \
+              --output "$RAW/hits_$i.parquet.part" "$url/hits_$i.parquet"
+        }
         mv "$RAW/hits_$i.parquet.part" "$RAW/hits_$i.parquet"
       }
     done

@@ -44,6 +44,10 @@ SOURCES = REPO_ROOT / "datasets" / "sources.yaml"
 RAW_DIR = REPO_ROOT / "datasets" / "raw"
 PARQUET_COLUMN = "data"
 BATCH_ROWS = 1 << 20
+# A download slower than MIN_RATE bytes/s over STALL_SECONDS is as good as
+# stalled: it starts again on a fresh connection, as a failed one does.
+MIN_RATE = 100_000
+STALL_SECONDS = 60
 
 
 def log(msg: str) -> None:
@@ -83,11 +87,17 @@ def download(url: str, target: Path, expected_sha256: str | None,
             log(f"  downloading {url}")
             req = urllib.request.Request(url, headers={"User-Agent": "like-benchmark-prepare/1.0"})
             with urllib.request.urlopen(req, timeout=60) as resp, open(tmp, "wb") as out:
+                window, received = time.monotonic(), 0
                 while True:
-                    b = resp.read(1 << 20)
+                    b = resp.read1(1 << 20)
                     if not b:
                         break
                     out.write(b)
+                    received += len(b)
+                    if time.monotonic() - window >= STALL_SECONDS:
+                        if received < MIN_RATE * STALL_SECONDS:
+                            raise TimeoutError(f"below {MIN_RATE // 1000} kB/s for {STALL_SECONDS} s")
+                        window, received = time.monotonic(), 0
             break
         except Exception as e:  # noqa: BLE001 — transient network errors
             if attempt == retries:
