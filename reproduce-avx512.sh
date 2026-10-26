@@ -35,6 +35,7 @@ for arg in "$@"; do
 done
 
 stage() { echo; echo "===== reproduce: $* ====="; }
+sh paper/check-tex.sh || echo "The runs do not need it; paper/make-figures.sh does, afterwards."
 
 # The AVX-512 kernels are compile-time gated, so the harness is built native.
 export RUSTFLAGS="-C target-cpu=native"

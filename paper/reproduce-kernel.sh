@@ -4,8 +4,9 @@
 #
 #   paper/reproduce-kernel.sh
 #
-# Needs a Rust toolchain, a C++ compiler, cmake, the duckdb CLI, uv and a TeX
-# install with libertine, zi4 and newtxmath on PATH. OnPair and the FSST fork
+# Needs a Rust toolchain, a C++ compiler, cmake, the duckdb CLI and uv; the
+# figure also needs TeX (paper/check-tex.sh), and without it only the sweeps
+# run, for make-figures.sh to draw from. OnPair and the FSST fork
 # are third_party/onpair and third_party/fsst. On an AVX-512 host the onpair sweep
 # runs twice, the native build first, so both x86 columns are measured.
 set -eu
@@ -33,5 +34,9 @@ if [ -n "$AVX512" ]; then
 fi
 
 OUT="$HERE/out/kernel-$DATE"
-(cd "$ROOT" && uv run paper/plot_matcher.py --data paper/data/matcher_"$MACHINE"_*"$DATE".csv paper/data/matcher_*_"$MACHINE"_*"$DATE".csv --out "$OUT")
-echo "-> $OUT/kernel-matcher/"
+if sh "$HERE/check-tex.sh"; then
+  (cd "$ROOT" && uv run paper/plot_matcher.py --data paper/data/matcher_"$MACHINE"_*"$DATE".csv paper/data/matcher_*_"$MACHINE"_*"$DATE".csv --out "$OUT")
+  echo "-> $OUT/kernel-matcher/"
+else
+  echo "kernel figure not drawn here; paper/make-figures.sh draws it from the sweeps"
+fi

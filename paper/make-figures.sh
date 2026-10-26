@@ -26,6 +26,8 @@ while [ $# -gt 0 ]; do
     *) sed -n '2,16p' "$0"; exit 2 ;;
   esac
 done
+# Every plot sets its labels through LaTeX.
+sh paper/check-tex.sh
 SCRIPTS="plot_fig1 plot_matcher plot_phase_shares plot_micro plot_prefix_suffix plot_selection
   plot_plan_cut plot_kernel_choice plot_e2e plot_e2e_micro plot_no_sort table1"
 

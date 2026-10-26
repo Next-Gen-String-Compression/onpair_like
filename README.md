@@ -83,7 +83,8 @@ or `--log`.
 - Rust 1.91 or newer, a C++20 compiler, CMake, Python 3.11 or newer
 - [`uv`](https://docs.astral.sh/uv/) for the plot and check scripts, and the `duckdb` CLI for
   the kernel sweeps and the end-to-end data
-- a TeX installation with the `libertine`, `zi4` and `newtxmath` packages, to draw figures
+- a TeX installation with the `libertine`, `zi4` and `newtxmath` packages, to draw figures:
+  only where `make-figures.sh` runs, which checks for it first (`sh paper/check-tex.sh`)
 - for the end-to-end block on NEON, `ninja` and `flatc`, the FlatBuffers compiler the OnPair
   Vortex build runs (`brew install ninja flatbuffers`); the Vortex folders pin Rust 1.98,
   which rustup installs on first use. On Linux the block also needs libclang with its

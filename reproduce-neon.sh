@@ -41,6 +41,7 @@ for arg in "$@"; do
 done
 
 stage() { echo; echo "===== reproduce: $* ====="; }
+sh paper/check-tex.sh || echo "The runs do not need it; paper/make-figures.sh does, afterwards."
 
 stage "build and test"
 cargo build --release --workspace
