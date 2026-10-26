@@ -2,6 +2,7 @@
 size for all of them, the Okabe-Ito hues in a fixed order so a kernel keeps its
 colour across every figure."""
 
+import json
 import os
 import re
 from pathlib import Path
@@ -24,7 +25,10 @@ PREPRINT_ASSETS = Path(__file__).resolve().parents[2] / "substring_search_prepri
 
 
 def inputs(section):
-    """One section of config.INPUTS, the pinned inputs of every figure."""
+    """One section of config.INPUTS, the pinned inputs of every figure, or of
+    the inputs file PAPER_INPUTS names (paper/inputs.py, for make-figures.sh)."""
+    if path := os.environ.get("PAPER_INPUTS"):
+        return json.loads(Path(path).read_text())[section]
     return config.INPUTS[section]
 
 

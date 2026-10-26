@@ -20,6 +20,7 @@ exits non-zero on any finding:
 
 import argparse
 import json
+import os
 import re
 import runpy
 import sys
@@ -76,6 +77,9 @@ def check(inputs, con):
     run_dir = dict(con.sql("select run_name, run_dir from run where is_latest").fetchall())
 
     def run(name, what):
+        if name is None:
+            findings.append(f"missing  {what}: no run in this tree")
+            return False
         if name not in runs:
             findings.append(f"missing  {what}: run {name} is not in {DB.name}")
             return False
@@ -85,6 +89,9 @@ def check(inputs, con):
         return True
 
     def file(rel, what, base=HERE, suffix=".csv"):
+        if rel is None:
+            findings.append(f"missing  {what}: none in this tree")
+            return
         path = base / rel
         if not path.exists():
             findings.append(f"missing  {what}: {rel}")
@@ -154,7 +161,7 @@ def check(inputs, con):
     file(log, "plan log", base=ROOT, suffix="")
     # micro-<size>-<date>, or micro-1mi[-fast|-medium]-<date> before the specs
     # moved to specs/micro/.
-    tag = prefix_of(Path(log).name)
+    tag = prefix_of(Path(log).name) if log else None
     size = {"micro-1mi-": "full", "micro-1mi-fast-": "fast", "micro-1mi-medium-": "medium"}.get(
         tag, tag[len("micro-"):-1] if tag else None)
     spec = HERE / "specs" / "micro" / f"{size}.toml" if size else None
@@ -176,6 +183,14 @@ def main():
     ap.add_argument("--update", action="store_true")
     args = ap.parse_args()
     con = duckdb.connect(str(DB), read_only=True)
+    # make-figures.sh checks the inputs paper/inputs.py found the same way.
+    if path := os.environ.get("PAPER_INPUTS"):
+        if args.update:
+            ap.error("--update rewrites config.py; PAPER_INPUTS names another inputs file")
+        findings, _ = check(json.loads(Path(path).read_text()), con)
+        for line in findings:
+            print(line)
+        sys.exit(1 if findings else 0)
     findings, stale = check(runpy.run_path(CONFIG)["INPUTS"], con)
     if args.update and stale:
         text = CONFIG.read_text()

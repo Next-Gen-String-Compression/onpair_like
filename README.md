@@ -48,29 +48,27 @@ describes each figure block, its specs and its inputs.
 
 ### Drawing the figures
 
-`INPUTS` in `paper/config.py` names the runs, sweeps and logs each figure is drawn from. As
-shipped they are the authors' runs, which the artifact does not include, so
-`paper/check_inputs.py` reports them missing and `paper/make-figures.sh` stops. To draw the
-figures from your own runs:
+The reproduce scripts produce the numbers, and one command draws every figure from them. Most
+figures set the two machines side by side, so first copy one machine's `results/` and
+`paper/data/` into a folder of the other's clone, e.g. on the AVX-512 host:
 
-1. Gather both machines' runs in one tree: copy the Mac's `results/paper/`, `results/plan-log/`
-   and `results/e2e/` folders and its `paper/data/matcher_*arm64*.csv` sweeps next to the x86
-   ones, then load the benchmark runs into `results/bench.duckdb` with
-   `.venv/bin/python tools/results-db/load.py results/paper/*` (the end-to-end figures read
-   `results/e2e/` directly).
-2. Replace each run name in `INPUTS` with yours of the same block and machine: every
-   `paper/gen-*.sh` prints the runs it wrote (`-> run <name>`), `gen-plan-cut.sh` its log
-   directory, and `e2e/run.py` and `e2e/micro.py` their `results/e2e/<name>`. The sweeps need
-   no edit: `uv run paper/check_inputs.py --update` moves each to the newest CSV of its name.
-3. `uv run paper/check_inputs.py` lists what is still missing or mixed; once it reports every
-   input present, `sh paper/make-figures.sh --out DIR` draws the figures.
+```sh
+mkdir -p mac/paper
+scp -r mac-host:onpair_like/results mac/
+scp -r mac-host:onpair_like/paper/data mac/paper/
+sh paper/make-figures.sh --from mac
+```
 
-The paper draws the micro, phases, ablation and plan-cut figures from the medium needle set
-(`--medium`), and Figure 1, the row group figures and the end-to-end micro figure from the small
-one (after a `--medium` run, `python3 e2e/micro.py --spec fast`). The phase-shares split CSVs in
-`paper/data/` cover the medium set only. `make-figures.sh` also draws the PREFIX/SUFFIX figure,
-which the paper does not include, from a `--prefix-suffix` run. Each plot script also draws a
-single figure from a run given with `--run`, `--data` or `--log`.
+`--from` copies that folder's runs and sweeps into this tree and loads them. For every figure,
+`make-figures.sh` then takes the newest run of its block and machine in this tree
+(`paper/inputs.py`, of the needle size the paper uses when there is one), checks them with
+`paper/check_inputs.py` and draws into `paper/out/figures/` (`--out DIR`). With one machine's
+runs it draws the figures those feed and names the others. The kernel figure takes the shipped
+sweep of a machine you did not run, and the phase-shares split CSVs in `paper/data/` cover the
+medium needle set only. In a tree holding the authors' runs, which `paper/config.py` pins and
+the artifact does not ship, it draws those instead; `--pinned` and `--latest` choose
+explicitly. Each plot script also draws a single figure from a run given with `--run`, `--data`
+or `--log`.
 
 ### Requirements
 

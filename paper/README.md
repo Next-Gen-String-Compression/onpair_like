@@ -21,18 +21,19 @@ one `gen-<block>.sh` that runs them, and one section of `INPUTS` in `config.py`.
 `llvm-simd`, the JIT-compiled pattern automaton, is in the micro and rows
 specs; it registers only on an x86 build against LLVM 14-16. Check the inputs
 with `uv run paper/check_inputs.py [--update]`, and redraw every figure with
-`paper/make-figures.sh [--out DIR]`.
+`sh paper/make-figures.sh [--from DIR] [--pinned | --latest] [--out DIR]`.
 
 `INPUTS` in `paper/config.py` names every figure's inputs: the runs, sweeps and plan log
-it is drawn from. The plot scripts read it unless given `--run`, `--data` or
-`--log`, and write to the preprint's `assets/` unless given `--out`.
+it is drawn from. The plot scripts read it, or the file `PAPER_INPUTS` names, unless given
+`--run`, `--data` or `--log`, and write to the preprint's `assets/` unless given `--out`.
 `check_inputs.py` reports an entry that is missing, one with a newer run or
 file of the same name, figures drawn from different needle sizes, micro runs
 without a series `plot_micro.py` draws, and a phase-shares split that does not
 cover its run; `--update` moves stale entries to the newest, which
 every `gen-*.sh` does after its runs. Changing needle size or machine is an
-edit to `config.py`. `make-figures.sh` runs the check and stops on any
-finding before it draws. A multi-panel figure writes **one PDF
+edit to `config.py`. With every run `config.py` pins present, `make-figures.sh` runs the
+check and stops on any finding before it draws; without them it draws from the newest runs
+of the tree, which `paper/inputs.py` writes into `results/inputs.json` for `PAPER_INPUTS`. A multi-panel figure writes **one PDF
 per panel into its own folder**, `assets/<figure>/1.pdf`, `2.pdf`, ... plus
 `legend.pdf` where the series need one, so `assets/` lists figures rather than
 dozens of panels; a single-panel figure stays a file. The grid is assembled in
