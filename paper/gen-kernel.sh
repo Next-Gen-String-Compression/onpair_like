@@ -1,11 +1,12 @@
 #!/usr/bin/env sh
 # Runs onpair's stage-one sweep, the matcher figure's input, and copies the
 # CSV into paper/data under a stable name, from third_party/onpair. The URL corpus and its needle catalogs are built
-# first when missing: bench_corpus over ~/ch.duckdb (the duckdb CLI on PATH),
-# then bench_needles over each OnPair stream. A missing ~/ch.duckdb is built
-# from the first two ClickBench parquet files, downloaded to ~/raw/hits where
-# e2e/data.sh with E2E_DATA=$HOME would put them: the corpus is the first
-# 2^20 rows, which those two files hold in table order.
+# first when missing: bench_corpus over a ch.duckdb of the first two ClickBench
+# parquet files (the duckdb CLI on PATH), then bench_needles over each OnPair
+# stream; the corpus is the first 2^20 rows, which those two files hold in
+# table order. The files come from datasets/raw/clickbench/, where
+# datasets/prepare.py and e2e/data.sh keep them too, and are downloaded there
+# when missing; ch.duckdb is built in target/kernel-corpus/.
 #
 #   paper/gen-kernel.sh
 #
@@ -18,22 +19,28 @@ ONPAIR=$(cd "$HERE/../third_party/onpair" && pwd)
 MACHINE=$(uname -m)
 DATE=$(date +%F)
 DATA="$ONPAIR/bench/data/ch/hits"
+RAW="$HERE/../datasets/raw/clickbench"
+CORPUS="$HERE/../target/kernel-corpus"
 
 if [ ! -f "$DATA/URL_1m.onpair16.csv" ]; then
-  if [ ! -e "$HOME/ch.duckdb" ]; then
+  if [ ! -e "$CORPUS/ch.duckdb" ]; then
     url=https://datasets.clickhouse.com/hits_compatible/athena_partitioned
-    mkdir -p "$HOME/raw/hits"
+    mkdir -p "$RAW" "$CORPUS"
     for i in 0 1; do
-      [ -s "$HOME/raw/hits/hits_$i.parquet" ] || {
-        curl --fail --location --retry 3 --continue-at - --output "$HOME/raw/hits/hits_$i.parquet.part" "$url/hits_$i.parquet"
-        mv "$HOME/raw/hits/hits_$i.parquet.part" "$HOME/raw/hits/hits_$i.parquet"
+      [ -s "$RAW/hits_$i.parquet" ] || {
+        curl --fail --location --retry 3 --continue-at - --output "$RAW/hits_$i.parquet.part" "$url/hits_$i.parquet"
+        mv "$RAW/hits_$i.parquet.part" "$RAW/hits_$i.parquet"
       }
     done
-    rm -f "$HOME/ch.duckdb.tmp"
-    duckdb "$HOME/ch.duckdb.tmp" -c "CREATE TABLE hits AS SELECT * FROM read_parquet(['$HOME/raw/hits/hits_0.parquet', '$HOME/raw/hits/hits_1.parquet'], binary_as_string = true)"
-    mv "$HOME/ch.duckdb.tmp" "$HOME/ch.duckdb"
+    rm -f "$CORPUS/ch.duckdb.tmp"
+    duckdb "$CORPUS/ch.duckdb.tmp" -c "CREATE TABLE hits AS SELECT * FROM read_parquet(['$RAW/hits_0.parquet', '$RAW/hits_1.parquet'], binary_as_string = true)"
+    mv "$CORPUS/ch.duckdb.tmp" "$CORPUS/ch.duckdb"
   fi
-  (cd "$ONPAIR" && cargo run --release --example bench_corpus -- ch)
+  # bench_corpus attaches ~/ch.duckdb, so HOME is the corpus folder for it
+  # alone, with cargo's and rustup's homes left where they are.
+  CORPUS=$(cd "$CORPUS" && pwd)
+  (cd "$ONPAIR" && CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}" RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}" \
+    HOME="$CORPUS" cargo run --release --example bench_corpus -- ch)
 fi
 for enc in onpair12 onpair16; do
   if [ ! -f "$DATA/URL_1m.$enc.needles.csv" ]; then

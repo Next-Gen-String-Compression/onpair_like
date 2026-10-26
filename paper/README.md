@@ -85,12 +85,13 @@ gen scripts (twice on an AVX-512 host, native build first) and draws the
 figure into `paper/out/kernel-<date>/`. Both build the kernels from this
 repository, `third_party/onpair` and `third_party/fsst`.
 The matcher sweeps read one stream, `ch/hits/URL_1m`, which the scripts build
-when missing: `gen-kernel.sh` runs onpair's `bench_corpus ch` over
-`~/ch.duckdb` (the `duckdb` CLI on `PATH`) and `bench_needles` over the
-OnPair streams. A missing `~/ch.duckdb` it builds itself from the first two
-ClickBench parquet files, 300 MB downloaded to `~/raw/hits`, which hold the
-corpus's 2^20 rows in table order; the streams come out byte-identical to the
-ones from `e2e/data.sh`'s full table. Then
+when missing: `gen-kernel.sh` runs onpair's `bench_corpus ch` over a
+`ch.duckdb` in `target/kernel-corpus/` (the `duckdb` CLI on `PATH`) and
+`bench_needles` over the OnPair streams. It builds that `ch.duckdb` from the
+first two ClickBench parquet files, which hold the corpus's 2^20 rows in table
+order, from `datasets/raw/clickbench/`, where `datasets/prepare.py` downloads
+them (300 MB) and `gen-kernel.sh` does when they are missing; the streams come
+out byte-identical to the ones from `e2e/data.sh`'s full table. Then
 `gen-kernel-fsst.sh` then encodes onpair's raw `URL_1m.csv` with
 `prefilter_corpus` and draws its catalog with the same `bench_needles`. Run
 `gen-kernel.sh` first. Besides the Rust and C++ toolchains the sweeps need nothing else;

@@ -11,7 +11,9 @@
 # figures the paper does not include, so its files (hits_*, ch.*, hits.*) are
 # built only with E2E_CLICKBENCH=1.
 #
-#   raw/hits/hits_<i>.parquet  ClickBench, the 100 athena_partitioned files
+#   ../datasets/raw/clickbench/hits_<i>.parquet  ClickBench, the 100 athena_partitioned
+#                              files, in the folder datasets/prepare.py and
+#                              paper/gen-kernel.sh share (hits_0 and hits_1)
 #   raw/job/job_<t>.parquet    IMDb (JOB), duckdb-data v1.0
 #   ch.duckdb                  hits, by DuckDB's benchmark/clickbench load.sql, written by stock DuckDB
 #   imdb.duckdb                the 21 JOB tables, by benchmark/imdb_plan_cost/init, written by stock DuckDB
@@ -35,6 +37,7 @@ CLICKBENCH=${E2E_CLICKBENCH:-}
 BIN=$E2E/builds/bin
 SRC=$E2E/../third_party/duckdb
 RAW=$DATA/raw
+HITS=$E2E/../datasets/raw/clickbench
 mkdir -p "$DATA"
 DUCKDB=$BIN/duckdb
 STOCK=$BIN/duckdb-vortex-0.86.1
@@ -54,10 +57,10 @@ need() { [ ! -e "$DATA/$1" ]; }
 
 if [ -n "$CLICKBENCH" ] && need ch.duckdb && { need ch.contains.duckdb || need hits.0861.vortex || need hits.onpair.vortex; }; then
   url=https://datasets.clickhouse.com/hits_compatible/athena_partitioned
-  for i in $(seq 0 99); do download "$url/hits_$i.parquet" "$RAW/hits/hits_$i.parquet"; done
+  for i in $(seq 0 99); do download "$url/hits_$i.parquet" "$HITS/hits_$i.parquet"; done
   echo "== ch.duckdb"
   rm -f "$DATA/ch.duckdb.tmp"
-  { echo "PRAGMA disable_progress_bar;"; sed "s|$url/|$RAW/hits/|" "$SRC/benchmark/clickbench/queries/load.sql"; } |
+  { echo "PRAGMA disable_progress_bar;"; sed "s|$url/|$HITS/|" "$SRC/benchmark/clickbench/queries/load.sql"; } |
     "$STOCK" "$DATA/ch.duckdb.tmp"
   mv "$DATA/ch.duckdb.tmp" "$DATA/ch.duckdb"
 fi

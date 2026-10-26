@@ -27,6 +27,9 @@ datasets:
       sha256: fa134fe101e68324e0de851146fda69624f5cbb707d387141d1c2a88a219a16d
       license: ClickBench (Yandex Metrica sample, published for benchmarking)
       download_bytes: 122446530
+      # datasets/raw/clickbench/ holds every ClickBench file: paper/gen-kernel.sh
+      # and e2e/data.sh read hits_0 and hits_1 from here and add theirs here.
+      download_dir: clickbench
       extra:
         # hits_0 holds exactly 1,000,000 rows, so 2^20 needs the next partition.
         - url: https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_1.parquet

@@ -269,6 +269,9 @@ def prepare_entry(entry: dict, update_checksums: bool) -> dict:
 
     kind = entry["kind"]
     raw_dir = RAW_DIR / ds_id
+    # Downloads land in datasets/raw/<source.download_dir> when the entry names
+    # one, a folder other scripts read the same files from; extracts stay here.
+    download_dir = RAW_DIR / entry["source"].get("download_dir", ds_id)
     writeback: dict = {}
 
     if kind == "parquet":
@@ -277,7 +280,7 @@ def prepare_entry(entry: dict, update_checksums: bool) -> dict:
         extra = entry["source"].get("extra") or []
         files = []
         for i, src in enumerate([entry["source"], *extra]):
-            f = raw_dir / src["url"].rsplit("/", 1)[1]
+            f = download_dir / src["url"].rsplit("/", 1)[1]
             sha = src.get("sha256")
             pin = sha if isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{64}", sha) else None
             got_sha = download(src["url"], f, pin)
@@ -296,7 +299,7 @@ def prepare_entry(entry: dict, update_checksums: bool) -> dict:
             column = params["column"]
     else:
         url = entry["source"]["url"]
-        raw = raw_dir / url.rsplit("/", 1)[1]
+        raw = download_dir / url.rsplit("/", 1)[1]
         got_sha = download(url, raw, _pinned_sha(entry))
         if update_checksums and not _pinned_sha(entry):
             writeback.setdefault(ds_id, {})["sha256"] = got_sha
