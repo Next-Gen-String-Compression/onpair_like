@@ -126,7 +126,8 @@ def main():
     pooled_panel(ax, d[d["query"] != Q20])
     gbs_axis(ax)
     pf.save_row([(fig, ax)], "e2e-micro-pooled", ["all"], pf.COLUMN_IN, args.out, unit=pf.COLUMN_IN)
-    pf.save_grouped_legend(ax, LEGEND_GROUPS, "e2e-micro-pooled", args.out, width=pf.COLUMN_IN)
+    # Its five entries in two titled blocks take 4.6 in, more than a column.
+    pf.save_grouped_legend(ax, LEGEND_GROUPS, "e2e-micro-pooled", args.out)
 
 
 if __name__ == "__main__":
