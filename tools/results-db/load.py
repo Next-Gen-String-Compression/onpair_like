@@ -523,7 +523,10 @@ def main(argv):
     if not argv:
         raise SystemExit(__doc__)
     if argv == ["--all"]:
-        dirs = sorted(p.parent for p in (ROOT / "results").glob("**/manifest.json"))
+        # The end-to-end runs under results/e2e have a manifest but no
+        # results.jsonl: the plots read them from their folders.
+        dirs = sorted(p.parent for p in (ROOT / "results").glob("**/manifest.json")
+                      if (p.parent / "results.jsonl").exists())
     else:
         dirs = [Path(a).resolve() for a in argv]
     con = duckdb.connect(DB_PATH)
