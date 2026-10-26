@@ -24,5 +24,5 @@ case $(uname -m) in
     "$ROOT/target/release/bench" run "$HERE/specs/rows/rowgroup-neon.toml" ${MIN_ITERS:+--min-iters "$MIN_ITERS"} -o "$ROOT/results/paper/rowgroup-fast-neon-$DATE"
     RUNS="rowgroup-fast-neon-$DATE" ;;
 esac
-(cd "$ROOT" && uv run paper/check_inputs.py --update) || true
+(cd "$ROOT" && uv run paper/check_inputs.py --update | grep -v '^missing') || true
 echo "-> runs $RUNS"

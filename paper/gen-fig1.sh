@@ -15,4 +15,4 @@ for spec in lz4 uncompressed onpair fsst selection; do
   "$ROOT/target/release/bench" run "$HERE/specs/fig1/$spec.toml" ${MIN_ITERS:+--min-iters "$MIN_ITERS"} -o "$ROOT/results/paper/fig1-$spec-neon-$DATE"
   echo "-> run fig1-$spec-neon-$DATE"
 done
-(cd "$ROOT" && uv run paper/check_inputs.py --update) || true
+(cd "$ROOT" && uv run paper/check_inputs.py --update | grep -v '^missing') || true

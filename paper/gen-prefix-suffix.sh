@@ -26,5 +26,5 @@ NAME="prefix-suffix-$SIZE-$ARCH-$(date +%F)"
 "$ROOT/target/release/bench" run "$HERE/specs/prefix-suffix/$SIZE.toml" ${MIN_ITERS:+--min-iters "$MIN_ITERS"} -o "$ROOT/results/paper/$NAME"
 # The check exits non-zero while an input is still missing or mixed, which is
 # not a failed run.
-(cd "$ROOT" && uv run paper/check_inputs.py --update) || true
+(cd "$ROOT" && uv run paper/check_inputs.py --update | grep -v '^missing') || true
 echo "-> run $NAME"
