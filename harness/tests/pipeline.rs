@@ -259,8 +259,12 @@ fn cli_end_to_end_exit_codes_and_artifacts() {
     std::fs::create_dir_all(&canary_dir).unwrap();
     let spec_bad = write_spec(&canary_dir, &ds_dir, &suite_dir, &["gate_canary"], "[0]");
     let out_bad = tmp.path().join("results-bad");
+    // Its report, RUN FAILED included, is the expected outcome: kept out of
+    // the test output, where it reads as a failure.
     let status = std::process::Command::new(bench)
         .args(["run".as_ref(), spec_bad.as_os_str(), "--out".as_ref(), out_bad.as_os_str()])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .status()
         .unwrap();
     assert_eq!(status.code(), Some(3), "gate failure must fail the whole run");
