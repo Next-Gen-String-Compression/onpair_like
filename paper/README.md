@@ -82,8 +82,9 @@ The OnPair sweep lives in `scan::bench::matcher_fit::sweep`. The walk
 has no sweep of its own; its cost comes out of the harness run, see below.
 
 `reproduce-kernel.sh` does the whole kernel block from a clone: it runs both
-gen scripts (twice on an AVX-512 host, native build first) and draws the
-figure into `paper/out/kernel-<date>/`. Both build the kernels from this
+gen scripts (twice on an AVX-512 host, native build first) and, when TeX is
+installed (`check-tex.sh`), draws the figure into `paper/out/kernel-<date>/`;
+`make-figures.sh` draws it otherwise. Both build the kernels from this
 repository, `third_party/onpair` and `third_party/fsst`.
 The matcher sweeps read one stream, `ch/hits/URL_1m`, which the scripts build
 when missing: `gen-kernel.sh` runs onpair's `bench_corpus ch` over a
