@@ -111,9 +111,9 @@ def check(inputs, con):
         if lacking:
             findings.append(f"labels   micro {machine}: no {', '.join(lacking)}")
 
-    name = inputs["prefix-suffix"]["run"]
-    if run(name, "prefix-suffix"):
-        suites["prefix-suffix"] = suites_of_run(name)
+    # The PREFIX/SUFFIX figure, which the paper does not include, runs the fast
+    # needles whatever size micro runs, so it stays out of the mixed-suite check.
+    run(inputs["prefix-suffix"]["run"], "prefix-suffix")
 
     # Figure 1 runs the fast needles too, outside the mixed-suite check.
     for what, name in inputs["fig1"].items():
