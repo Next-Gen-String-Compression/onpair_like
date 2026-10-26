@@ -18,9 +18,9 @@
 # --min-iters=N sets every harness run's timed iterations per cell.
 #
 # Needs a Rust toolchain, a C++ compiler, cmake, python3, uv and the duckdb
-# CLI. Downloads about 7 GB for the four columns and 2 GB of JOB data for the
-# end-to-end runs, into datasets/ and $E2E_DATA (default e2e/data), which then
-# holds about 9 GB.
+# CLI, and for the end-to-end block ninja and flatc. Downloads about 7 GB for
+# the four columns and 2 GB of JOB data for the end-to-end runs, into datasets/
+# and $E2E_DATA (default e2e/data), which then holds about 9 GB.
 set -euo pipefail
 cd "$(dirname "$0")"
 

@@ -59,6 +59,9 @@ inputs.
 - [`uv`](https://docs.astral.sh/uv/) for the plot and check scripts, and the `duckdb` CLI for
   the kernel sweeps and the end-to-end data
 - a TeX installation with the `libertine`, `zi4` and `newtxmath` packages, to draw figures
+- for the end-to-end block on NEON, `ninja` and `flatc`, the FlatBuffers compiler the OnPair
+  Vortex build runs (`brew install ninja flatbuffers`); the Vortex folders pin Rust 1.98,
+  which rustup installs on first use
 - on x86, optionally LLVM 14 to 16 for the compiled-automaton baseline (`llvm-simd`).
   `reproduce-avx512.sh` uses an installed one or downloads LLVM's 16.0.4 release into
   `target/llvm-16`; without it that baseline is skipped.
