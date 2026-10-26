@@ -40,10 +40,10 @@ if(APPLE)
                 $<TARGET_OBJECTS:fpd_objs> -o ${COMBINED}
         DEPENDS fpd_objs $<TARGET_OBJECTS:fpd_objs> COMMAND_EXPAND_LISTS VERBATIM)
 else()
-    # --force-group-allocation dissolves the COMDAT groups into plain sections, so
-    # localize.sh can localize the weak symbols too (see there).
+    # localize.sh keeps every symbol but the entry points to this candidate
+    # (see there).
     add_custom_command(OUTPUT ${COMBINED}
-        COMMAND ${CMAKE_LINKER} -r --force-group-allocation $<TARGET_OBJECTS:fpd_objs> -o ${COMBINED}
+        COMMAND ${CMAKE_LINKER} -r $<TARGET_OBJECTS:fpd_objs> -o ${COMBINED}
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/localize.sh ${COMBINED}
         DEPENDS fpd_objs $<TARGET_OBJECTS:fpd_objs> ${CMAKE_CURRENT_SOURCE_DIR}/localize.sh COMMAND_EXPAND_LISTS VERBATIM)
 endif()
