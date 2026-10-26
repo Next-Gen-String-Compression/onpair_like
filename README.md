@@ -50,6 +50,11 @@ inputs.
 
 ### Requirements
 
+- hardware: for `reproduce-neon.sh` an arm64 Mac (the paper's is an Apple M4 Pro); for
+  `reproduce-avx512.sh` an x86-64 Linux host with AVX-512BW, such as the paper's AWS
+  `c7a.xlarge` (AMD EPYC 9R14). The script refuses a host without AVX-512BW: the AVX-512
+  kernels are compile-time gated, so such a host would measure other kernels under the
+  AVX-512 run names.
 - Rust 1.91 or newer, a C++20 compiler, CMake, Python 3.11 or newer
 - [`uv`](https://docs.astral.sh/uv/) for the plot and check scripts, and the `duckdb` CLI for
   the kernel sweeps and the end-to-end data

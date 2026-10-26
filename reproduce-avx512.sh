@@ -20,7 +20,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 [ "$(uname -m)" = x86_64 ] && grep -q avx512bw /proc/cpuinfo \
-  || { echo "reproduce-avx512.sh runs on an x86_64 host with AVX-512BW" >&2; exit 2; }
+  || { echo "reproduce-avx512.sh needs an x86_64 host with AVX-512BW, such as an AWS c7a.xlarge (README.md, Requirements)" >&2; exit 2; }
 SIZE=fast PER_CELL=1
 for arg in "$@"; do
   case $arg in
