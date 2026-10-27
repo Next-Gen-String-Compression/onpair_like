@@ -543,8 +543,12 @@ def main(argv):
     con.execute(SCHEMA_PATH.read_text())
     if old:
         con.execute("INSERT INTO result BY NAME SELECT * FROM result_pre_selection; DROP TABLE result_pre_selection")
+    # One transaction per run: autocommit syncs the WAL after every inserted row,
+    # minutes per run on a slow disk, and a failed load would leave half a run.
     for run_dir in dirs:
+        con.begin()
         print(load_run(con, run_dir))
+        con.commit()
     con.close()
 
 
