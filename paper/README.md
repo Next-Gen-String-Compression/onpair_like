@@ -1,7 +1,6 @@
 # paper
 
-Data and figures for the kernel section of the substring-search preprint
-(`../../substring_search_preprint`). Nothing here is built by the workspace.
+Data and figures for the paper. Nothing here is built by the workspace.
 
 The figures fall into blocks. Each block has its specs under `specs/<block>/`,
 one `gen-<block>.sh` that runs them, and one section of `INPUTS` in `config.py`.
@@ -25,7 +24,7 @@ with `uv run paper/check_inputs.py [--update]`, and redraw every figure with
 
 `INPUTS` in `paper/config.py` names every figure's inputs: the runs, sweeps and plan log
 it is drawn from. The plot scripts read it, or the file `PAPER_INPUTS` names, unless given
-`--run`, `--data` or `--log`, and write to the preprint's `assets/` unless given `--out`.
+`--run`, `--data` or `--log`, and write to `out/figures/` unless given `--out`.
 `check_inputs.py` reports an entry that is missing, one with a newer run or
 file of the same name, figures drawn from different needle sizes, micro runs
 without a series `plot_micro.py` draws, and a phase-shares split that does not

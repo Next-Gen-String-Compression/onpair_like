@@ -21,7 +21,10 @@ import config
 PT_IN = 1 / 72.27
 TEXT_IN = 506.295 * PT_IN
 COLUMN_IN = 241.14749 * PT_IN
-PREPRINT_ASSETS = Path(__file__).resolve().parents[2] / "substring_search_preprint" / "assets"
+# The default output: the preprint's assets/ where it sits beside the clone, else
+# paper/out/figures/, where make-figures.sh draws.
+PREPRINT = Path(__file__).resolve().parents[2] / "substring_search_preprint"
+PREPRINT_ASSETS = PREPRINT / "assets" if PREPRINT.is_dir() else Path(__file__).resolve().parent / "out" / "figures"
 
 
 def inputs(section):
